@@ -85,9 +85,8 @@ std::string CampaignRegistry::makeCampaignKey(const CampaignArgs& args)
 {
     return joinCsvFields(
         args.library, args.stage, args.logN, args.logQ, args.bitsPerCoeff,
-        args.logDelta, args.logSlots, args.withNTT, args.mult_depth,
-        args.doAdd, args.doPlainMul, args.doMul, args.doScalarMul,
-        args.doRot, args.doBoot, args.op_step, args.op_depth, args.amountBits, args.seed,
+        args.logDelta, args.logSlots, args.withNTT, args.mult_depth, args.pipeline,
+        args.op_step, args.op_depth, args.amountBits, args.seed,
         args.seed_input, args.isComplex, args.logMin, args.logMax,
         args.isExhaustive,args.numSamples, args.dnum, args.scaleTech);
 }
@@ -100,7 +99,7 @@ void CampaignRegistry::ensureCsvFilesExist()
             throw std::runtime_error("CampaignRegistry: no se pudo crear " + start_csv_);
 
         f << "campaign_id,library,stage,logN,logQ,bitsPerCoeff,logDelta,logSlots,"
-             "withNTT,mult_depth,doAdd,doPlainMul,doMul,doScalarMul,doRot,doBoot,op_step,"
+             "withNTT,mult_depth,pipeline,op_step,"
              "op_depth,amountBits,seed,seed_input,"
              "isComplex,logMin,logMax,isExhaustive,numSamples,dnum,scaleTech\n";
     }

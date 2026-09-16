@@ -76,6 +76,7 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
 
     auto addRange = [&](uint32_t start, uint32_t end)
     {
+        if (end < start || end >= maxBits) return;
         uint32_t count = 0;
         if (count == 1) {
             res.push_back(start);
@@ -107,7 +108,7 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
         gapDelta = 5;
     else if (logDelta>=30)
         gapDelta = 3;
-    addRange(0, logDelta-gapDelta);
+    if (logDelta >= gapDelta) addRange(0, logDelta - gapDelta);
     addRange(logDelta, logQ);
 
     uint32_t gapQ = 1;

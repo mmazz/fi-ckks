@@ -179,11 +179,6 @@ void VectorLogger::log(uint32_t limb, uint32_t coeff, uint32_t bit,
     total_++;
 }
  
-void VectorLogger::log(const IterationArgs& args,
-                       const std::vector<double>& output)
-{
-    log(args.limb, args.coeff, args.bit, output);
-}
  
 void VectorLogger::log(uint32_t limb, uint32_t coeff, uint32_t bit,
                        const std::vector<double>& input,

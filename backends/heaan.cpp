@@ -7,6 +7,8 @@
 #include <vector>
 #include <complex>
 #include <algorithm>
+#include <array> 
+#include <set>
 
 const size_t MAX_H = 64;
 /*
@@ -65,8 +67,62 @@ void backend_prepare_args(CampaignArgs& args){
     args.library = "heaan";
     args.mult_depth = 0;
 }
-uint32_t num_limbs(const BackendContext* ctx, const CampaignArgs& args){
-    return 1;
+
+static Injector*        g_inj = nullptr;
+static const NTL::ZZX*  g_last_poly = nullptr;
+static NTL::ZZ          g_original;
+static long             g_N = 0;
+
+static void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long ring_degree)
+{
+   if (!g_inj) throw std::logic_error("flip call outside of run_iteration");
+   Injector& inj = *g_inj;
+   const long N = ring_degree > 0 ? ring_degree : g_N;
+
+   if (inj.probing()) {
+       long maxbits = 0;
+       for (long i = 0; i < poly.rep.length(); ++i)
+           maxbits = std::max(maxbits, NTL::NumBits(poly.rep[i]));
+       inj.record_probe(1, uint32_t(maxbits));
+       return;
+   }
+   const FaultSpec& f = inj.spec();
+   if (coeff != f.coeff || bit != f.bit || width != f.amountBits)
+       throw std::logic_error("the fork ask a flip different than FaultSpec");
+   if (long(coeff) >= N) throw std::out_of_range("coeff >= N");
+
+   const long need = std::max<long>(long(coeff) + 1, N);   // igual que default_flip: estirar, NUNCA normalize
+   if (poly.rep.length() < need) poly.SetLength(need);
+
+   const bool is_restore = (g_last_poly == &poly);
+   const NTL::ZZX before = poly;
+   for (uint32_t i = 0; i < width; ++i) NTL::SwitchBit(poly.rep[coeff], long(bit + i));
+
+   if (is_restore) {
+       if (poly.rep[coeff] != g_original) throw std::logic_error("the restore didnt recover the original value");
+       inj.record_restore();
+       g_last_poly = nullptr;
+       return;
+   }
+   int flipped = 0;
+   for (uint32_t i = 0; i < width; ++i)
+       flipped += NTL::bit(before.rep[coeff], long(bit + i)) != NTL::bit(poly.rep[coeff], long(bit + i));
+   int changed = 0;
+   for (long i = 0; i < N; ++i)
+       changed += NTL::coeff(before, i) != NTL::coeff(poly, i);
+   g_original  = before.rep[coeff];
+   g_last_poly = &poly;
+   inj.record_flip(flipped, changed);
+}
+
+struct InjectorScope {
+   explicit InjectorScope(Injector& inj) { g_inj = &inj; g_last_poly = nullptr; }
+   ~InjectorScope() { g_inj = nullptr; g_last_poly = nullptr; }
+};
+
+static void client_flip(Injector& inj, NTL::ZZX& poly) {
+   const FaultSpec& f = inj.spec();
+   heaanfi::flip(poly, f.coeff, f.bit, f.amountBits, g_N);
 }
 
 BackendContext* setup_campaign(const CampaignArgs& args)
@@ -79,14 +135,18 @@ BackendContext* setup_campaign(const CampaignArgs& args)
     else
         h = std::max<long>(4,N/64);
     NTL::SetSeed(NTL::ZZ(args.seed));
+    heaanfi::set_flip(&fi_flip);
+    g_N = long(N);
     auto* ctx = new HEAANContext(args.logN, args.logQ, h, args.seed);
     std::srand(args.seed);
-    if(args.doBoot)
-        ctx->scheme.addBootKey(ctx->sk, args.logSlots, logq_boot + 4);
+    if (has_op(args.ops, OpType::Boot))
+       ctx->scheme.addBootKey(ctx->sk, args.logSlots, logq_boot + 4);
 
-    if(args.doRot){
-        ctx->scheme.addLeftRotKey(ctx->sk, args.doRot);
-    }
+    std::set<long> rots;
+    for (const Op& op : args.ops)
+       if (op.type == OpType::Rot) rots.insert(long(op.param));
+    for (long r : rots)
+       ctx->scheme.addLeftRotKey(ctx->sk, r);
     if(args.isComplex>0){
         compute_plain_io(args, ctx->baseInputComplex, ctx->goldenOutputComplex);
         ctx->isComplex = true;
@@ -97,28 +157,21 @@ BackendContext* setup_campaign(const CampaignArgs& args)
     return ctx;
 }
 
-void flipBit(uint32_t amount, ZZX& poly, uint32_t coeff, uint32_t bit) {
-    for (uint32_t b = bit; b < bit + amount; ++b) {
-        SwitchBit(poly[coeff], b);
-    }
-}
 
 IterationResult run_iteration(
     BackendContext* bctx,
-    const CampaignArgs& args,
-    std::optional<IterationArgs> iterArgs
+    const CampaignArgs& args, Injector& inj
     )
 {
+    InjectorScope scope(inj);
+
     long logq_boot = (long)args.logDelta + 10;
-    uint32_t op_depth = args.op_depth;
-    uint32_t op_step = args.op_step;
 
     auto& ctx = static_cast<HEAANContext&>(*bctx);
 
     auto baseInput = ctx.baseInput.data();
     auto baseSize  = ctx.baseInput.size();
     auto baseInputComplex = ctx.baseInputComplex.data();
-    uint32_t amountBits = args.amountBits;
 
     if(args.isComplex){
         baseSize = ctx.baseInputComplex.size();
@@ -143,13 +196,12 @@ IterationResult run_iteration(
         );
     }
 
-    if (iterArgs && args.stage == "encode") {
-        flipBit(amountBits, plain.mx, iterArgs->coeff, iterArgs->bit);
-    }
+
+    if (inj.here("encode")) client_flip(inj, plain.mx);
 
     Ciphertext c = ctx.scheme.encryptMsg(plain, ctx.seed);
     Ciphertext c_clean;
-    if(args.doAdd || args.doMul){
+    if (has_op(args.ops, OpType::Add) || has_op(args.ops, OpType::Mul)){
         if(args.isComplex){
             plain_clean =  ctx.scheme.encode(baseInputComplex,
                                 baseSize,
@@ -165,88 +217,104 @@ IterationResult run_iteration(
         }
         c_clean = ctx.scheme.encryptMsg(plain_clean, ctx.seed);
     }
-
-    if(args.doPlainMul){
+    if (has_op(args.ops, OpType::PMul)){
         if(args.isComplex){
             plain_clean =  ctx.cc.encode(baseInputComplex, baseSize, args.logDelta);
         } else {
             plain_clean =  ctx.cc.encode(baseInput, baseSize, args.logDelta);
         }
     }
-    if (iterArgs) {
-        if (args.stage == "encrypt_c0") {
-            flipBit(amountBits, c.bx, iterArgs->coeff, iterArgs->bit);
-        } else if (args.stage == "encrypt_c1") {
-            flipBit(amountBits, c.ax, iterArgs->coeff, iterArgs->bit);
-        }
-    }
 
-    // Server Side
-    for (uint32_t i = 0; i < args.doAdd; ++i) {
-        if(iterArgs && args.stage == "add_inside" && i == op_depth){
-            c = ctx.scheme.addBitFlip(c, c_clean, op_step, iterArgs->coeff, iterArgs->bit);
-        }else {
-            c = ctx.scheme.add(c, c_clean);
-        }
-    }
+    if (inj.here("encrypt_c0")) client_flip(inj, c.bx);
+    if (inj.here("encrypt_c1")) client_flip(inj, c.ax);
+    // ---- Server side: el pipeline ----
+    std::array<uint32_t, kNumOpTypes> occ{};   // ocurrencias por tipo -> op_depth
+    uint32_t n_rescale = 0;
 
-    for (uint32_t i = 0; i < args.doPlainMul; ++i) {
-        c = ctx.scheme.multByPoly(c, plain_clean.mx, args.logDelta);
-    }
+    auto rescale = [&]() {
+       const uint32_t r = n_rescale++;
+       if (inj.here("rescale", r)) {
+           const FaultSpec& f = inj.spec();
+           ctx.scheme.reScaleByAndEqualBitFlip(c, args.logDelta, f.op_step, f.coeff, f.bit, f.amountBits);
+       } else {
+           ctx.scheme.reScaleByAndEqual(c, args.logDelta);
+       }
+    };
 
-    for (uint32_t i = 0; i < args.doMul; ++i) {
-        if(iterArgs && args.stage == "mul_inside" && i == op_depth){
-            c = ctx.scheme.multBitFlip(c, c_clean, op_step, iterArgs->coeff, iterArgs->bit);
-        } else if(iterArgs && args.stage == "mul_inside_asplos" && i == op_depth){
-           c = ctx.scheme.multBitFlipAsplos(c, c_clean, op_step, iterArgs->coeff, iterArgs->bit);
-        } else {
-                c = ctx.scheme.mult(c, c_clean);
-        }
-        if(iterArgs && args.stage == "rescale_inside" && i == op_depth){
-            ctx.scheme.reScaleByAndEqualBitFlip(c, args.logDelta, op_step, iterArgs->coeff, iterArgs->bit);
-        }
-        else {
-                ctx.scheme.reScaleByAndEqual(c, args.logDelta);
-        }
-    }
+    for (const Op& op : args.ops) {
+       const uint32_t d = occ[size_t(op.type)]++;
+       switch (op.type) {
+       case OpType::Add:
+           if (inj.here("add", d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.addBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else {
+               c = ctx.scheme.add(c, c_clean);
+           }
+           break;
 
-    if(args.doRot>0){
-        int32_t rotIndex = args.doRot;
-        if(iterArgs && args.stage == "rot_inside"){
-            c = ctx.scheme.leftRotateFastBitFlip(c, rotIndex, op_step, iterArgs->coeff, iterArgs->bit);
-        } else if(iterArgs && args.stage == "rot_inside_asplos"){
-            c = ctx.scheme.leftRotateFastBitFlipAsplos(c, rotIndex, op_step, iterArgs->coeff, iterArgs->bit);
-        }         else {
-            c = ctx.scheme.leftRotateFast(c, rotIndex);
-        }
-    }
+       case OpType::PMul:
+           c = ctx.scheme.multByPoly(c, plain_clean.mx, args.logDelta);
+           rescale();
+           break;
 
-    // Back to client side
-    if (iterArgs) {
-        //if ((args.stage == "decrypt_c0") && (args.doAdd >0 || args.doPlainMul>0 || args.doMul>0 || args.doRot>0)){
-        if (args.stage == "decrypt_c0"){
-            flipBit(amountBits, c.bx, iterArgs->coeff, iterArgs->bit);
-        } else if (args.stage == "decrypt_c1"){
-            flipBit(amountBits, c.ax, iterArgs->coeff, iterArgs->bit);
-        //} else if ((args.stage == "decrypt_c1") && (args.doAdd >0 || args.doPlainMul>0 || args.doMul>0 || args.doRot>0)){
-        }
-    }
+       case OpType::Mul:
+           if (inj.here("mul", d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.multBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else if (inj.here("mul_asplos", d)) {
+               const FaultSpec& f = inj.spec();
+               Ciphertext operand = c_clean;
+               c = ctx.scheme.multBitFlipAsplos(c, operand, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else {
+               c = ctx.scheme.mult(c, c_clean);
+           }
+           rescale();
+           break;
+
+       case OpType::Scalar:
+           c = ctx.scheme.multByConst(c, op.param, args.logDelta);
+           rescale();
+           break;
+
+       case OpType::Rot: {
+           const long k = long(op.param);
+           if (inj.here("rot", d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.leftRotateFastBitFlip(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else if (inj.here("rot_asplos", d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.leftRotateFastBitFlipAsplos(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else {
+               c = ctx.scheme.leftRotateFast(c, k);
+           }
+           break;
+       }
+
     //cipher, logq, logQ, logT, logI=4
-
-    if(args.doBoot>0){
-        if (iterArgs && args.stage == "boot_outside")
-            ctx.scheme.bootstrapAndEqualBitFlip(c, logq_boot, args.logQ, 4, 4, op_step, iterArgs->coeff, iterArgs->bit);
-        else if (iterArgs && (args.stage == "boot_coeff" || args.stage == "boot_eval" || args.stage == "boot_slot"))
-            ctx.scheme.bootstrapAndEqualBitFlip_inside(c, logq_boot, args.logQ, 4, 4, args.stage, op_step, iterArgs->coeff, iterArgs->bit);
-        else
-            ctx.scheme.bootstrapAndEqual(c, logq_boot, args.logQ, 4, 4);
+       case OpType::Boot:
+           if (inj.here("boot", d)) {
+               const FaultSpec& f = inj.spec();
+               ctx.scheme.bootstrapAndEqualBitFlip(c, logq_boot, args.logQ, 4, 4, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else if (inj.here("boot_coeff", d) || inj.here("boot_eval", d) || inj.here("boot_slot", d)) {
+               const FaultSpec& f = inj.spec();
+               ctx.scheme.bootstrapAndEqualBitFlip_inside(c, logq_boot, args.logQ, 4, 4, f.stage, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else {
+               ctx.scheme.bootstrapAndEqual(c, logq_boot, args.logQ, 4, 4);
+           }
+           break;
+       }
     }
+
+    // ---- Back to client side (despues de TODO el pipeline, incluido el boot) ----
+    if (inj.here("decrypt_c0")) client_flip(inj, c.bx);
+    if (inj.here("decrypt_c1")) client_flip(inj, c.ax);
+
+
 
     Plaintext decrypt_plain = ctx.scheme.decryptMsg(ctx.sk, c);
 
-    if (iterArgs && args.stage == "decode") {
-        flipBit(amountBits, decrypt_plain.mx, iterArgs->coeff, iterArgs->bit);
-    }
+    if (inj.here("decode")) client_flip(inj, decrypt_plain.mx);
 
     complex<double>* decoded = ctx.scheme.decode(decrypt_plain);
 

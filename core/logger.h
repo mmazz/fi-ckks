@@ -80,9 +80,6 @@ public:
     void log(uint32_t limb, uint32_t coeff, uint32_t bit,
              const std::vector<double>& output);
  
-    void log(const IterationArgs& args,
-             const std::vector<double>& output);
- 
     // Comodo para el call site: pasa siempre los dos vectores y el logger se
     // encarga de escribir el de entrada una unica vez.
     void log(uint32_t limb, uint32_t coeff, uint32_t bit,

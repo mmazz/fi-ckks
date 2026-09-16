@@ -14,6 +14,11 @@ if [ ! -d "HEAAN-PRNG-Control" ]; then
 else
     echo "HEAAN-PRNG-Control already exists"
 fi
+HEAAN_SHA="5bc81044c30d5b6635e77def2918fca4501ff846"
+[ -d HEAAN-PRNG-Control ] || git clone git@github.com:mmazz/HEAAN-PRNG-Control.git
+git -C HEAAN-PRNG-Control fetch -q
+git -C HEAAN-PRNG-Control checkout -q "$HEAAN_SHA"
+make -C HEAAN-PRNG-Control lib
 
 # Clonar openfhe-PRNG-Control si no existe
 if [ ! -d "openfhe-PRNG-Control" ]; then

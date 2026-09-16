@@ -1,5 +1,6 @@
 #pragma once
 #include "attack_mode.h"
+#include "pipeline.h"
 #include <chrono>
 #include <iomanip>
 #include <string>
@@ -16,14 +17,6 @@ inline std::string timestamp_now() {
     ss << std::put_time(std::localtime(&t), "%Y-%m-%dT%H:%M:%S");
     return ss.str();
 }
-
-struct IterationArgs{
-    uint32_t limb;
-    uint32_t coeff;
-    uint32_t bit;
-    IterationArgs(uint64_t l, uint64_t c, uint64_t b)
-        : limb(l), coeff(c), bit(b) {}
-};
 
 struct CampaignArgs {
     std::string library = "none";
@@ -42,12 +35,8 @@ struct CampaignArgs {
     uint32_t seed_input = 0;
 
     bool withNTT = false;
-    uint32_t doAdd = false;
-    uint32_t doPlainMul = 0;
-    uint32_t doMul = 0;
-    double doScalarMul = 0;
-    uint32_t doRot = 0;
-    uint32_t doBoot = 0;
+    std::string pipeline;        // forma canonica, ej: "add; mul x2; rot 4"
+    std::vector<Op> ops;         // pipeline ya parseado y expandido
     uint32_t op_step = 0;
     uint32_t op_depth = 0;
     size_t isComplex = 0;

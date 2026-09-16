@@ -20,6 +20,7 @@ add_library(fi_core STATIC
     core/logger.cpp
     core/metrics.cpp
     core/registry.cpp
+    core/pipeline.cpp
 )
 target_include_directories(fi_core PUBLIC ${CMAKE_SOURCE_DIR}/core)
 
@@ -36,6 +37,7 @@ if(WITH_HEAAN)
     target_link_libraries(heaan_lib INTERFACE ${NTL_LIB} ${GMP_LIB} Threads::Threads m)
 
     add_library(fi_backend_heaan STATIC backends/heaan.cpp)
+
     target_link_libraries(fi_backend_heaan PUBLIC fi_core heaan_lib)
 endif()
 
@@ -71,3 +73,6 @@ if(WITH_OPENFHE)
     target_link_options(fi_openfhe PRIVATE -Wl,--no-as-needed ${OFHE_LD_FLAGS})
     set_target_properties(fi_openfhe PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
 endif()
+
+add_executable(test_pipeline apps/tools/test_pipeline.cpp)
+target_link_libraries(test_pipeline PRIVATE fi_core)

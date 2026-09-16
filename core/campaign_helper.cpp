@@ -6,7 +6,8 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
-
+#include <map>
+#include <set>
 
 
 void CampaignArgs::print(std::ostream& os) const {
@@ -27,12 +28,7 @@ void CampaignArgs::print(std::ostream& os) const {
     os << "seed_input: " << seed_input << '\n';
 
     os << "withNTT: " << std::boolalpha << withNTT << '\n';
-    os << "doAdd: " << doAdd << '\n';
-    os << "doPlainMul: " << doPlainMul << '\n';
-    os << "doMul: " << doMul << '\n';
-    os << "doScalarMul: " << doScalarMul << '\n';
-    os << "doRot: " << doRot << '\n';
-    os << "doBoot: " << doBoot << '\n';
+    os << "pipeline: " << pipeline << '\n';
     os << "op_step: " << op_step << '\n';
     os << "op_depth: " << op_depth << '\n';
 
@@ -65,21 +61,16 @@ void CampaignArgs::print(std::ostream& os) const {
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [OPTIONS]\n\n"
               << "Options:\n"
-              << "  --stage <name>              Stage to target: none, encode, encrypt_c0, encrypt_c1, decrypt_c0, decrypt_c1, decode, mul_inside, mul_outside, add_inside, add_outside, rot_inside, rot_outside (default: none)\n"
-              << "  --bitsPerCoeff <value>   Max bits per coeff (default: 64)\n"
+              << "  --stage <name>          Stage to target: none, encode, encrypt_c0, encrypt_c1, decrypt_c0, decrypt_c1, decode, mul_inside, mul_outside, add_inside, add_outside, rot_inside, rot_outside (default: none)\n"
+              << "  --bitsPerCoeff <value>  Max bits per coeff (default: 64)\n"
               << "  --logN <value>          log Ring dimension (default: 3 = 2^3 = 8)\n"
               << "  --logQ <value>          First mod bits (default: 60)\n"
               << "  --logDelta <value>      Scaling factor bits (default: 50)\n"
               << "  --logSlots <value>      log Slots used (default: 1)\n"
               << "  --mult_depth <value>    Multiplicative depth (only openfhe, default: 0)\n"
               << "  --withNTT <value>       Turn on or off NTT (only heaan, default: 0)\n"
-              << "  --doAdd <value>         The pipeline server has addition (default: 0)\n"
-              << "  --doPlainMul <value>    The pipeline server has that much of plain Muls (default: 0)\n"
-              << "  --doMul <value>         The pipeline server has that much Muls (default: 0)\n"
-              << "  --doScalarMul <value>   The pipeline server has Multiplies the cipher with that scalar (double) (default: 0, no mult)\n"
-              << "  --doRot <value>         The pipeline server has Rot, the value is how many rot (default: 0)\n"
-              << "  --doBoot <value>        The pipeline server has Bootstrapping after operations (default: 0)\n"
-              << "  --op_step <value>      Index of the target operation within the selected stage (0-based, default: 0)\n"
+              << "  --pipeline              TODO\n"
+              << "  --op_step <value>       Index of the target operation within the selected stage (0-based, default: 0)\n"
               << "  --op_depth <value>      Depth within the selected operation where the bit flip is applied (0-based, default: 0)\n"
               << "  --isComplex <name>      Complex input, only for HEAAN (default: 0)\n"
               << "  --isExhaustive <name>   Type of bit flip campaign (default: exhaustive)\n"
@@ -102,6 +93,26 @@ void print_usage(const char* program_name) {
               << "  " << program_name << " --library heaan --logN 15 --logDelta 60 --seed 123\n"
               << "  " << program_name << " --stage mul --limbs 4 -v\n";
 }
+
+   // Nombres viejos -> nuevos, para que los configs viejos sigan andando.
+   static std::string canonical_stage(const std::string& s) {
+       static const std::map<std::string, std::string> alias = {
+           {"add_inside", "add"},         {"mul_inside", "mul"},  {"mul_inside_asplos", "mul_asplos"},
+           {"rescale_inside", "rescale"}, {"rot_inside", "rot"},  {"rot_inside_asplos", "rot_asplos"},
+           {"boot_outside", "boot"},
+       };
+       static const std::set<std::string> valid = {
+           "none", "encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode",
+           "add", "pmul", "mul", "mul_asplos", "scalar", "rescale", "rot", "rot_asplos",
+           "boot", "boot_coeff", "boot_eval", "boot_slot", "cheby_tanh3", "hidden_layer",
+       };
+       auto it = alias.find(s);
+       const std::string st = (it != alias.end()) ? it->second : s;
+       if (!valid.count(st)) throw std::invalid_argument("stage invalido: '" + s + "'");
+       return st;
+   }
+
+
 CampaignArgs parse_arguments(int argc, char* argv[]) {
     CampaignArgs args;
 
@@ -114,12 +125,7 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
         {"logSlots",       required_argument, 0, 'g'},
         {"mult_depth",     required_argument, 0, 'm'},
         {"withNTT",        required_argument, 0, 'n'},
-        {"doAdd",          required_argument, 0, 'A'},
-        {"doPlainMul",     required_argument, 0, 'p'},
-        {"doMul",          required_argument, 0, 'M'},
-        {"doScalarMul",    required_argument, 0, 'L'},
-        {"doRot",          required_argument, 0, 'r'},
-        {"doBoot",         required_argument, 0, 'B'},
+        {"pipeline", required_argument, 0, 'P'},
         {"op_step",        required_argument, 0, 'o'},
         {"op_depth",       required_argument, 0, 'O'},
         {"isComplex",      required_argument, 0, 'X'},
@@ -146,7 +152,7 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
 
     while ((opt = getopt_long(
         argc, argv,
-        "S:c:N:Q:d:g:m:n:A:p:M:L:r:B:o:O:X:T:x:y:s:b:a:t:D:C:R:K:V:v:h",
+        "S:c:N:Q:d:g:m:n:P:o:O:X:T:x:y:s:b:a:t:D:J:C:R:K:V:vh",
         long_options,
         &option_index)) != -1)
     {
@@ -162,8 +168,6 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
             case 'x': args.logMin = std::stoul(optarg); break;
             case 'y': args.logMax = std::stoul(optarg); break;
             case 'D': args.dnum= std::stoul(optarg); break;
-            case 'r': args.doRot = std::stoul(optarg); break;
-            case 'B': args.doBoot = std::stoul(optarg); break;
             case 'o': args.op_step = std::stoul(optarg); break;
             case 'O': args.op_depth = std::stoul(optarg); break;
             case 'J': args.amountBits = std::stoul(optarg); break;
@@ -181,49 +185,10 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
             case 'n':  // --withNTT 0/1
                 args.withNTT = std::stoul(optarg) != 0;
                 break;
-
-            case 'A': args.doAdd = std::stoul(optarg); break;
-            case 'p': args.doPlainMul = std::stoul(optarg); break;
-            case 'M': args.doMul = std::stoul(optarg); break;
-            case 'L':
-                try {
-                    args.doScalarMul = std::stod(optarg);
-                } catch (const std::exception& e) {
-                    std::cerr << "Invalid value for -L (expected double): " << optarg << "\n";
-                    std::exit(EXIT_FAILURE);
-                }
-                break;
-
+            case 'P': args.pipeline = optarg; break;
             case 'S':
-                args.stage = optarg;
-                if (args.stage != "encode" &&
-                    args.stage != "none" &&
-                    args.stage != "encrypt_c0" &&
-                    args.stage != "encrypt_c1" &&
-                    args.stage != "decrypt_c0" &&
-                    args.stage != "decrypt_c1" &&
-                    args.stage != "decode" &&
-                    args.stage != "cheby_tanh3" &&
-                    args.stage != "hidden_layer" &&
-                    args.stage != "add_inside" &&
-                    args.stage != "mul_inside" &&
-                    args.stage != "mul_inside_asplos" &&
-                    args.stage != "rescale_inside" &&
-                    args.stage != "rot_inside" &&
-                    args.stage != "rot_inside_asplos" &&
-                    args.stage != "boot_outside" &&
-                    args.stage != "boot_coeff" &&
-                    args.stage != "boot_eval" &&
-                    args.stage != "boot_slot")
-                {
-                    std::cerr << "Error: invalid stage '" << args.stage
-                              << "' (expected: encode, encrypt_c0, encrypt_c1, decrypt_c0, decrypt_c1"
-                              " decode, cheby_tanh3, hidden_layer,  mul_inside or mul_outside"
-                              "boot_outisde, boot_coeff, boot_eval, boot_slots)\n";
-                    std::exit(EXIT_FAILURE);
-                }
-                break;
-
+                args.stage = canonical_stage(optarg); break;
+               
             case 'X':
                 args.isComplex= std::stoul(optarg);
                 break;
@@ -259,7 +224,8 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
                 std::exit(1);
         }
     }
-
+   args.ops = parse_pipeline(args.pipeline);   // tira invalid_argument si esta mal
+   args.pipeline = to_string(args.ops);        // canonico: es lo que va a la clave del registry
     if (!args.logSlots_provided) {
         if (args.logN == 0) {
             std::cerr << "Error: logN must be set if --logSlots is omitted\n";
