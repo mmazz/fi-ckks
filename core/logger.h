@@ -14,23 +14,24 @@
 #include "args.h"
 #include "metrics.h"
  
-
 struct BitflipResult {
-    uint32_t limb;
-    uint32_t coeff;
-    uint32_t bit;
-    double l2_abs;
-    double l2_rel;
-    double linf_abs;
-    double linf_rel;
-    bool detected;
+    uint32_t limb     = 0;
+    uint32_t coeff    = 0;
+    uint32_t bit      = 0;
+    double   l2_abs   = 0;
+    double   l2_rel   = 0;
+    double   linf_abs = 0;
+    double   linf_rel = 0;
+    bool     detected = false;
     SlotErrorStats stats;
-    uint32_t hidden_layer;
-    uint32_t reduceSum_layer;
+    uint32_t hidden_layer    = 0;
+    uint32_t reduceSum_layer = 0;
+    bool     misclassified   = false;   // solo workloads clasificadores (NN)
 
     static std::string header();
     std::string row() const;
 };
+
 
 class CampaignLogger {
 public:
@@ -39,10 +40,7 @@ public:
                    size_t flush_threshold = 10000);
 
     void log(const BitflipResult& r);
-    void log(uint32_t limb, uint32_t coeff, uint32_t bit,
-            double l2_abs, double l2_rel, double linf_abs, double linf_rel, bool is_sdc, SlotErrorStats stats,
-            uint32_t hidden_layer = 0,
-            uint32_t reduceSum_layer = 0);
+
     void compress_and_cleanup();
     void flush();
     void close();
@@ -68,7 +66,7 @@ public:
  
     VectorLogger(uint32_t campaign_id,
                  const std::string& vectors_dir,
-                 uint32_t logSlot,
+                 size_t n_values,
                  size_t flush_threshold = 16);
     ~VectorLogger();
  
@@ -92,7 +90,6 @@ public:
  
  
     size_t   slots()    const { return n_slots_; }      // 1 << logSlot
-    uint32_t log_slot() const { return log_slot_; }
     uint64_t total()    const { return total_; }        // bit flips logueados
     const std::string& path() const { return csv_path_; }
  
@@ -105,7 +102,6 @@ private:
     std::ofstream      file_;
     std::string        csv_path_;
     mutable std::mutex mtx_;
-    uint32_t log_slot_;
     size_t   n_slots_;
     size_t   flush_threshold_;
     size_t   since_flush_   = 0;

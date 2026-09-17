@@ -3,15 +3,21 @@
 #
 #   tests/regress.sh create   # genera/actualiza las referencias (tests/reference/*.csv.gz)
 #   tests/regress.sh check    # corre todo y compara contra las referencias
+#   tests/regress.sh check --slow    # ademas, la red con inyecciones reales (~5 min por caso)
+#
 set -uo pipefail
 
 MODE="${1:-check}"
+SLOW="${2:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/build/bin"
 REF="$ROOT/tests/reference"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$REF"
+# Datos sinteticos para el workload NN (no hace falta MNIST ni entrenar)
+export FI_NN_DATA="$TMP/nndata"
+python3 "$ROOT/tests/nn_testdata.py" "$FI_NN_DATA" || exit 1
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "  PASS  $1"; PASS=$((PASS+1)); }
@@ -21,7 +27,10 @@ skip() { echo "  SKIP  $1  ($2)"; SKIP=$((SKIP+1)); }
 HEAAN_S="--logN 4 --logQ 60  --logDelta 30 --logSlots 3 --bitsPerCoeff 64  --seed 1 --seed_input 1"
 HEAAN_L="--logN 4 --logQ 120 --logDelta 30 --logSlots 3 --bitsPerCoeff 128 --seed 1 --seed_input 1"
 OFHE_S="--logN 4 --logQ 60 --logDelta 40 --logSlots 3 --bitsPerCoeff 64 --mult_depth 1 --seed 1 --seed_input 1"
-
+# NN con numSamples 0: corre baseline + probe + chequeo de transitoriedad, sin inyectar (una corrida es lenta)
+# el CSV de referencia tiene solo el header. Las inyecciones reales de la red estan en --slow.
+NN_H="--isExhaustive 0 --numSamples 0 --logN 11 --logQ 220 --logDelta 30 --logSlots 10 --bitsPerCoeff 250 --seed 1 --seed_input 0"
+NN_O="--isExhaustive 0 --numSamples 0 --logN 12 --logQ 60 --logDelta 50 --logSlots 10 --bitsPerCoeff 64 --mult_depth 5 --withNTT 1 --seed 1 --seed_input 0"
 # nombre | binario | argumentos
 CASES=(
   "heaan_encode        | fi_heaan   | --isExhaustive 1 --stage encode     $HEAAN_S"
@@ -35,7 +44,17 @@ CASES=(
   "openfhe_encrypt_c0  | fi_openfhe | --isExhaustive 1 --stage encrypt_c0 $OFHE_S"
   "openfhe_add_dec_c0  | fi_openfhe | --isExhaustive 1 --stage decrypt_c0 --pipeline 'add' $OFHE_S"
   "openfhe_random      | fi_openfhe | --isExhaustive 0 --numSamples 5 --stage encrypt_c1 $OFHE_S"
+  "heaannn_hidden      | fi_heaan_nn   | --stage hidden_layer --op_step 4 $NN_H"
+  "heaannn_mul         | fi_heaan_nn   | --stage mul --op_step 25 $NN_H"
+  "openfhenn_cheby     | fi_openfhe_nn | --stage cheby_tanh3 --op_step 9 $NN_O"
 )
+if [[ "$SLOW" == "--slow" ]]; then
+  CASES+=(
+    "nnslow_heaan_hidden | fi_heaan_nn   | --stage hidden_layer --op_step 12 $NN_H --numSamples 1"
+    "nnslow_heaan_mul    | fi_heaan_nn   | --stage mul --op_step 5 $NN_H --numSamples 1"
+    "nnslow_openfhe_cheb | fi_openfhe_nn | --stage cheby_tanh3 --op_step 2 $NN_O --numSamples 1"
+  )
+fi
 # Configs invalidas: tienen que fallar, POR EL MOTIVO ESPERADO, y sin registrar la campania.
 # nombre | binario | argumentos | pedazo del mensaje de error esperado
 MUST_FAIL=(
@@ -45,6 +64,10 @@ MUST_FAIL=(
   "heaan_pipeline_mal  | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x2; rot' $HEAAN_L      | necesita un valor"
   "openfhe_mul_inside  | fi_openfhe | --isExhaustive 1 --stage mul --pipeline 'mul' $OFHE_S                   | never reach"
   "openfhe_boot        | fi_openfhe | --isExhaustive 1 --stage encode --pipeline 'boot' $OFHE_S               | no esta implementado"
+  "heaannn_step_fuera  | fi_heaan_nn   | --stage mul --op_step 26 $NN_H                 | never reach"
+  "heaannn_mal_clasif  | fi_heaan_nn   | --stage encode $NN_H --seed_input 3            | clasifica mal"
+  "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | tiene que ir vacio"
+  "openfhenn_mul       | fi_openfhe_nn | --stage mul $NN_O                              | never reach"
 )
 
 
@@ -80,7 +103,7 @@ for entry in "${CASES[@]}"; do
 
   if [[ "$MODE" == "create" ]]; then
     cp "$out" "$REF/$name.csv.gz"
-    pass "$name (referencia creada, $(zcat "$out" | wc -l) filas)"
+    pass "$name (referencia creada, $(( $(zcat "$out" | wc -l) - 1 )) inyecciones)"
   else
     [[ -f "$REF/$name.csv.gz" ]] || { skip "$name" "sin referencia, corre 'create'"; continue; }
     if cmp -s <(zcat "$REF/$name.csv.gz") <(zcat "$out"); then

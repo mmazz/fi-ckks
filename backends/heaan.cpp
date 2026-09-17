@@ -1,4 +1,5 @@
 #include "backend_interface.h"
+#include "heaan_inject.h"
 
 // HEAAN-only includes
 #include "HEAAN.h"
@@ -68,62 +69,6 @@ void backend_prepare_args(CampaignArgs& args){
     args.mult_depth = 0;
 }
 
-static Injector*        g_inj = nullptr;
-static const NTL::ZZX*  g_last_poly = nullptr;
-static NTL::ZZ          g_original;
-static long             g_N = 0;
-
-static void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long ring_degree)
-{
-   if (!g_inj) throw std::logic_error("flip call outside of run_iteration");
-   Injector& inj = *g_inj;
-   const long N = ring_degree > 0 ? ring_degree : g_N;
-
-   if (inj.probing()) {
-       long maxbits = 0;
-       for (long i = 0; i < poly.rep.length(); ++i)
-           maxbits = std::max(maxbits, NTL::NumBits(poly.rep[i]));
-       inj.record_probe(1, uint32_t(maxbits));
-       return;
-   }
-   const FaultSpec& f = inj.spec();
-   if (coeff != f.coeff || bit != f.bit || width != f.amountBits)
-       throw std::logic_error("the fork ask a flip different than FaultSpec");
-   if (long(coeff) >= N) throw std::out_of_range("coeff >= N");
-
-   const long need = std::max<long>(long(coeff) + 1, N);   // igual que default_flip: estirar, NUNCA normalize
-   if (poly.rep.length() < need) poly.SetLength(need);
-
-   const bool is_restore = (g_last_poly == &poly);
-   const NTL::ZZX before = poly;
-   for (uint32_t i = 0; i < width; ++i) NTL::SwitchBit(poly.rep[coeff], long(bit + i));
-
-   if (is_restore) {
-       if (poly.rep[coeff] != g_original) throw std::logic_error("the restore didnt recover the original value");
-       inj.record_restore();
-       g_last_poly = nullptr;
-       return;
-   }
-   int flipped = 0;
-   for (uint32_t i = 0; i < width; ++i)
-       flipped += NTL::bit(before.rep[coeff], long(bit + i)) != NTL::bit(poly.rep[coeff], long(bit + i));
-   int changed = 0;
-   for (long i = 0; i < N; ++i)
-       changed += NTL::coeff(before, i) != NTL::coeff(poly, i);
-   g_original  = before.rep[coeff];
-   g_last_poly = &poly;
-   inj.record_flip(flipped, changed);
-}
-
-struct InjectorScope {
-   explicit InjectorScope(Injector& inj) { g_inj = &inj; g_last_poly = nullptr; }
-   ~InjectorScope() { g_inj = nullptr; g_last_poly = nullptr; }
-};
-
-static void client_flip(Injector& inj, NTL::ZZX& poly) {
-   const FaultSpec& f = inj.spec();
-   heaanfi::flip(poly, f.coeff, f.bit, f.amountBits, g_N);
-}
 
 BackendContext* setup_campaign(const CampaignArgs& args)
 {
@@ -135,8 +80,6 @@ BackendContext* setup_campaign(const CampaignArgs& args)
     else
         h = std::max<long>(4,N/64);
     NTL::SetSeed(NTL::ZZ(args.seed));
-    heaanfi::set_flip(&fi_flip);
-    g_N = long(N);
     auto* ctx = new HEAANContext(args.logN, args.logQ, h, args.seed);
     std::srand(args.seed);
     if (has_op(args.ops, OpType::Boot))
@@ -162,13 +105,11 @@ IterationResult run_iteration(
     BackendContext* bctx,
     const CampaignArgs& args, Injector& inj
     )
-{
-    InjectorScope scope(inj);
-
-    long logq_boot = (long)args.logDelta + 10;
+    {
 
     auto& ctx = static_cast<HEAANContext&>(*bctx);
-
+    InjectorScope scope(inj, ctx.cc.N);
+    long logq_boot = (long)args.logDelta + 10;
     auto baseInput = ctx.baseInput.data();
     auto baseSize  = ctx.baseInput.size();
     auto baseInputComplex = ctx.baseInputComplex.data();

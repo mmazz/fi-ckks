@@ -6,11 +6,14 @@ Combina (mediana / media / max) las seeds de la MISMA config, y hace una figura
 por cada op_step encontrado.
 
 Ejemplos:
-  python3 register_analysis.py --results ../../results --title mul \
+  python3 register_map.py --results ../../results --title mul \
       --where library=heaan stage=mul "pipeline=add; mul" logN=6 --op_step all
 
-  python3 register_analysis.py --results ../../results --title rescale \
+  python3 register_map.py --results ../../results --title rescale \
       --where library=heaan stage=rescale "pipeline=mul x2" --op_step 0-3 --stat max
+
+Agrega --no-legend (o --no_legend) para ocultar categorias, umbrales y escala.
+--title solo define el nombre de los archivos; no agrega texto a la figura.
 """
 import argparse
 import sys
@@ -18,7 +21,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.lines import Line2D
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -27,14 +29,15 @@ from utils.results import load_campaigns, load_data, select, require_single_conf
 # ------------------------------------------------------------------ #
 # Categorias de MREP (en %). Ajusta los umbrales aca.
 # ------------------------------------------------------------------ #
-MASKED_PCT = 0.1      # < 0.1 %          -> Masked
-MINOR_PCT = 10.0      # 0.1 % .. 10 %    -> Minor SDC
-MODERATE_PCT = 100.0  # 10 % .. 100 %    -> Moderate SDC ;  > 100 % -> Severe (gradiente)
+MASKED_PCT = 0.1      # <= epsilon = 0.1 % -> Masked
+MINOR_PCT = 10.0      # epsilon < MREP <= 10 % -> Minor SDC
+MODERATE_PCT = 100.0  # 10 % < MREP <= 100 % -> Moderate SDC ; > 100 % -> Severe
 
-GREEN, YELLOW, ORANGE, RED, NOCOLOR = "#008000", "#FFD700", "#FFA500", "#FF0000", "#BBBBBB"
+GREEN, YELLOW, ORANGE, RED, NOCOLOR = "#008000", "#FFFF00", "#FFA500", "#FF0000", "#BBBBBB"
 SEVERE_CMAP = mcolors.LinearSegmentedColormap.from_list("severe", [RED, "black"])
 
 FONT = 20
+MARKER_OVERLAP = 0.6  # diametro = 115 % de la mayor separacion entre centros
 IMG_DIR = Path(__file__).resolve().parent.parent / "img"
 
 
@@ -73,7 +76,8 @@ def parse_args():
     p.add_argument("--stat", default="median", choices=["median", "mean", "max"],
                    help="como combinar las seeds en cada (coeff, bit)")
     p.add_argument("--title", default="register")
-    p.add_argument("--no_legend", action="store_true")
+    p.add_argument("--no-legend", "--no_legend", dest="no_legend", action="store_true",
+                   help="ocultar la leyenda completa (categorias, umbrales y escala)")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -90,11 +94,11 @@ def mrep_per_cell(data, stat):
 def mrep_colors(mrep, vmax):
     """RGBA por punto: color por categoria; los severos en gradiente log entre 100 % y vmax."""
     rgba = np.tile(mcolors.to_rgba(NOCOLOR), (len(mrep), 1))     # NaN -> gris
-    for mask, color in [(mrep < MASKED_PCT, GREEN),
-                        ((mrep >= MASKED_PCT) & (mrep < MINOR_PCT), YELLOW),
-                        ((mrep >= MINOR_PCT) & (mrep < MODERATE_PCT), ORANGE)]:
+    for mask, color in [(mrep <= MASKED_PCT, GREEN),
+                        ((mrep > MASKED_PCT) & (mrep <= MINOR_PCT), YELLOW),
+                        ((mrep > MINOR_PCT) & (mrep <= MODERATE_PCT), ORANGE)]:
         rgba[mask] = mcolors.to_rgba(color)
-    severe = mrep >= MODERATE_PCT
+    severe = mrep > MODERATE_PCT
     if severe.any():
         norm = mcolors.LogNorm(vmin=MODERATE_PCT, vmax=max(vmax, MODERATE_PCT * 1.01), clip=True)
         rgba[severe] = SEVERE_CMAP(norm(mrep[severe]))
@@ -114,11 +118,12 @@ def plot_register_map(ax, cells, cfg, vmax):
     y = cells["bit"].to_numpy()
     c = mrep_colors(cells["mrep"].to_numpy(), vmax)
 
-    # Tamano del circulo: que entre en la celda (coeff, bit) sin pisarse
+    # Diametro ligeramente mayor que la separacion en AMBOS ejes.
+    # Usar min dejaba huecos cuando las celdas no eran cuadradas.
     fig = ax.figure
     bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-    cell_pt = min(bbox.width * 72 / n_x, bbox.height * 72 / n_bits)
-    size = (0.85 * cell_pt) ** 2
+    cell_pt = max(bbox.width * 72 / n_x, bbox.height * 72 / n_bits)
+    size = (MARKER_OVERLAP * cell_pt) ** 2
 
     ax.scatter(x, y, c=c, s=size, linewidths=0, zorder=3)
     ax.set_xlim(-0.5, n_x - 0.5)
@@ -147,18 +152,37 @@ def plot_register_map(ax, cells, cfg, vmax):
 
 
 def add_legend(fig, ax, vmax):
-    handles = [
-        Line2D([], [], marker="o", ls="", color=GREEN,  ms=12, label=f"Masked (<{MASKED_PCT:g}%)"),
-        Line2D([], [], marker="o", ls="", color=YELLOW, ms=12, label=f"Minor ({MASKED_PCT:g}–{MINOR_PCT:g}%)"),
-        Line2D([], [], marker="o", ls="", color=ORANGE, ms=12, label=f"Moderate ({MINOR_PCT:g}–{MODERATE_PCT:g}%)"),
+    """Una unica franja: categorias arriba y sus umbrales debajo."""
+    legend_ax = ax.inset_axes([0, 1.025, 1, 0.10])
+    legend_ax.set_xlim(0, 1)
+    legend_ax.set_ylim(0, 1)
+    legend_ax.set_axis_off()
+
+    categories = [
+        (0.02, GREEN, "Masked", r"$\leq\varepsilon$"),
+        (0.16, YELLOW, "Minor SDC", rf"$\leq {MINOR_PCT:g}\%$"),
+        (0.32, ORANGE, "Moderate SDC", f"{MINOR_PCT:g}% - {MODERATE_PCT:g}%"),
     ]
-    ax.legend(handles=handles, loc="lower left", bbox_to_anchor=(0, 1.02), ncol=3,
-              frameon=False, fontsize=FONT - 6, handletextpad=0.2, columnspacing=1.0)
-    if vmax > MODERATE_PCT:
-        sm = plt.cm.ScalarMappable(cmap=SEVERE_CMAP, norm=mcolors.LogNorm(MODERATE_PCT, vmax))
-        cb = fig.colorbar(sm, ax=ax, pad=0.07, fraction=0.04)
-        cb.set_label("Severe SDC: MREP (%)", fontsize=FONT - 6)
-        cb.ax.tick_params(labelsize=FONT - 8)
+    for x, color, label, threshold in categories:
+        legend_ax.scatter([x], [0.67], marker="s", s=80, c=color,
+                          edgecolors="black", linewidths=0.6)
+        legend_ax.text(x + 0.025, 0.67, label, va="center", fontsize=FONT - 6)
+        legend_ax.text(x, 0.20, threshold, ha="center", va="center", fontsize=FONT - 8)
+
+    # El mismo rango logaritmico que usan los puntos. Solo dos etiquetas,
+    # sin ticks intermedios ni titulo adicional.
+    scale_max = max(vmax, MODERATE_PCT * 1.01)
+    cax = legend_ax.inset_axes([0.49, 0.58, 0.39, 0.18])
+    sm = plt.cm.ScalarMappable(cmap=SEVERE_CMAP,
+                              norm=mcolors.LogNorm(MODERATE_PCT, scale_max))
+    ticks = [MODERATE_PCT, scale_max] if vmax > MODERATE_PCT else [MODERATE_PCT]
+    cb = fig.colorbar(sm, cax=cax, orientation="horizontal", ticks=ticks)
+    cb.ax.minorticks_off()
+    cb.ax.tick_params(labelbottom=False)
+    cb.outline.set_linewidth(0.6)
+    for x, value in zip((0.49, 0.88), ticks):
+        legend_ax.text(x, 0.20, f"{value:.3g}%", ha="center", va="center", fontsize=FONT - 8)
+    legend_ax.text(0.885, 0.67, "Severe SDC", va="center", fontsize=FONT - 6)
 
 
 # ------------------------------------------------------------------ #
@@ -189,8 +213,6 @@ def main():
         plot_register_map(ax, cells, cfg, vmax)
         if not args.no_legend:
             add_legend(fig, ax, vmax)
-        ax.set_title(f"{cfg['stage']}  op_step={step}  [{cfg['pipeline']}]  "
-                     f"{args.stat} of {n_seeds} seeds", fontsize=FONT - 4, pad=40)
 
         out = IMG_DIR / f"{args.title}_op_step_{step}"
         fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")

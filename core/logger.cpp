@@ -4,7 +4,7 @@
 namespace fs = std::filesystem;
 
 std::string BitflipResult::header() {
-    return "limb,coeff,bit,l2_abs,l2_rel,linf_abs,linf_rel,detected,correct,degraded,corrupted,failed,hidden_layer,reduceSum_layer";
+    return "limb,coeff,bit,l2_abs,l2_rel,linf_abs,linf_rel,detected,correct,degraded,corrupted,failed,hidden_layer,reduceSum_layer,misclassified";
 }
 
 std::string BitflipResult::row() const {
@@ -14,7 +14,7 @@ std::string BitflipResult::row() const {
        << linf_abs << "," << linf_rel << "," << (detected? 1 : 0) << ","
        << stats.correct << "," << stats.degraded << ","
        << stats.corrupted << "," << stats.failed<< ","
-       << hidden_layer << "," << reduceSum_layer;
+       << hidden_layer << "," << reduceSum_layer << "," << (misclassified ? 1 : 0);
     return ss.str();
 }
 
@@ -56,23 +56,6 @@ void CampaignLogger::log(const BitflipResult& r) {
         flush();
 }
 
-void CampaignLogger::log(uint32_t limb, uint32_t coeff, uint32_t bit,
-          double l2_abs, double l2_rel, double linf_abs, double linf_rel, bool detected, SlotErrorStats stats,
-          uint32_t hidden_layer, uint32_t reduceSum_layer)
-    {
-        BitflipResult r{
-            limb,
-            coeff,
-            bit,
-            l2_abs, l2_rel,
-            linf_abs, linf_rel, detected,
-            stats,
-            hidden_layer,
-            reduceSum_layer
-        };
-        log(r);
-    }
-
 void CampaignLogger::flush() {
     for (auto& l : buffer_)
         file_ << l << "\n";
@@ -105,10 +88,9 @@ void CampaignLogger::compress_and_cleanup() {
 
 VectorLogger::VectorLogger(uint32_t id,
                            const std::string& dir,
-                           uint32_t logSlot,
+                           size_t n_values,
                            size_t flush_th)
-    : log_slot_(logSlot),
-      n_slots_(size_t{1} << logSlot),
+    : n_slots_(n_values),
       flush_threshold_(flush_th == 0 ? size_t{1} : flush_th)
 {
     fs::create_directories(dir);
@@ -148,8 +130,7 @@ void VectorLogger::write_row_locked(long long limb,
 {
     if (v.size() != n_slots_) {
         std::ostringstream e;
-        e << "VectorLogger: se esperaban " << n_slots_
-          << " slots (1<<" << log_slot_ << ") y llegaron " << v.size();
+        e << "VectorLogger: waiting " << n_slots_ << " values but only " << v.size() << " arrive";
         throw std::invalid_argument(e.str());
     }
  

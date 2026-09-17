@@ -14,6 +14,7 @@ option(WITH_OPENFHE "Compilar backend OpenFHE" ON)
 set(THIRD_PARTY ${CMAKE_SOURCE_DIR}/third_party)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# ---------------------------------------------------------------- core
 add_library(fi_core STATIC
     core/args.cpp
     core/campaign_helper.cpp
@@ -24,6 +25,10 @@ add_library(fi_core STATIC
 )
 target_include_directories(fi_core PUBLIC ${CMAKE_SOURCE_DIR}/core)
 
+add_executable(test_pipeline apps/tools/test_pipeline.cpp)
+target_link_libraries(test_pipeline PRIVATE fi_core)
+
+# ---------------------------------------------------------------- HEAAN
 if(WITH_HEAAN)
     set(HEAAN_DIR ${THIRD_PARTY}/HEAAN-PRNG-Control)
     find_library(NTL_LIB ntl REQUIRED)
@@ -36,11 +41,19 @@ if(WITH_HEAAN)
         INTERFACE_INCLUDE_DIRECTORIES ${HEAAN_DIR}/src)
     target_link_libraries(heaan_lib INTERFACE ${NTL_LIB} ${GMP_LIB} Threads::Threads m)
 
-    add_library(fi_backend_heaan STATIC backends/heaan.cpp)
+    # Puente Injector <-> hook del fork. Lo comparten el backend y los workloads HEAAN.
+    add_library(fi_heaan_inject STATIC backends/heaan_inject.cpp)
+    target_include_directories(fi_heaan_inject PUBLIC ${CMAKE_SOURCE_DIR}/backends)
+    target_link_libraries(fi_heaan_inject PUBLIC fi_core heaan_lib)
 
-    target_link_libraries(fi_backend_heaan PUBLIC fi_core heaan_lib)
+    add_library(fi_backend_heaan STATIC backends/heaan.cpp)
+    target_link_libraries(fi_backend_heaan PUBLIC fi_heaan_inject)
+
+    add_executable(fi_heaan apps/fi_main.cpp)
+    target_link_libraries(fi_heaan PRIVATE fi_backend_heaan)
 endif()
 
+# ---------------------------------------------------------------- OpenFHE
 if(WITH_OPENFHE)
     find_package(OpenFHE CONFIG REQUIRED
         PATHS ${THIRD_PARTY}/openfhe-PRNG-Control/install/lib/OpenFHE
@@ -49,30 +62,48 @@ if(WITH_OPENFHE)
 
     separate_arguments(OFHE_CXX_FLAGS UNIX_COMMAND "${OpenFHE_CXX_FLAGS}")
     separate_arguments(OFHE_LD_FLAGS  UNIX_COMMAND "${OpenFHE_EXE_LINKER_FLAGS}")
+    list(REMOVE_ITEM OFHE_CXX_FLAGS -Werror)   # no queremos que un warning nuestro rompa el build
 
-    add_library(fi_backend_openfhe STATIC backends/openfhe.cpp)
-    target_compile_options(fi_backend_openfhe PRIVATE ${OFHE_CXX_FLAGS})
-    target_include_directories(fi_backend_openfhe PUBLIC
+    # Todo lo que hace falta para compilar y linkear contra OpenFHE, en un solo target.
+    add_library(openfhe_lib INTERFACE)
+    target_compile_options(openfhe_lib INTERFACE ${OFHE_CXX_FLAGS})
+    target_include_directories(openfhe_lib INTERFACE
         ${OpenFHE_INCLUDE}
         ${OpenFHE_INCLUDE}/third-party/include
         ${OpenFHE_INCLUDE}/core
         ${OpenFHE_INCLUDE}/pke
         ${OpenFHE_INCLUDE}/binfhe)
-    target_link_directories(fi_backend_openfhe PUBLIC ${OpenFHE_LIBDIR})
-    target_link_libraries(fi_backend_openfhe PUBLIC fi_core ${OpenFHE_SHARED_LIBRARIES})
-endif()
+    target_link_directories(openfhe_lib INTERFACE ${OpenFHE_LIBDIR})
+    target_link_libraries(openfhe_lib INTERFACE ${OpenFHE_SHARED_LIBRARIES})
+    target_link_options(openfhe_lib INTERFACE -Wl,--no-as-needed ${OFHE_LD_FLAGS})
 
-if(WITH_HEAAN)
-    add_executable(fi_heaan apps/fi_main.cpp)
-    target_link_libraries(fi_heaan PRIVATE fi_backend_heaan)
-endif()
+    add_library(fi_openfhe_inject STATIC backends/openfhe_inject.cpp)
+    target_include_directories(fi_openfhe_inject PUBLIC ${CMAKE_SOURCE_DIR}/backends)
+    target_link_libraries(fi_openfhe_inject PUBLIC fi_core openfhe_lib)
 
-if(WITH_OPENFHE)
+    add_library(fi_backend_openfhe STATIC backends/openfhe.cpp)
+    target_link_libraries(fi_backend_openfhe PUBLIC fi_openfhe_inject)
+
     add_executable(fi_openfhe apps/fi_main.cpp)
     target_link_libraries(fi_openfhe PRIVATE fi_backend_openfhe)
-    target_link_options(fi_openfhe PRIVATE -Wl,--no-as-needed ${OFHE_LD_FLAGS})
     set_target_properties(fi_openfhe PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
 endif()
 
-add_executable(test_pipeline apps/tools/test_pipeline.cpp)
-target_link_libraries(test_pipeline PRIVATE fi_core)
+# ---------------------------------------------------------------- workload NN
+add_library(fi_nn_plain STATIC workloads/nn/mnist.cpp)
+target_include_directories(fi_nn_plain PUBLIC ${CMAKE_SOURCE_DIR}/workloads/nn)
+target_compile_definitions(fi_nn_plain PRIVATE FI_NN_DATA_DIR="${CMAKE_SOURCE_DIR}/workloads/nn/data")
+
+if(WITH_HEAAN)
+    add_library(fi_nn_heaan STATIC workloads/nn/heaan_nn.cpp)
+    target_link_libraries(fi_nn_heaan PUBLIC fi_heaan_inject fi_nn_plain)
+    add_executable(fi_heaan_nn apps/fi_main.cpp)
+    target_link_libraries(fi_heaan_nn PRIVATE fi_nn_heaan)
+endif()
+if(WITH_OPENFHE)
+    add_library(fi_nn_openfhe STATIC workloads/nn/openfhe_nn.cpp)
+    target_link_libraries(fi_nn_openfhe PUBLIC fi_openfhe_inject fi_nn_plain)
+    add_executable(fi_openfhe_nn apps/fi_main.cpp)
+    target_link_libraries(fi_openfhe_nn PRIVATE fi_nn_openfhe)
+    set_target_properties(fi_openfhe_nn PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
+endif()

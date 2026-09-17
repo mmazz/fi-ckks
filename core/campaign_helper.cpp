@@ -165,8 +165,8 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
             case 'm': args.mult_depth = std::stoul(optarg); break;
             case 's': args.seed = std::stoul(optarg); break;
             case 'b': args.seed_input = std::stoul(optarg); break;
-            case 'x': args.logMin = std::stoul(optarg); break;
-            case 'y': args.logMax = std::stoul(optarg); break;
+            case 'x': args.logMin = std::stoi(optarg); break;
+            case 'y': args.logMax = std::stoi(optarg); break;
             case 'D': args.dnum= std::stoul(optarg); break;
             case 'o': args.op_step = std::stoul(optarg); break;
             case 'O': args.op_depth = std::stoul(optarg); break;

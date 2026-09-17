@@ -23,3 +23,9 @@ PS = library=$(LIB) logN=6 logSlots=4 logQ=120 logDelta=40 bitsPerCoeff=144
 add_inside:   ; $(CURVE) --title add_inside --where $(PS) stage=add "pipeline=add x2" --per op_step --split gap
 mul_inside:   ; $(CURVE) --title mul_inside --where $(PS) stage=mul pipeline=mul      --per op_step --split gap
 mul_reg:      ; $(REG)   --title mul_inside --where $(PS) stage=mul pipeline=mul      --op_step all
+
+
+test: ; python3 register_map.py --where library=heaan logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c0 pipeline="add x2; rot 2" --results "../results" --show
+test1: ; python3 register_map.py --where library=heaan logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c1 pipeline="add x2; rot 2" --results "../results" --show
+test2: ; python3 register_map.py --where library=openfhe logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c0 pipeline="add x2; rot 2" --results "../results" --show
+test3: ; python3 register_map.py --where library=openfhe logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c1 pipeline="add x2; rot 2" --results "../results" --show

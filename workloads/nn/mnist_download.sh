@@ -9,4 +9,3 @@ if [[ ! -d "data" ]]; then
 else
     echo "MNIST data already exists."
 fi
-python3 trainingNeuralNetwork.py

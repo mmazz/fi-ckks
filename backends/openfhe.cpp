@@ -1,9 +1,11 @@
 #include "openfhe.h"
 #include "backend_interface.h"
+#include "openfhe_inject.h"
 #include "attack_mode.h"
 #include "constants-defs.h"
 #include "metrics.h"
 #include "args.h"
+
 using namespace lbcrypto;
 
 struct OpenFHEContext final : BackendContext {
@@ -27,21 +29,6 @@ void backend_prepare_args(CampaignArgs& args){
     args.library = "openfhe";
 }
 
-SecretKeyAttackMode to_openfhe_attack_mode(AttackModeSKA mode)
-{
-    using OF = SecretKeyAttackMode;
-    switch (mode) {
-        case AttackModeSKA::Disabled:
-            return OF::Disabled;
-        case AttackModeSKA::CompleteInjection:
-            return OF::CompleteInjection;
-        case AttackModeSKA::RealOnly:
-            return OF::RealOnly;
-        case AttackModeSKA::ImaginaryOnly:
-            return OF::ImaginaryOnly;
-    }
-    throw std::logic_error("Invalid AttackModeSKA");
-}
 
 std::string toLower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),
@@ -63,23 +50,8 @@ ScalingTechnique toScalingTechnique(const std::string& s) {
 BackendContext* setup_campaign(const CampaignArgs& args)
 {
 
-    if (args.openfhe_attack_mode || args.openfhe_threshold_bits)
-    {
-        auto attackModeOF =
-            args.openfhe_attack_mode
-                ? to_openfhe_attack_mode(*args.openfhe_attack_mode)
-                : SecretKeyAttackMode::CompleteInjection;
+    configure_sdc(args);
 
-        double threshold = args.openfhe_threshold_bits.value_or(5.0);
-
-        auto cfg = SDCConfigHelper::MakeConfig(
-            false, // Disable execption
-            attackModeOF,
-            threshold
-        );
-
-        SDCConfigHelper::SetGlobalConfig(cfg);
-    }
     CCParams<CryptoContextCKKSRNS> params;
     params.SetMultiplicativeDepth(args.mult_depth);
     params.SetScalingModSize(args.logDelta);
@@ -127,37 +99,10 @@ BackendContext* setup_campaign(const CampaignArgs& args)
 void destroy_campaign(BackendContext* ctx) {
     delete ctx;
 }
-   static int count_diff(const DCRTPoly& a, const DCRTPoly& b) {
-       const auto& ta = a.GetAllElements();
-       const auto& tb = b.GetAllElements();
-       int n = 0;
-       for (size_t i = 0; i < ta.size(); ++i)
-           for (size_t j = 0; j < ta[i].GetLength(); ++j)
-               n += (ta[i][j] != tb[i][j]);
-       return n;
-   }
 
-   static void inject(DCRTPoly& p, bool withNTT, Injector& inj) {
-       const Format orig = p.GetFormat();
-       p.SetFormat(withNTT ? Format::EVALUATION : Format::COEFFICIENT);
-       auto& towers = p.GetAllElements();
 
-       if (inj.probing()) {
-           uint32_t qbits = 0;
-           for (const auto& t : towers) qbits = std::max<uint32_t>(qbits, t.GetModulus().GetMSB());
-           inj.record_probe(uint32_t(towers.size()), qbits);
-       } else {
-           const FaultSpec& f = inj.spec();
-           const DCRTPoly before = p;
-           auto& t = towers.at(f.limb);
-           if (f.coeff >= t.GetLength()) throw std::out_of_range("coeff fuera de rango");
-           const uint64_t a = t[f.coeff].ConvertToInt();
-           const uint64_t b = a ^ inj.mask64();
-           t[f.coeff] = NativeInteger(b);
-           inj.record_flip(__builtin_popcountll(a ^ b), count_diff(before, p));
-       }
-       p.SetFormat(orig);
-   }
+
+
 
 IterationResult run_iteration(BackendContext* bctx,
               const CampaignArgs& args,Injector& inj)

@@ -28,8 +28,8 @@ struct CampaignArgs {
     uint32_t logDelta = 50;
     uint32_t logSlots = 2;
     uint32_t mult_depth = 0;
-    uint32_t logMin = 0;
-    uint32_t logMax = 0;
+    int32_t logMin = 0;
+    int32_t logMax = 0;
 
     uint32_t seed = 0;
     uint32_t seed_input = 0;
