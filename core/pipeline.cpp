@@ -20,7 +20,7 @@ constexpr OpInfo kOps[] = {
 
 const OpInfo& info(OpType t) {
     for (const auto& o : kOps) if (o.type == t) return o;
-    throw std::logic_error("OpType desconocido");
+    throw std::logic_error("OpType unknown");
 }
 
 std::string trim(const std::string& s) {
@@ -65,8 +65,8 @@ std::vector<Op> parse_pipeline(const std::string& s) {
 
         const OpInfo* oi = nullptr;
         for (const auto& o : kOps) if (name == o.name) oi = &o;
-        if (!oi) throw std::invalid_argument("pipeline: op desconocida '" + name +
-                                             "' (validas: add pmul mul scalar rot boot)");
+        if (!oi) throw std::invalid_argument("pipeline: op unknown '" + name +
+                                             "' (valid: add pmul mul scalar rot boot)");
 
         long reps = 1;
         bool has_param = false;
@@ -74,22 +74,22 @@ std::vector<Op> parse_pipeline(const std::string& s) {
         while (ws >> w) {
             if (is_repeat(w)) {
                 reps = std::stol(w.substr(1));
-                if (reps < 1) throw std::invalid_argument("pipeline: repeticion invalida en '" + chunk + "'");
+                if (reps < 1) throw std::invalid_argument("pipeline: invalid repetition in '" + chunk + "'");
             } else if (!has_param) {
                 size_t used = 0;
                 try { param = std::stod(w, &used); } catch (...) { used = 0; }
-                if (used != w.size()) throw std::invalid_argument("pipeline: valor invalido '" + w + "' en '" + chunk + "'");
+                if (used != w.size()) throw std::invalid_argument("pipeline: invalid value '" + w + "' in '" + chunk + "'");
                 has_param = true;
             } else {
-                throw std::invalid_argument("pipeline: sobra '" + w + "' en '" + chunk + "'");
+                throw std::invalid_argument("pipeline: surplus '" + w + "' in '" + chunk + "'");
             }
         }
         if (oi->needs_param && !has_param)
-            throw std::invalid_argument("pipeline: '" + name + "' necesita un valor");
+            throw std::invalid_argument("pipeline: '" + name + "' needs a value");
         if (!oi->needs_param && has_param)
-            throw std::invalid_argument("pipeline: '" + name + "' no acepta valor");
+            throw std::invalid_argument("pipeline: '" + name + "' does not accept a value");
         if (oi->type == OpType::Rot && (param < 1 || param != double(long(param))))
-            throw std::invalid_argument("pipeline: rot necesita un entero >= 1");
+            throw std::invalid_argument("pipeline: rot requires an integer >= 1");
 
         for (long i = 0; i < reps; ++i) out.push_back({oi->type, param});
     }

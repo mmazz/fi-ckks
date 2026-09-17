@@ -20,7 +20,7 @@ std::string nn_data_dir()
 std::vector<std::vector<double>> loadCSVMatrix(const std::string& path, size_t rows, size_t cols)
 {
     std::ifstream file(path);
-    if (!file.is_open()) throw std::runtime_error("No se pudo abrir " + path);
+    if (!file.is_open()) throw std::runtime_error("Could not be opened " + path);
 
     std::vector<std::vector<double>> matrix;
     matrix.reserve(rows);
@@ -31,12 +31,12 @@ std::vector<std::vector<double>> loadCSVMatrix(const std::string& path, size_t r
         row.reserve(cols);
         while (row.size() < cols && std::getline(ss, cell, ',')) row.push_back(std::stod(cell));
         if (row.size() != cols)
-            throw std::runtime_error(path + ": fila " + std::to_string(matrix.size()) + " tiene " +
-                                     std::to_string(row.size()) + " columnas, se esperaban " + std::to_string(cols));
+            throw std::runtime_error(path + ": fila " + std::to_string(matrix.size()) + " has " +
+                                     std::to_string(row.size()) + " columns, they were expected " + std::to_string(cols));
         matrix.push_back(std::move(row));
     }
     if (matrix.size() != rows)
-        throw std::runtime_error(path + ": " + std::to_string(matrix.size()) + " filas, se esperaban " +
+        throw std::runtime_error(path + ": " + std::to_string(matrix.size()) + " lines, they were expected " +
                                  std::to_string(rows));
     return matrix;
 }
@@ -44,7 +44,7 @@ std::vector<std::vector<double>> loadCSVMatrix(const std::string& path, size_t r
 std::vector<double> loadCSVVector(const std::string& path, size_t size)
 {
     std::ifstream file(path);
-    if (!file.is_open()) throw std::runtime_error("No se pudo abrir " + path);
+    if (!file.is_open()) throw std::runtime_error("Could not be opened " + path);
 
     std::vector<double> data;
     data.reserve(size);
@@ -54,7 +54,7 @@ std::vector<double> loadCSVVector(const std::string& path, size_t size)
         while (data.size() < size && std::getline(ss, cell, ',')) data.push_back(std::stod(cell));
     }
     if (data.size() != size)
-        throw std::runtime_error(path + ": " + std::to_string(data.size()) + " valores, se esperaban " +
+        throw std::runtime_error(path + ": " + std::to_string(data.size()) + " values, they were expected " +
                                  std::to_string(size));
     return data;
 }
@@ -63,7 +63,7 @@ void loadMnistNormRowByIndex(const std::string& csvPath, size_t image_index,
                              size_t& outLabel, std::vector<double>& pixelsOut)
 {
     std::ifstream file(csvPath);
-    if (!file.is_open()) throw std::runtime_error("No se pudo abrir " + csvPath);
+    if (!file.is_open()) throw std::runtime_error("Could not be opened " + csvPath);
 
     std::string line;
     size_t current = 0;
@@ -89,12 +89,12 @@ void loadMnistNormRowByIndex(const std::string& csvPath, size_t image_index,
             pixelsOut.push_back(2.0 * (pixel * inv255) - 1.0);   // [-1, 1]
         }
         if (pixelsOut.size() != NN_INPUT)
-            throw std::runtime_error(csvPath + ": la imagen " + std::to_string(image_index) + " tiene " +
-                                     std::to_string(pixelsOut.size()) + " pixeles");
+            throw std::runtime_error(csvPath + ": the image " + std::to_string(image_index) + " has " +
+                                     std::to_string(pixelsOut.size()) + " pixels");
         return;
     }
-    throw std::runtime_error(csvPath + ": imagen " + std::to_string(image_index) +
-                             " fuera de rango (hay " + std::to_string(current) + ")");
+    throw std::runtime_error(csvPath + ": image " + std::to_string(image_index) +
+                             " out of range (are " + std::to_string(current) + ")");
 }
 
 double cheby_tanh3(double x)
@@ -134,7 +134,7 @@ NNModel load_nn_model(const std::string& data_dir, size_t image_index)
     const size_t pred = size_t(std::max_element(m.plain_logits.begin(), m.plain_logits.end()) -
                                m.plain_logits.begin());
     if (pred != m.label)
-        throw std::runtime_error("la red en claro clasifica mal la imagen " + std::to_string(image_index) +
-                                 " (predice " + std::to_string(pred) + ", label " + std::to_string(m.label) + ")");
+        throw std::runtime_error("The plain network misclassifies the image " + std::to_string(image_index) +
+                                 " (predicts " + std::to_string(pred) + ", label " + std::to_string(m.label) + ")");
     return m;
 }

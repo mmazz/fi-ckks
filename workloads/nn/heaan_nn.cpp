@@ -180,9 +180,9 @@ void backend_prepare_args(CampaignArgs& args)
     args.library    = "heaanNN";
     args.mult_depth = 0;
     if (!args.ops.empty())
-        throw std::invalid_argument("heaanNN: el workload es la red, --pipeline tiene que ir vacio");
+        throw std::invalid_argument("heaanNN: the workload is the network; --pipeline must be left empty");
     if ((size_t(1) << args.logSlots) < NN_INPUT)
-        throw std::invalid_argument("heaanNN: 2^logSlots tiene que ser >= " + std::to_string(NN_INPUT));
+        throw std::invalid_argument("heaanNN: 2^logSlots it has to be >= " + std::to_string(NN_INPUT));
 }
 
 BackendContext* setup_campaign(const CampaignArgs& args)

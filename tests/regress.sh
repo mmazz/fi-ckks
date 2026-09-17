@@ -61,12 +61,12 @@ MUST_FAIL=(
   "heaan_depth_fuera   | fi_heaan   | --isExhaustive 1 --stage mul --op_depth 5 --pipeline 'mul x2' $HEAAN_L   | never reach"
   "heaan_step_fuera    | fi_heaan   | --isExhaustive 1 --stage mul --op_step 999 --pipeline 'mul x2' $HEAAN_L | never reach"
   "heaan_stage_mal     | fi_heaan   | --isExhaustive 1 --stage rot --pipeline 'mul' $HEAAN_L                  | never reach"
-  "heaan_pipeline_mal  | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x2; rot' $HEAAN_L      | necesita un valor"
+  "heaan_pipeline_mal  | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x2; rot' $HEAAN_L      | needs a value"
   "openfhe_mul_inside  | fi_openfhe | --isExhaustive 1 --stage mul --pipeline 'mul' $OFHE_S                   | never reach"
-  "openfhe_boot        | fi_openfhe | --isExhaustive 1 --stage encode --pipeline 'boot' $OFHE_S               | no esta implementado"
+  "openfhe_boot        | fi_openfhe | --isExhaustive 1 --stage encode --pipeline 'boot' $OFHE_S               | hasn't been implemented yet"
   "heaannn_step_fuera  | fi_heaan_nn   | --stage mul --op_step 26 $NN_H                 | never reach"
-  "heaannn_mal_clasif  | fi_heaan_nn   | --stage encode $NN_H --seed_input 3            | clasifica mal"
-  "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | tiene que ir vacio"
+  "heaannn_mal_clasif  | fi_heaan_nn   | --stage encode $NN_H --seed_input 3            | The plain network misclassifies the image"
+  "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | --pipeline must be left empty"
   "openfhenn_mul       | fi_openfhe_nn | --stage mul $NN_O                              | never reach"
 )
 
@@ -82,42 +82,42 @@ run_case() {   # run_case <nombre> <binario> <args> <dir>  -> deja el rc en $RC
 }
 data_of() { echo "$1/data/campaign_000001.csv.gz"; }
 
-echo "== casos de regresion ($MODE) =="
+echo "== regression cases ($MODE) =="
 for entry in "${CASES[@]}"; do
   IFS='|' read -r name bin args <<<"$entry"
   name=$(trim "$name"); bin=$(trim "$bin"); args=$(trim "$args")
-  [[ -x "$BIN/$bin" ]] || { skip "$name" "no existe $bin"; continue; }
+  [[ -x "$BIN/$bin" ]] || { skip "$name" "dosen't exist $bin"; continue; }
 
   run_case "$name" "$bin" "$args" "$TMP/$name"
   out=$(data_of "$TMP/$name")
   if [[ $RC -ne 0 || ! -f "$out" ]]; then
-    fail "$name" "rc=$RC, ver log abajo"; tail -5 "$TMP/$name.log" | sed 's/^/        /'; continue
+    fail "$name" "rc=$RC, see log below "; tail -5 "$TMP/$name.log" | sed 's/^/        /'; continue
   fi
 
   if [[ "$name" == *random* ]]; then   # las random tienen que ser deterministas
     run_case "$name" "$bin" "$args" "$TMP/${name}_bis"
     if ! cmp -s <(zcat "$out") <(zcat "$(data_of "$TMP/${name}_bis")"); then
-      fail "$name" "no determinista: dos corridas iguales dan distinto"; continue
+      fail "$name" "non-deterministic: two identical runs yield different results"; continue
     fi
   fi
 
   if [[ "$MODE" == "create" ]]; then
     cp "$out" "$REF/$name.csv.gz"
-    pass "$name (referencia creada, $(( $(zcat "$out" | wc -l) - 1 )) inyecciones)"
+    pass "$name (reference created, $(( $(zcat "$out" | wc -l) - 1 )) injections)"
   else
-    [[ -f "$REF/$name.csv.gz" ]] || { skip "$name" "sin referencia, corre 'create'"; continue; }
+    [[ -f "$REF/$name.csv.gz" ]] || { skip "$name" "without reference, it runs 'create'"; continue; }
     if cmp -s <(zcat "$REF/$name.csv.gz") <(zcat "$out"); then
       pass "$name"
     else
       nd=$(diff <(zcat "$REF/$name.csv.gz") <(zcat "$out") | grep -c '^>')
-      fail "$name" "$nd filas distintas; primera diferencia:"
+      fail "$name" "$nd different rows; first difference:"
       diff <(zcat "$REF/$name.csv.gz") <(zcat "$out") | head -4 | sed 's/^/        /'
     fi
   fi
 done
 
 if [[ "$MODE" == "check" ]]; then
-  echo "== configs invalidas (tienen que fallar sin registrarse) =="
+  echo "== invalid configs (must fail without registering) =="
   for entry in "${MUST_FAIL[@]}"; do
     IFS='|' read -r name bin args expect <<<"$entry"
     name=$(trim "$name"); bin=$(trim "$bin"); args=$(trim "$args"); expect=$(trim "$expect")
@@ -127,11 +127,11 @@ if [[ "$MODE" == "check" ]]; then
     rows=0
     [[ -f "$TMP/$name/campaigns_start.csv" ]] && rows=$(( $(wc -l <"$TMP/$name/campaigns_start.csv") - 1 ))
     if [[ $RC -eq 0 ]]; then
-      fail "$name" "termino OK y tenia que fallar"
+      fail "$name" "It finished OK, but it was bound to FAIL."
     elif [[ $rows -gt 0 ]]; then
-      fail "$name" "fallo, pero registro $rows campania(s)"
+      fail "$name" "failure, but recorded $rows campanign(s)"
     elif ! grep -q -- "$expect" "$TMP/$name.log"; then
-      fail "$name" "fallo por otro motivo (se esperaba '$expect'):"
+      fail "$name" "failed for another reason (it was expected '$expect'):"
       grep -m2 -iE 'error|unrecognized|invalid' "$TMP/$name.log" | sed 's/^/        /'
     else
       pass "$name ($expect)"
