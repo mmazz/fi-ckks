@@ -12,4 +12,5 @@ compile_commands.json
 
 .ipynb_checkpoints/
 *.csv
+*.csv.gz
 

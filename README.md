@@ -54,7 +54,7 @@ Server side, inside the operations (HEAAN only for now):
 | `mul_inside`     | 0..25           |
 | `rescale_inside` | 0..3            |
 | `rot_inside`     | 0..11           |
-| `boot_outside`   | 0..11           |
+| `boot_outside`   | 0..7            |
 | `boot_coeff`     | 0..1            |
 | `boot_eval`      | 0..15           |
 | `boot_slot`      | 0..1            |

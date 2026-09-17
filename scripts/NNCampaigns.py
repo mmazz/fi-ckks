@@ -9,8 +9,8 @@
 Los datos de la red (pesos + mnist_test.csv) se buscan en workloads/nn/data,
 o en $FI_NN_DATA si esta definida.
 """
-from campaigns import grid, main
-
+from campaigns import ROOT, grid, main
+RESULTS = str(ROOT / "results_NN")
 RESULTS = "results_NN"   # en el server conviene un path absoluto
 SEEDS = [1]              # --seed: claves y ruido
 IMAGES = [0]             # --seed_input: indice de la imagen en mnist_test.csv

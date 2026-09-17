@@ -6,6 +6,7 @@ terminaron, asi que volver a correr un grupo es seguro: solo corre lo que falta.
 """
 import argparse
 import itertools
+import shlex
 import subprocess
 import sys
 import time
@@ -37,7 +38,7 @@ def run_all(runs, jobs, dry_run):
     cmds = [command(r) for r in runs]
     if dry_run:
         for cmd in cmds:
-            print(" ".join(cmd))
+            print(shlex.join(cmd))
         return 0
 
     failed = 0
@@ -47,7 +48,7 @@ def run_all(runs, jobs, dry_run):
         for i, fut in enumerate(as_completed(futures), 1):
             cmd, res = futures[fut], fut.result()
             status = "OK  " if res.returncode == 0 else "FAIL"
-            print(f"[{i}/{len(cmds)} {time.time() - start:7.0f}s] {status} {' '.join(cmd[1:])}", flush=True)
+            print(f"[{i}/{len(cmds)} {time.time() - start:7.0f}s] {status} {shlex.join(cmd[1:])}", flush=True)
             if res.returncode != 0:
                 failed += 1
                 for line in (res.stderr or res.stdout).strip().splitlines()[-3:]:

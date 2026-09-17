@@ -1,279 +1,95 @@
-from utilsGen import cartesian_product_rows, write_csv, SEEDS_PRNG, SEEDS_INP, EXTRA_SEEDS, SEEDS_PRNG_NN, SEEDS_INP_NN
-ADD_STEPS = 5
-MUL_STEPS = 25
-RESCALE_STEPS = 3
-ROT_STEPS = 11
-BOOTOUT_STEPS = 7
-BOOTEVAL_STEPS = 15
+#!/usr/bin/env python3
+"""Campanias de operaciones del servidor (fi_heaan).
 
-seed_init = 3
-seed_list = list(range(seed_init, seed_init+SEEDS_PRNG+1))
+    python3 scripts/serverCampaigns.py                        # lista los grupos
+    python3 scripts/serverCampaigns.py op_add --dry-run       # muestra los comandos
+    python3 scripts/serverCampaigns.py op_add op_mul --jobs 8
+    python3 scripts/serverCampaigns.py all --jobs 16
 
+Equivalencias con la version vieja (doAdd/doMul/... -> --pipeline):
+    doAdd 2              -> "add x2"
+    doMul 3              -> "mul x3"
+    doRot 2              -> "rot 2"     (una rotacion de 2 slots)
+    doBoot 1             -> "boot"      (al final del pipeline)
+    exhaustiveSingleBitFlip -> isExhaustive=1
+    randomSingleBitFlip     -> isExhaustive=0
+"""
+from campaigns import ROOT, grid, main
 
+RESULTS = str(ROOT / "results")
+RESULTS_BOOT = str(ROOT / "results_boot")
 
+SEEDS = [1, 2]           # --seed
+INPUTS = [1, 2]          # --seed_input
+SEEDS_MUL = [3, 4, 5]    # las campanias de mul usaban otra lista de seeds; se conserva
+SEEDS_BOOT = [1]         # boot es caro: una sola seed
+NUM_SAMPLES = 50
 
-def gen_opServerAdd_analysis():
-    fixed = {
-        "binary": "exhaustiveSingleBitFlip",
-        "library": "heaan",  # ajustar si corresponde a $(LIBRARY)
-        "logN": 6,
-        "logQ": 120,
-        "bitsPerCoeff": 144,
-        "logDelta": 40,
-        "stage": "add_inside",
-        "doAdd": 2,
-        "op_depth": 0,
-        "logSlots": 4,
-    }
-    sweep = {
-        "seed": list(range(1, SEEDS_PRNG+1)),
-        "seed_input": list(range(1, SEEDS_INP+1)),
-        "op_step": list(range(0,ADD_STEPS+1)),
-    }
-    write_csv("opServerAdd_analysis", cartesian_product_rows(fixed, sweep))
+# Cantidad de op_step de cada stage del fork (0 .. n-1)
+ADD_STEPS = 6
+MUL_STEPS = 26
+RESCALE_STEPS = 4
+ROT_STEPS = 12
+BOOT_STEPS = 8           # boot (bootstrapAndEqualBitFlip)
+BOOT_EVAL_STEPS = 16     # boot_eval (evalExpAndEqualBitFlip)
 
+# Operaciones del servidor, anillo chico
+SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)
 
-def gen_opServerMul_analysis():
-    fixed = {
-        "binary": "exhaustiveSingleBitFlip",
-        "library": "heaan",  # ajustar si corresponde a $(LIBRARY)
-        "logN": 6,
-        "logQ": 120,
-        "bitsPerCoeff": 144,
-        "logDelta": 40,
-        "stage": "mul_inside_asplos",
-        "doMul": 1,
-        "op_depth": 0,
-        "mult_depth": 0,
-        "logSlots": 4,
-    }
-    sweep = {
-        "seed": seed_list,
-        "seed_input": seed_list,
-        "op_step": list(range(0,MUL_STEPS+1)),
-    }
-    write_csv("opServerMul_analysis", cartesian_product_rows(fixed, sweep))
+# Bootstrapping: aleatorio, logQ grande
+BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
+            logN=4, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 
-def gen_opServerMulDepth_analysis():
-    fixed = {
-        "results": "/home/mmazz/ckks-singleBitFlip/results",
-        "binary": "exhaustiveSingleBitFlip",
-        "library": "heaan",  # ajustar si corresponde a $(LIBRARY)
-        "logN": 6,
-        "logQ": 160,
-        "bitsPerCoeff": 174,
-        "logDelta": 40,
-        "stage": "mul_inside_asplos",
-        "doMul": 3,
-        "mult_depth": 0,
-        "logSlots": 4,
-    }
-    sweep = {
-        "seed": seed_list,
-        "seed_input": seed_list,
-        "op_depth": [0,1,2],
-        "op_step": list(range(0,MUL_STEPS+1)),
-    }
-    write_csv("opServerMulDepth_analysis", cartesian_product_rows(fixed, sweep))
+# ASPLOS: exhaustivo, parametros chicos
+ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=3, logQ=60, logDelta=25, bitsPerCoeff=64, pipeline="add; mul")
 
 
-def gen_opServerRescaleDepth_analysis():
-    fixed = {
-        "binary": "exhaustiveSingleBitFlip",
-        "library": "heaan",  # ajustar si corresponde a $(LIBRARY)
-        "logN": 6,
-        "logQ": 120,
-        "bitsPerCoeff": 144,
-        "logDelta": 40,
-        "stage": "rescale_inside",
-        "doMul": 2,
-        "mult_depth": 0,
-        "logSlots": 4,
-    }
-    sweep = {
-        "seed": list(range(1, SEEDS_PRNG+1)),
-        "seed_input": list(range(1, SEEDS_INP+1)),
-        "op_step": list(range(0,RESCALE_STEPS+1)),
-        "op_depth": [0,1],
-    }
-    write_csv("opServerRescaleDepth_analysis", cartesian_product_rows(fixed, sweep))
-
-def gen_opServerRot_analysis():
-    fixed = {
-        "binary": "exhaustiveSingleBitFlip",
-        "library": "heaan",  # ajustar si corresponde a $(LIBRARY)
-        "logN": 6,
-        "logQ": 120,
-        "bitsPerCoeff": 144,
-        "logDelta": 40,
-        "stage": "rot_inside_asplos",
-        "doRot": 2,
-        "logSlots": 4,
-    }
-    sweep = {
-        "seed": list(range(1, SEEDS_PRNG+1)),
-        "seed_input": list(range(1, SEEDS_INP+1)),
-        "op_step": list(range(0,ROT_STEPS+1)),
-    }
-    write_csv("opServerRot_analysis", cartesian_product_rows(fixed, sweep))
+def steps(base, n, seeds=SEEDS, inputs=INPUTS, **sweep):
+    """Barrido de op_step 0..n-1 (y lo que se pase en sweep) sobre seeds x inputs."""
+    return grid(base, op_step=range(n), seed=seeds, seed_input=inputs, **sweep)
 
 
-def gen_opServerBootOutside_analysis():
-    sweep = {
-        "seed": list(range(1, SEEDS_PRNG_NN+1)),
-        "seed_input": list(range(1, SEEDS_INP_NN+1)),
-        "op_step": list(range(0,BOOTOUT_STEPS+1)),
-    }
-    fixed = {
-        "binary": "randomSingleBitFlip",
-        "library": "heaan",
-        "stage": "boot_outside",
-        "logN": 4,
-        "logDelta": 40,
-        "bitsPerCoeff": 860,
-        "logSlots": 3,
-        "logQ": 840,
-        "doMul": 4,
-        "doBoot": 1,
-        "withNTT": 0,
-    }
+GROUPS = {
+    "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
-    write_csv("bootOutside_analysis", cartesian_product_rows(fixed, sweep))
+    "op_mul": steps(dict(SERVER, stage="mul_asplos", pipeline="mul"), MUL_STEPS,
+                    seeds=SEEDS_MUL, inputs=SEEDS_MUL),
 
-def gen_opServerBootEval_analysis():
-    sweep = {
-        "seed": list(range(1, SEEDS_PRNG_NN+1)),
-        "seed_input": list(range(1, SEEDS_INP_NN+1)),
-        "op_step": list(range(0,BOOTEVAL_STEPS+1)),
-    }
-    fixed = {
-        "binary": "randomSingleBitFlip",
-        "library": "heaan",
-        "stage": "boot_eval",
-        "logN": 4,
-        "logDelta": 40,
-        "bitsPerCoeff": 860,
-        "logSlots": 3,
-        "logQ": 840,
-        "doMul": 4,
-        "doBoot": 1,
-        "withNTT": 0,
-    }
+    "op_mul_depth": steps(dict(SERVER, stage="mul_asplos", pipeline="mul x3", logQ=160, bitsPerCoeff=174),
+                          MUL_STEPS, seeds=SEEDS_MUL, inputs=SEEDS_MUL, op_depth=[0, 1, 2]),
 
-    write_csv("bootEval_analysis", cartesian_product_rows(fixed, sweep))
+    "op_rescale_depth": steps(dict(SERVER, stage="rescale", pipeline="mul x2"), RESCALE_STEPS,
+                              op_depth=[0, 1]),
 
-def gen_opServerBootOps_analysis():
-    variants = [
-            {"doAdd":1, "doMul":3 , "doRot": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 1, "op_depth": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 2, "op_depth": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 1, "op_depth": 2},
-            {"doAdd":1, "doMul":1 },
-            {"doAdd":1, "doMul":2 },
-            {"doAdd":1, "doMul":2 , "doRot": 1},
-    ]
-    sweep = {
-        "seed": list(range(1, 2)),
-        "seed_input": list(range(1, 2)),
-        "stage" : ["encrypt_c0", "encrypt_c1"]
-    }
-    rows = []
-    for v in variants:
-        fixed = {
-            "results": "/home/mmazz/ckks-singleBitFlip/results_boot",
-            "binary": "randomSingleBitFlip",
-            "library": "heaan",
-            "logN": 6,
-            "logSlots": 4,
-            "logDelta": 34,
-            "logQ": 660,
-            "bitsPerCoeff": 680,
-            "doBoot": 1,
-            "withNTT": 0,
-            **v,
-        }
-        rows += cartesian_product_rows(fixed, sweep)
+    "op_rot": steps(dict(SERVER, stage="rot_asplos", pipeline="rot 2"), ROT_STEPS),
 
-    write_csv("bootOps_analysis", rows)
+    "boot_outside": steps(dict(BOOT, stage="boot", pipeline="mul x4; boot"), BOOT_STEPS,
+                          seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
-def gen_opServerBootOpsSlots_analysis():
-    variants = [
-            {"doAdd":1, "doMul":3 , "doRot": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 1, "op_depth": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 2, "op_depth": 1},
-            {"doAdd":1, "doMul":3 , "doRot": 1, "op_depth": 2},
-            {"doAdd":1, "doMul":1 },
-            {"doAdd":1, "doMul":2 },
-            {"doAdd":1, "doMul":2 , "doRot": 1},
-    ]
-    sweep = {
-        "seed": list(range(1, 2)),
-        "seed_input": list(range(1, 2)),
-        "stage" : ["encrypt_c0", "encrypt_c1"],
-        "logSlots": [1,2,3]
-    }
-    rows = []
-    for v in variants:
-        fixed = {
-            "results": "/home/mmazz/ckks-singleBitFlip/results_boot",
-            "binary": "randomSingleBitFlip",
-            "library": "heaan",
-            "logN": 4,
-            "logDelta": 40,
-            "logQ": 840,
-            "bitsPerCoeff": 860,
-            "doBoot": 1,
-            "withNTT": 0,
-            **v,
-        }
-        rows += cartesian_product_rows(fixed, sweep)
+    # boot_eval necesita slots < N/2: con logSlots = logN-1 el fork no inyecta (imprime "Error en boot").
+    "boot_eval": steps(dict(BOOT, stage="boot_eval", pipeline="mul x4; boot", logSlots=2), BOOT_EVAL_STEPS,
+                       seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
-    write_csv("bootOpsSlots_analysis", rows)
+    # Fault en el cliente, pipeline con bootstrapping al final.
+    # Las variantes viejas con op_depth 1/2 eran la misma campania (op_depth no aplica al
+    # cliente, y ahora el probe las rechaza), asi que quedan solo las pipelines distintas.
+    # logQ=660 no alcanza para el boot con logDelta=34 (HEAAN hace segfault): se usa 840.
+    "boot_ops": grid(dict(BOOT, logN=6, logSlots=4, logDelta=34),
+                     pipeline=["add; mul x3; rot 1; boot", "add; mul x3; rot 2; boot",
+                               "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
+                     stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
 
+    "boot_ops_slots": grid(BOOT,
+                           pipeline=["add; mul x3; rot 1; boot", "add; mul x3; rot 2; boot",
+                                     "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
+                           stage=["encrypt_c0", "encrypt_c1"], logSlots=[1, 2, 3],
+                           seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
 
+    "asplos_mul": steps(dict(ASPLOS, stage="mul"), MUL_STEPS, seeds=[1], inputs=[1]),
+    "asplos_add": steps(dict(ASPLOS, stage="add"), ADD_STEPS, seeds=[1], inputs=[1]),
+}
 
-
-
-def gen_ASPLOS_mul_analysis():
-    variants = [
-            {"logN": 6,  "logSlots": 3, "logQ": 60, "logDelta": 25, "bitsPerCoeff": 64, "doAdd":1, "doMul":1 },
-    ]
-    sweep = {
-        "seed": list(range(1, 2)),
-        "seed_input": list(range(1, 2)),
-        "op_step": list(range(0,MUL_STEPS+1)),
-    }
-    rows = []
-    for v in variants:
-        fixed = {
-            "library": "heaan",
-            "stage": "mul_inside",
-            "withNTT": 0,
-            "binary": "exhaustiveSingleBitFlip",
-            **v,
-        }
-        rows += cartesian_product_rows(fixed, sweep)
-
-    write_csv("mul_inside_asplos_analysis", rows)
-
-def gen_ASPLOS_add_analysis():
-    variants = [
-            {"logN": 6,  "logSlots": 3, "logQ": 60, "logDelta": 25, "bitsPerCoeff": 64, "doAdd":1, "doMul":1 },
-    ]
-    sweep = {
-        "seed": list(range(1, 2)),
-        "seed_input": list(range(1, 2)),
-        "op_step": list(range(0,ADD_STEPS+1)),
-    }
-    rows = []
-    for v in variants:
-        fixed = {
-            "library": "heaan",
-            "stage": "add_inside",
-            "withNTT": 0,
-            "binary": "exhaustiveSingleBitFlip",
-            **v,
-        }
-        rows += cartesian_product_rows(fixed, sweep)
-
-    write_csv("add_inside_asplos_analysis", rows)
+if __name__ == "__main__":
+    main(GROUPS, __doc__)
