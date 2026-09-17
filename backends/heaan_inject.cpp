@@ -58,7 +58,7 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
 
 InjectorScope::InjectorScope(Injector& inj, long ring_degree)
 {
-    if (g_inj) throw std::logic_error("InjectorScope anidado: ya hay uno activo");
+    if (g_inj) throw std::logic_error("Nested InjectorScope: already one active");
     heaanfi::set_flip(&fi_flip);
     g_inj       = &inj;
     g_N         = ring_degree;
@@ -73,7 +73,7 @@ InjectorScope::~InjectorScope()
 
 void client_flip(Injector& inj, NTL::ZZX& poly)
 {
-    if (&inj != g_inj) throw std::logic_error("client_flip con un Injector que no es el del scope activo");
+    if (&inj != g_inj) throw std::logic_error("client_flip with one Injector that is not of the active scope");
     const FaultSpec& f = inj.spec();
     heaanfi::flip(poly, f.coeff, f.bit, f.amountBits, g_N);
 }

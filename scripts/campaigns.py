@@ -53,27 +53,27 @@ def run_all(runs, jobs, dry_run):
                 failed += 1
                 for line in (res.stderr or res.stdout).strip().splitlines()[-3:]:
                     print(f"        {line}")
-    print(f"{len(cmds) - failed} ok, {failed} fallaron")
+    print(f"{len(cmds) - failed} ok, {failed} fail")
     return failed
 
 
 def main(groups, description):
     ap = argparse.ArgumentParser(description=description,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("groups", nargs="*", help="grupos a correr ('all' = todos)")
-    ap.add_argument("--jobs", type=int, default=1, help="procesos en paralelo")
-    ap.add_argument("--dry-run", action="store_true", help="solo imprime los comandos")
+    ap.add_argument("groups", nargs="*", help="groups to run")
+    ap.add_argument("--jobs", type=int, default=1, help="parallel processes")
+    ap.add_argument("--dry-run", action="store_true", help="only prints the comands")
     args = ap.parse_args()
 
     if not args.groups:
         for name, runs in groups.items():
-            print(f"{name:24s} {len(runs):5d} corridas")
+            print(f"{name:24s} {len(runs):5d} runs")
         return
 
     names = list(groups) if "all" in args.groups else args.groups
     unknown = [n for n in names if n not in groups]
     if unknown:
-        sys.exit(f"grupos desconocidos: {unknown}. Disponibles: {list(groups)}")
+        sys.exit(f"unknow grupos: {unknown}. Available: {list(groups)}")
 
     runs = [r for n in names for r in groups[n]]
     sys.exit(1 if run_all(runs, args.jobs, args.dry_run) else 0)

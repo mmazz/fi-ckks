@@ -42,7 +42,7 @@ CampaignRegistry::FileLock::FileLock(const std::string& path)
     fd_ = open(path.c_str(), O_CREAT | O_RDWR, 0666);
     if (fd_ < 0) {
         throw std::runtime_error(
-            "CampaignRegistry: no se pudo abrir el lockfile '" + path +
+            "CampaignRegistry: the lockfile could not be opened '" + path +
             "' (errno=" + std::to_string(errno) + ")");
     }
 
@@ -51,7 +51,7 @@ CampaignRegistry::FileLock::FileLock(const std::string& path)
         close(fd_);
         fd_ = -1;
         throw std::runtime_error(
-            "CampaignRegistry: no se pudo tomar flock sobre '" + path +
+            "CampaignRegistry: could not take a lock on '" + path +
             "' (errno=" + std::to_string(err) + ")");
     }
 }
@@ -96,7 +96,7 @@ void CampaignRegistry::ensureCsvFilesExist()
     if (!fs::exists(start_csv_)) {
         std::ofstream f(start_csv_);
         if (!f)
-            throw std::runtime_error("CampaignRegistry: no se pudo crear " + start_csv_);
+            throw std::runtime_error("CampaignRegistry: could not be created " + start_csv_);
 
         f << "campaign_id,library,stage,logN,logQ,bitsPerCoeff,logDelta,logSlots,"
              "withNTT,mult_depth,pipeline,op_step,"
@@ -107,7 +107,7 @@ void CampaignRegistry::ensureCsvFilesExist()
     if (!fs::exists(end_csv_)) {
         std::ofstream f(end_csv_);
         if (!f)
-            throw std::runtime_error("CampaignRegistry: no se pudo crear " + end_csv_);
+            throw std::runtime_error("CampaignRegistry: could not be created " + end_csv_);
 
         f << "campaign_id,total_bitFlips,sdc_count,"
              "duration_seconds,l2_P95,l2_P99,duration\n";
@@ -201,12 +201,12 @@ CampaignRegistry::CampaignRegistry(const CampaignArgs& args)
 
         std::ofstream f(start_csv_, std::ios::app);
         if (!f)
-            throw std::runtime_error("CampaignRegistry: no se pudo abrir " + start_csv_ + " para escritura");
+            throw std::runtime_error("CampaignRegistry: could not be opened " + start_csv_ + " for writing");
 
         f << campaign_id << "," << key << "\n";
 
         if (!f)
-            throw std::runtime_error("CampaignRegistry: fallo al escribir en " + start_csv_);
+            throw std::runtime_error("CampaignRegistry: failed to write to " + start_csv_);
     }
     // ~FileLock() libera el flock aca.
 }
@@ -217,10 +217,10 @@ void CampaignRegistry::register_end(const CampaignEndRecord& r)
 
     std::ofstream f(end_csv_, std::ios::app);
     if (!f)
-        throw std::runtime_error("CampaignRegistry: no se pudo abrir " + end_csv_ + " para escritura");
+        throw std::runtime_error("CampaignRegistry: could not be opened " + end_csv_ + " for writing");
     f << joinCsvFields(r.campaign_id, r.total_bitFlips, r.sdc_count,
                         r.duration_seconds, r.l2_P95, r.l2_P99, r.duration)
       << "\n";
     if (!f)
-        throw std::runtime_error("CampaignRegistry: fallo al escribir en " + end_csv_);
+        throw std::runtime_error("CampaignRegistry: failed to write to " + end_csv_);
 }

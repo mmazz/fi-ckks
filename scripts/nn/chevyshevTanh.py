@@ -16,7 +16,7 @@ poly = cheb.convert(kind=np.polynomial.Polynomial)
 
 coeffs_poly = poly.coef
 
-print("\nCoeficientes monomiales:")
+print("\nMonomial coefficients:")
 for i, a in enumerate(coeffs_poly):
     print(f"a_{i} =", a, np.round(a,2))
 

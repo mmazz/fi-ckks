@@ -33,7 +33,7 @@ CampaignLogger::CampaignLogger(uint32_t id,
 
     file_.open(csv_path_, std::ios::out | std::ios::trunc);
     if (!file_.is_open())
-        throw std::runtime_error("CampaignLogger: no se pudo abrir " + csv_path_);
+        throw std::runtime_error("CampaignLogger: could not be opened " + csv_path_);
 
     file_ << BitflipResult::header() << "\n";
 
@@ -102,7 +102,7 @@ VectorLogger::VectorLogger(uint32_t id,
 
     file_.open(csv_path_, std::ios::out | std::ios::trunc);
     if (!file_.is_open())
-        throw std::runtime_error("VectorLogger: no se pudo abrir " + csv_path_);
+        throw std::runtime_error("VectorLogger: could not be opened " + csv_path_);
  
     // 17 digitos significativos => el double se recupera exacto al leerlo.
     file_ << std::defaultfloat

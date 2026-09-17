@@ -182,8 +182,8 @@ best_score, best_state, best_epoch = -1.0, None, -1
 
 print(f"device={device} | train={len(train_set)} val={len(val_set) if val_set else 0} "
       f"test={len(test_set)}")
-print(f"zona segura |z| <= {Z_SAFE} | p(z) pierde monotonía en {Z_MONOTONE:.4f} "
-      f"y cambia de signo en {Z_FLIP:.4f}\n")
+print(f"Safe zone |z| <= {Z_SAFE} | p(z) loses its monotony in {Z_MONOTONE:.4f} "
+      f"and changes sign at {Z_FLIP:.4f}\n")
 
 for epoch in range(1, EPOCHS + 1):
     model.train()
@@ -224,7 +224,7 @@ for epoch in range(1, EPOCHS + 1):
 
 if best_state is not None:
     model.load_state_dict(best_state)
-    print(f"\nMejor época: {best_epoch} "
+    print(f"\nBest epoch: {best_epoch} "
           f"({'val' if val_loader else 'train'} macro F1 = {best_score:.4f})")
 
 
@@ -232,22 +232,22 @@ if best_state is not None:
 tr_acc, tr_f1, tr_f1c, tr_d = evaluate(model, train_eval_loader)
 te_acc, te_f1, te_f1c, te_d = evaluate(model, test_loader)
 
-print("\n================= RESULTADOS FINALES =================")
+print("\n================= FINAL RESULTS =================")
 print(f"TRAIN  ->  accuracy: {tr_acc*100:.2f}%   macro F1: {tr_f1:.4f}")
 print(f"TEST   ->  accuracy: {te_acc*100:.2f}%   macro F1: {te_f1:.4f}")
 if val_loader is not None:
     va_acc, va_f1, _, _ = evaluate(model, val_loader)
     print(f"VAL    ->  accuracy: {va_acc*100:.2f}%   macro F1: {va_f1:.4f}")
 
-print("\nF1 por clase (test):")
+print("\nF1 by class (test):")
 print("  " + "  ".join(f"{c}:{f:.3f}" for c, f in enumerate(te_f1c)))
 
-print("\nRango de la pre-activación z (lo que entra al polinomio):")
+print("\nRange of the pre-activation z (the input to the polynomial):")
 for name, d in (("train", tr_d), ("test", te_d)):
     print(f"  {name:5s}  max|z| = {d['z_max']:.3f} | "
-          f"fuera de |z|>{Z_SAFE}: {d['pct_out_safe']:.3f}% | "
-          f"fuera de |z|>{Z_FLIP:.2f} (p cambia de signo): {d['pct_out_flip']:.4f}%")
-print("  Si el % fuera del punto de cambio de signo no es ~0, subí LAMBDA_RANGE.")
+          f"outside of |z|>{Z_SAFE}: {d['pct_out_safe']:.3f}% | "
+          f"outside of|z|>{Z_FLIP:.2f} (p changes sign): {d['pct_out_flip']:.4f}%")
+print(" If the percentage at the sign-change point is not ~0, increase LAMBDA_RANGE.")
 
 
 # ----------- Plegar BatchNorm dentro de W1/b1 y exportar CSVs ------------
@@ -273,7 +273,7 @@ W1, b1, W2, b2 = fold_bn(model)
 for name, arr in (("W1", W1), ("b1", b1), ("W2", W2), ("b2", b2)):
     np.savetxt(OUT_DIR / f"{name}.csv", arr, delimiter=",", fmt="%.12e")
 
-print(f"\nGuardado en {OUT_DIR}/  ->  "
+print(f"\nSaved at {OUT_DIR}/  ->  "
       f"W1{W1.shape}  b1{b1.shape}  W2{W2.shape}  b2{b2.shape}")
 
 
@@ -297,9 +297,9 @@ model.eval()
 with torch.no_grad():
     logits_pt = model(test_x.to(device)).cpu().double().numpy()
 
-print("\n--------- Verificación del export (numpy vs PyTorch) ---------")
-print(f"  accuracy desde los CSV : {acc_np*100:.2f}%   (PyTorch: {te_acc*100:.2f}%)")
-print(f"  max |diff| en logits   : {np.abs(logits_np - logits_pt).max():.2e}")
-print(f"  predicciones distintas : {(logits_np.argmax(1) != logits_pt.argmax(1)).sum()}"
+print("\n--------- Export verification (NumPy vs. PyTorch) ---------")
+print(f"  accuracy from CSVs : {acc_np*100:.2f}%   (PyTorch: {te_acc*100:.2f}%)")
+print(f"  max |diff| in logits   : {np.abs(logits_np - logits_pt).max():.2e}")
+print(f"  different predictions : {(logits_np.argmax(1) != logits_pt.argmax(1)).sum()}"
       f" / {len(test_y)}")
-print("  Si esto coincide, los CSV representan exactamente la red entrenada.")
+print("  If this matches, the CSVs represent exactly the trained network.")

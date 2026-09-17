@@ -10,10 +10,10 @@ static void expect_eq(const std::string& in, size_t n_ops, const std::string& ca
         if (ops.size() != n_ops || out != canon) {
             std::cerr << "FAIL '" << in << "': " << ops.size() << " ops, canon='" << out << "'\n"; ++fails;
         }
-    } catch (const std::exception& e) { std::cerr << "FAIL '" << in << "' tiro: " << e.what() << "\n"; ++fails; }
+    } catch (const std::exception& e) { std::cerr << "FAIL '" << in << "' throw: " << e.what() << "\n"; ++fails; }
 }
 static void expect_throw(const std::string& in) {
-    try { parse_pipeline(in); std::cerr << "FAIL '" << in << "' no tiro\n"; ++fails; }
+    try { parse_pipeline(in); std::cerr << "FAIL '" << in << "' has not throw\n"; ++fails; }
     catch (const std::invalid_argument&) {}
 }
 
@@ -34,6 +34,6 @@ int main() {
     expect_throw("mul x0");
     expect_throw("scalar abc");
     expect_throw("scalar 1 2");
-    std::cout << (fails ? "HAY FALLAS\n" : "OK\n");
+    std::cout << (fails ? "THERE ARE FAULTS\n" : "OK\n");
     return fails ? 1 : 0;
 }

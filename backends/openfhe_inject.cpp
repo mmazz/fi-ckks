@@ -54,7 +54,7 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
         const FaultSpec& f = inj.spec();
         const DCRTPoly before = p;
         auto& t = towers.at(f.limb);
-        if (f.coeff >= t.GetLength()) throw std::out_of_range("coeff fuera de rango");
+        if (f.coeff >= t.GetLength()) throw std::out_of_range("coeff out of range");
         const uint64_t a = t[f.coeff].ConvertToInt();
         const uint64_t b = a ^ inj.mask64();
         t[f.coeff] = NativeInteger(b);

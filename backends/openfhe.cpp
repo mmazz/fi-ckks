@@ -72,13 +72,13 @@ BackendContext* setup_campaign(const CampaignArgs& args)
 
     ctx->keys = ctx->cc->KeyGen();
    if (has_op(args.ops, OpType::Boot))
-       throw std::invalid_argument("openfhe: 'boot' todavia no esta implementado");
+       throw std::invalid_argument("openfhe: 'boot' hasn't been implemented yet");
 
    uint32_t n_mults = 0;
    for (const Op& op : args.ops) n_mults += is_mult(op.type);
    if (ctx->manualRescale && n_mults > args.mult_depth)
-       throw std::invalid_argument("openfhe: el pipeline tiene " + std::to_string(n_mults) +
-                                   " multiplicaciones y mult_depth=" + std::to_string(args.mult_depth));
+       throw std::invalid_argument("openfhe: the pipeline has " + std::to_string(n_mults) +
+                                   " multiplications and mult_depth=" + std::to_string(args.mult_depth));
 
    if (has_op(args.ops, OpType::Mul))
        ctx->cc->EvalMultKeyGen(ctx->keys.secretKey);
@@ -134,7 +134,7 @@ IterationResult run_iteration(BackendContext* bctx,
        case OpType::Mul:    c = ctx.cc->EvalMult(c, operand_ct());   rescale();     break;
        case OpType::Scalar: c = ctx.cc->EvalMult(c, op.param);       rescale();     break;
        case OpType::Rot:    c = ctx.cc->EvalRotate(c, int32_t(op.param));           break;
-       case OpType::Boot:   throw std::logic_error("openfhe: boot no implementado");
+       case OpType::Boot:   throw std::logic_error("openfhe: boot hasn't been implemented yet");
        }
    }
     if (inj.here("decrypt_c0")) inject(c->GetElements()[0], args.withNTT, inj);

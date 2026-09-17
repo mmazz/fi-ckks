@@ -118,14 +118,14 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
 
     static struct option long_options[] = {
         {"stage",          required_argument, 0, 'S'},
-        {"bitsPerCoeff",    required_argument, 0, 'c'},
+        {"bitsPerCoeff",   required_argument, 0, 'c'},
         {"logN",           required_argument, 0, 'N'},
         {"logQ",           required_argument, 0, 'Q'},
         {"logDelta",       required_argument, 0, 'd'},
         {"logSlots",       required_argument, 0, 'g'},
         {"mult_depth",     required_argument, 0, 'm'},
         {"withNTT",        required_argument, 0, 'n'},
-        {"pipeline", required_argument, 0, 'P'},
+        {"pipeline",       required_argument, 0, 'P'},
         {"op_step",        required_argument, 0, 'o'},
         {"op_depth",       required_argument, 0, 'O'},
         {"isComplex",      required_argument, 0, 'X'},
