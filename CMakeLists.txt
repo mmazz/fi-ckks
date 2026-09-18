@@ -25,9 +25,15 @@ add_library(fi_core STATIC
 )
 target_include_directories(fi_core PUBLIC ${CMAKE_SOURCE_DIR}/core)
 
+enable_testing()
+
 add_executable(test_pipeline apps/tools/test_pipeline.cpp)
 target_link_libraries(test_pipeline PRIVATE fi_core)
+add_test(NAME pipeline COMMAND test_pipeline)
 
+# Tests: header de asserts propio (tests/check.h), sin dependencias externas.
+add_library(fi_test_support INTERFACE)
+target_include_directories(fi_test_support INTERFACE ${CMAKE_SOURCE_DIR}/tests)
 # ---------------------------------------------------------------- HEAAN
 if(WITH_HEAAN)
     set(HEAAN_DIR ${THIRD_PARTY}/HEAAN-PRNG-Control)
@@ -51,6 +57,16 @@ if(WITH_HEAAN)
 
     add_executable(fi_heaan apps/fi_main.cpp)
     target_link_libraries(fi_heaan PRIVATE fi_backend_heaan)
+
+    add_executable(fi_test_heaan tests/backend_tests.cpp)
+    target_link_libraries(fi_test_heaan PRIVATE fi_backend_heaan fi_test_support)
+    add_test(NAME heaan_backend COMMAND fi_test_heaan
+             --logN 4 --logQ 120 --logDelta 30 --logSlots 2 --bitsPerCoeff 128
+             --pipeline "add$<SEMICOLON> mul$<SEMICOLON> rot 1" --seed 7 --seed_input 3)
+
+    add_executable(fi_test_heaan_ct tests/heaan_ciphertext_test.cpp)
+    target_link_libraries(fi_test_heaan_ct PRIVATE fi_heaan_inject fi_test_support)
+    add_test(NAME heaan_ciphertext COMMAND fi_test_heaan_ct)
 endif()
 
 # ---------------------------------------------------------------- OpenFHE
@@ -87,6 +103,19 @@ if(WITH_OPENFHE)
     add_executable(fi_openfhe apps/fi_main.cpp)
     target_link_libraries(fi_openfhe PRIVATE fi_backend_openfhe)
     set_target_properties(fi_openfhe PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
+
+    add_executable(fi_test_openfhe tests/backend_tests.cpp)
+    target_link_libraries(fi_test_openfhe PRIVATE fi_backend_openfhe fi_test_support)
+    set_target_properties(fi_test_openfhe PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
+    add_test(NAME openfhe_backend COMMAND fi_test_openfhe
+             --logN 4 --logQ 60 --logDelta 40 --logSlots 2 --bitsPerCoeff 64
+             --mult_depth 1 --withNTT 1 --pipeline "add$<SEMICOLON> mul" --seed 7 --seed_input 3)
+
+    add_executable(fi_test_openfhe_ct tests/openfhe_ciphertext_test.cpp)
+    target_link_libraries(fi_test_openfhe_ct PRIVATE fi_openfhe_inject fi_test_support)
+    set_target_properties(fi_test_openfhe_ct PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
+    add_test(NAME openfhe_ciphertext COMMAND fi_test_openfhe_ct)
+
 endif()
 
 # ---------------------------------------------------------------- workload NN
@@ -99,6 +128,8 @@ if(WITH_HEAAN)
     target_link_libraries(fi_nn_heaan PUBLIC fi_heaan_inject fi_nn_plain)
     add_executable(fi_heaan_nn apps/fi_main.cpp)
     target_link_libraries(fi_heaan_nn PRIVATE fi_nn_heaan)
+    add_executable(fi_nn_metrics_heaan apps/tools/nn_metrics.cpp)
+    target_link_libraries(fi_nn_metrics_heaan PRIVATE fi_nn_heaan)
 endif()
 if(WITH_OPENFHE)
     add_library(fi_nn_openfhe STATIC workloads/nn/openfhe_nn.cpp)
@@ -106,4 +137,7 @@ if(WITH_OPENFHE)
     add_executable(fi_openfhe_nn apps/fi_main.cpp)
     target_link_libraries(fi_openfhe_nn PRIVATE fi_nn_openfhe)
     set_target_properties(fi_openfhe_nn PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
+    add_executable(fi_nn_metrics_openfhe apps/tools/nn_metrics.cpp)
+    target_link_libraries(fi_nn_metrics_openfhe PRIVATE fi_nn_openfhe)
+    set_target_properties(fi_nn_metrics_openfhe PROPERTIES BUILD_RPATH ${OpenFHE_LIBDIR})
 endif()

@@ -11,9 +11,9 @@
 // Scaling FLEXIBLEAUTO: los rescale los hace OpenFHE.
 #include "backend_interface.h"
 #include "mnist.h"
+#include "nn_workload.h"
 #include "nn_site.h"
 #include "openfhe_inject.h"
-
 #include "openfhe.h"
 
 #include <memory>
@@ -201,6 +201,13 @@ BackendContext* setup_campaign(const CampaignArgs& args)
 void destroy_campaign(BackendContext* ctx)
 {
     delete ctx;
+}
+
+void nn_set_image(BackendContext* bctx, size_t image_index)
+{
+    auto& model = static_cast<NNOpenfheContext&>(*bctx).model;
+    loadMnistNormRowByIndex(nn_data_dir() + "/mnist_test.csv", image_index, model.label, model.image);
+    model.plain_logits = plain_forward(model.image, model.weights);
 }
 
 std::vector<double> get_reference_output(const BackendContext* bctx)
