@@ -88,7 +88,10 @@ std::string CampaignRegistry::makeCampaignKey(const CampaignArgs& args)
         args.logDelta, args.logSlots, args.withNTT, args.mult_depth, args.pipeline,
         args.op_step, args.op_depth, args.amountBits, args.seed,
         args.seed_input, args.isComplex, args.logMin, args.logMax,
-        args.isExhaustive,args.numSamples, args.dnum, args.scaleTech);
+        args.isExhaustive, args.numSamples, args.dnum, args.scaleTech,
+        args.openfhe_attack_mode ? int(*args.openfhe_attack_mode) : -1,
+        args.openfhe_threshold_bits.value_or(-1.0),
+        int(args.saveVectors));
 }
 
 void CampaignRegistry::ensureCsvFilesExist()
@@ -97,11 +100,11 @@ void CampaignRegistry::ensureCsvFilesExist()
         std::ofstream f(start_csv_);
         if (!f)
             throw std::runtime_error("CampaignRegistry: could not be created " + start_csv_);
-
         f << "campaign_id,library,stage,logN,logQ,bitsPerCoeff,logDelta,logSlots,"
              "withNTT,mult_depth,pipeline,op_step,"
              "op_depth,amountBits,seed,seed_input,"
-             "isComplex,logMin,logMax,isExhaustive,numSamples,dnum,scaleTech\n";
+             "isComplex,logMin,logMax,isExhaustive,numSamples,dnum,scaleTech,"
+             "attackModeSKA,thresholdSKA,saveVectors\n";
     }
 
     if (!fs::exists(end_csv_)) {
@@ -110,7 +113,7 @@ void CampaignRegistry::ensureCsvFilesExist()
             throw std::runtime_error("CampaignRegistry: could not be created " + end_csv_);
 
         f << "campaign_id,total_bitFlips,sdc_count,"
-             "duration_seconds,l2_P95,l2_P99,duration\n";
+             "duration_minutes,l2_P95,l2_P99\n";
     }
 }
 
@@ -219,7 +222,7 @@ void CampaignRegistry::register_end(const CampaignEndRecord& r)
     if (!f)
         throw std::runtime_error("CampaignRegistry: could not be opened " + end_csv_ + " for writing");
     f << joinCsvFields(r.campaign_id, r.total_bitFlips, r.sdc_count,
-                        r.duration_seconds, r.l2_P95, r.l2_P99, r.duration)
+                        r.duration_minutes, r.l2_P95, r.l2_P99)
       << "\n";
     if (!f)
         throw std::runtime_error("CampaignRegistry: failed to write to " + end_csv_);

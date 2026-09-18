@@ -25,14 +25,23 @@ def main(results_dir):
     camps = load_campaigns(results_dir)
     out = results_dir / "agg"
     out.mkdir(exist_ok=True)
-
     parts = []
     for exhaustive, keys in [(1, ["limb", "coeff", "bit"]), (0, ["bit"])]:
         sel = camps[camps["isExhaustive"] == exhaustive]
         if sel.empty:
             continue
-        parts.append(aggregate(load_data(sel, results_dir), keys))
+        part = aggregate(load_data(sel, results_dir), keys)
+        # Las random no tienen un coeficiente fijo: -1 en vez de NaN, y una columna
+        # que dice a que granularidad corresponde cada fila.
+        part["grain"] = "coeff_bit" if exhaustive else "bit"
+        for col in ("limb", "coeff"):
+            if col not in part.columns:
+                part[col] = -1
+        parts.append(part)
     agg = pd.concat(parts, ignore_index=True)
+    agg[["limb", "coeff"]] = agg[["limb", "coeff"]].astype(int)
+
+    parts = []
 
     cfg = camps.drop_duplicates("config_id")[["config_id", *config_columns(camps)]]
     agg.merge(cfg, on="config_id").to_parquet(out / "per_coeff_bit.parquet", index=False)

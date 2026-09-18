@@ -7,7 +7,7 @@ import pandas as pd
 # Todo lo que NO define el experimento. El resto de las columnas del start CSV es la config.
 NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id"}
 # Columnas de campaigns_end.csv: son RESULTADOS, nunca features ni parte de la config.
-END_COLS = {"total_bitFlips", "sdc_count", "duration_seconds", "l2_P95", "l2_P99", "duration", "git_commit"}
+END_COLS = {"total_bitFlips", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
 ERR_FLOOR = 2.0 ** -60   # piso para log2 cuando el error es exactamente 0
 
 

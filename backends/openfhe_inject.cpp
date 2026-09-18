@@ -58,7 +58,8 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
         const uint64_t a = t[f.coeff].ConvertToInt();
         const uint64_t b = a ^ inj.mask64();
         t[f.coeff] = NativeInteger(b);
-        inj.record_flip(__builtin_popcountll(a ^ b), count_diff(before, p));
+        const uint64_t got = t[f.coeff].ConvertToInt();
+        inj.record_flip(__builtin_popcountll(a ^ got), count_diff(before, p));
     }
     p.SetFormat(orig);
 }

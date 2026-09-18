@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent))
 from utils.results import load_campaigns, load_data, select, require_single_config  # noqa: E402
 
 # ------------------------------------------------------------------ #
@@ -38,8 +38,7 @@ SEVERE_CMAP = mcolors.LinearSegmentedColormap.from_list("severe", [RED, "black"]
 
 FONT = 20
 MARKER_OVERLAP = 0.6  # diametro = 115 % de la mayor separacion entre centros
-IMG_DIR = Path(__file__).resolve().parent.parent / "img"
-
+IMG_DIR = Path(__file__).resolve().parent / "img" 
 
 # ------------------------------------------------------------------ #
 # CLI
@@ -69,7 +68,7 @@ def parse_op_steps(spec, available):
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--results", default="../../results", help="directorio de resultados")
+    p.add_argument("--results", default="../results", help="directorio de resultados")
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL",
                    help='filtros exactos sobre campaigns_start, ej: stage=mul "pipeline=add; mul"')
     p.add_argument("--op_step", default="all", help="all | 5 | 0,5,10 | 0-25")

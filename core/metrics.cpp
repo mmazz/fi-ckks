@@ -106,8 +106,8 @@ bool AcceptCKKSResult(
 }
 
 
-
 double percentile(std::vector<double>& v, double p) {
+    if (v.empty()) return 0.0;
     double pos = p * (v.size() - 1);
     size_t idx = static_cast<size_t>(pos);
     double frac = pos - idx;
@@ -117,17 +117,4 @@ double percentile(std::vector<double>& v, double p) {
     else
         return v[idx];
 }
-
-double compute_rel_norm2(const std::vector<double>& v1,
-                         const std::vector<double>& v2)
-{
-    double num = 0.0, den = 0.0;
-    for (size_t i = 0; i < v1.size(); ++i) {
-        double diff = v1[i] - v2[i];
-        num += diff * diff;
-        den += v1[i] * v1[i];
-    }
-    return std::sqrt(num) / std::sqrt(den);
-}
-
 

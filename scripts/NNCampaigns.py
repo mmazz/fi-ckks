@@ -11,7 +11,7 @@ o en $FI_NN_DATA si esta definida.
 """
 from campaigns import ROOT, grid, main
 RESULTS = str(ROOT / "results_NN")
-RESULTS = "results_NN"   # en el server conviene un path absoluto
+
 SEEDS = [1]              # --seed: claves y ruido
 IMAGES = [0]             # --seed_input: indice de la imagen en mnist_test.csv
 NUM_SAMPLES = 50         # coeficientes al azar por campania, cada uno con todos los bits

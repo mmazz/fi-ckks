@@ -6,6 +6,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <set>
 
 using CtxPtr = std::unique_ptr<BackendContext, void (*)(BackendContext*)>;
 
@@ -121,14 +122,19 @@ static void run_random(BackendContext* ctx, CampaignArgs& args, const std::vecto
     std::vector<uint32_t> bits_to_flip;
     for (uint32_t bit : bitsToFlipGenerator(args))
         if (bit + args.amountBits <= args.bitsPerCoeff) bits_to_flip.push_back(bit);
-
     const uint32_t N = (1U << args.logN);
+    std::set<std::pair<uint32_t, uint32_t>> seen;
     for (uint32_t sample = 0; sample < args.numSamples; sample++) {
-        uint32_t limb  = random_int(0, s.num_limbs - 1);
-        uint32_t coeff = random_int(0, N - 1);
+        uint32_t limb = 0, coeff = 0;
+        for (int tries = 0; tries < 100; ++tries) {
+            limb  = random_int(0, s.num_limbs - 1);
+            coeff = random_int(0, N - 1);
+            if (seen.insert({limb, coeff}).second) break;   // no repetir coeficiente
+        }
         for (uint32_t bit : bits_to_flip)
             run_one(ctx, args, ckks_golden, make_fault(args, limb, coeff, bit), s);
     }
+
 }
 
 int main(int argc, char** argv)
@@ -137,6 +143,9 @@ int main(int argc, char** argv)
         CampaignArgs args = parse_arguments(argc, argv);
         backend_prepare_args(args);
         validateArgs(args);
+        if (args.stage == "none")
+            throw std::invalid_argument("must choose a --stage (ver --help); "
+                                        "'none' no inyecta en ningun lado");
         if (args.isExhaustive)
             args.numSamples = 0;
 
@@ -149,9 +158,17 @@ int main(int argc, char** argv)
         Injector probe = Injector::probe(args.stage, args.op_depth, args.op_step);
         run_iteration(ctx.get(), args, probe);
         probe.finish();
-        if (probe.probed_coeff_bits() > args.bitsPerCoeff)
-            std::cerr << "WARNING: the coefficients in '" << args.stage << "' has up to "
-                      << probe.probed_coeff_bits() << " bits and bitsPerCoeff=" << args.bitsPerCoeff << "\n";
+            const uint32_t real_bits = probe.probed_coeff_bits();
+        if (real_bits > args.bitsPerCoeff)
+            std::cerr << "WARNING: los coeficientes de '" << args.stage << "' tienen hasta "
+                      << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
+                      << ": se barre de menos\n";
+        if (args.bitsPerCoeff > real_bits)
+            std::cerr << "WARNING: bitsPerCoeff=" << args.bitsPerCoeff << " supera los "
+                      << real_bits << " bits reales de '" << args.stage
+                      << "': los bits >= " << real_bits
+                      << " dejan el coeficiente fuera de rango\n";
+
         check_transient(ctx.get(), args, ckks_golden);
 
         CampaignRegistry registry(args);
@@ -191,7 +208,7 @@ int main(int argc, char** argv)
             p99 = percentile(s.norms, 0.99);
         }
 
-        registry.register_end({registry.campaign_id, logger.total(), logger.sdc(), mins, p95, p99, timestamp_now()});
+        registry.register_end({registry.campaign_id, logger.total(), logger.sdc(), mins, p95, p99});
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << '\n';

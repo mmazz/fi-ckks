@@ -15,10 +15,9 @@ struct CampaignEndRecord {
     uint32_t campaign_id;
     uint64_t total_bitFlips;
     uint64_t sdc_count;
-    uint64_t duration_seconds;
+    uint64_t duration_minutes;
     double l2_P95;
     double l2_P99;
-    std::string duration;
 };
 
 class CampaignRegistry {

@@ -63,59 +63,48 @@ void validateArgs(const CampaignArgs& args)
         );
 }
 
-
 std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
 {
     std::vector<uint32_t> res;
-    res.reserve(25);
+    res.reserve(40);
 
     const uint32_t logQ     = args.logQ;
     const uint32_t logDelta = args.logDelta;
     const uint32_t maxBits  = args.bitsPerCoeff;
-    const uint32_t M        = maxBits - 1;
+    if (maxBits == 0) return res;
+    const uint32_t M = maxBits - 1;
 
+    // [start, end] inclusivo, recortado a [0, M]. Un rango valido nunca se descarta.
     auto addRange = [&](uint32_t start, uint32_t end)
     {
-        if (end < start || end >= maxBits) return;
-        uint32_t count = 0;
-        if (count == 1) {
-            res.push_back(start);
-            return;
-        }
-        uint32_t diff = end - start + 1;
-        if (diff == 0) {
-            res.push_back(start);
-            return;
-        }
-        if (diff < 3){
-            return;
-        }else if (diff < 5) {
-            count = diff - 1;
-        } else if (diff < 30) {
-            count = 5;
-        } else {
-            count = 15;
-        }
-        for (uint32_t i = 0; i < count; i++) {
-            uint32_t v = start + (uint64_t)(end - start) * i / (count - 1);
+        if (start > M) return;
+        end = std::min(end, M);
+        if (end < start) return;
 
-            if (res.empty() || res.back() != v)
-                res.push_back(v);
+        const uint32_t diff = end - start + 1;
+        uint32_t count;
+        if      (diff <= 2)  count = diff;       // antes se perdian los rangos de 1 y 2 bits
+        else if (diff < 5)   count = diff - 1;
+        else if (diff < 30)  count = 5;
+        else                 count = 15;
+
+        for (uint32_t i = 0; i < count; i++) {
+            const uint32_t v = (count == 1)
+                ? start
+                : start + uint32_t((uint64_t)(end - start) * i / (count - 1));
+            if (res.empty() || res.back() != v) res.push_back(v);
         }
     };
+
     uint32_t gapDelta = 1;
-    if (logDelta>=50)
-        gapDelta = 5;
-    else if (logDelta>=30)
-        gapDelta = 3;
+    if      (logDelta >= 50) gapDelta = 5;
+    else if (logDelta >= 30) gapDelta = 3;
+
     if (logDelta >= gapDelta) addRange(0, logDelta - gapDelta);
     addRange(logDelta, logQ);
 
-    uint32_t gapQ = 1;
-    uint32_t diffQ = maxBits-logQ;
-    if (diffQ>10)
-        gapQ = 3;
-    addRange(logQ+gapQ, M);
+    const uint32_t gapQ = (maxBits - logQ > 10) ? 3 : 1;
+    addRange(logQ + gapQ, M);
     return res;
 }
 

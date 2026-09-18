@@ -5,6 +5,7 @@
 import sys
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 OPS = ["add", "pmul", "mul", "scalar", "rot", "boot"]
 MULTS = {"pmul", "mul", "scalar"}
@@ -35,21 +36,28 @@ def injection_index(ops, stage, op_depth):
     else:
         base = stage.replace("_asplos", "").split("_")[0]   # mul_asplos->mul, boot_eval->boot
         idx = [i for i, o in enumerate(ops) if o == base]
+    if op_depth >= len(idx):
+        return None    # stage del workload NN, o op_depth fuera del pipeline
     return idx[op_depth]
-
 
 def pipeline_features(row):
     ops = expand(row["pipeline"])
     pos = injection_index(ops, row["stage"], int(row["op_depth"]))
-    after = ops[pos + 1:] if pos >= 0 else ops
-    before = ops[:max(pos, 0)]
     f = {f"n_{o}": ops.count(o) for o in OPS}
     f["n_ops"] = len(ops)
+    if pos is None:            # no se puede ubicar en el pipeline (NN): sentinelas, no crash
+        f.update(mults_before=-1, mults_after=-1, ops_after=-1, boot_after=-1, pos_known=0)
+        return pd.Series(f)
+    after = ops[pos + 1:] if pos >= 0 else ops
+    before = ops[:max(pos, 0)]
     f["mults_before"] = sum(o in MULTS for o in before)
     f["mults_after"] = sum(o in MULTS for o in after)
     f["ops_after"] = len(after)
     f["boot_after"] = int("boot" in after)
+    f["pos_known"] = 1
     return pd.Series(f)
+
+
 
 
 def main(results_dir):
@@ -63,7 +71,7 @@ def main(results_dir):
     df["bit_over_q"] = df["bit"] / df["logQ"]
     if "coeff" in df:
         gap = 2 ** (df["logN"] - 1 - df["logSlots"])   # separacion entre slots en los coeficientes
-        df["coeff_aligned"] = (df["coeff"] % gap == 0).astype(int)
+        df["coeff_aligned"] = np.where(df["coeff"] >= 0, (df["coeff"] % gap == 0).astype(int), -1)
 
     df = pd.get_dummies(df, columns=["library", "stage", "scaleTech"], dtype=int)
     df = df.drop(columns=["pipeline"])

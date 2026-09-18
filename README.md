@@ -50,11 +50,11 @@ Server side, inside the operations (HEAAN only for now):
 
 | stage            | `op_step` range |
 |------------------|-----------------|
-| `add_inside`     | 0..5            |
-| `mul_inside`     | 0..25           |
-| `rescale_inside` | 0..3            |
-| `rot_inside`     | 0..11           |
-| `boot_outside`   | 0..7            |
+| `add`     | 0..5            |
+| `mul`     | 0..25           |
+| `rescale` | 0..3            |
+| `rot`     | 0..11           |
+| `boot`   | 0..7            |
 | `boot_coeff`     | 0..1            |
 | `boot_eval`      | 0..15           |
 | `boot_slot`      | 0..1            |
@@ -261,8 +261,6 @@ without a fault), return the reference output and the number of limbs.
 
 - OpenFHE: only client-side stages are implemented. `*_inside` and `boot_*`
   stages are HEAAN only for now.
-- OpenFHE: `amountBits > 1` is not wired yet.
-- The NN workloads still live in `backends/*NN/` with their own build and
   haven't been moved to the single main.
 - `--scaleTech` other than `FIXEDMANUAL` may drop limbs during the pipeline;
   the number of limbs to sweep is still computed as `mult_depth + 1`.
@@ -272,7 +270,6 @@ without a fault), return the reference output and the number of limbs.
 - NN data before this refactor: `rot_inside` injected in every rotation,
   `reduceSum_layer` was logged wrong, `cheby_tanh3` steps 4/5 flipped the same
   register as 6/7, and the image came from `--seed`. Don't mix it with new data.
-- `scripts/serverCampaigns.py` still imports the old `utilsGen`; port it to `scripts/campaigns.py`.
 
 
 ## TODOs

@@ -1,10 +1,12 @@
 #include "pipeline.h"
 #include "args.h"
-
+#include <cmath>
 #include <cctype>
 #include <charconv>
 #include <sstream>
 #include <stdexcept>
+
+constexpr long kMaxReps = 20;
 
 namespace {
 
@@ -69,21 +71,28 @@ std::vector<Op> parse_pipeline(const std::string& s) {
                                              "' (valid: add pmul mul scalar rot boot)");
 
         long reps = 1;
+        bool has_reps = false;
         bool has_param = false;
         double param = 0;
         while (ws >> w) {
             if (is_repeat(w)) {
-                reps = std::stol(w.substr(1));
-                if (reps < 1) throw std::invalid_argument("pipeline: invalid repetition in '" + chunk + "'");
+                if (has_reps) throw std::invalid_argument("pipeline: two repetitions in '" + chunk + "'");
+                has_reps = true;
+                try { reps = std::stol(w.substr(1)); } catch (...) { reps = -1; }
+                if (reps < 1 || reps > kMaxReps)
+                    throw std::invalid_argument("pipeline: repetition out of range (1.." +
+                                                std::to_string(kMaxReps) + ") in '" + chunk + "'");
             } else if (!has_param) {
                 size_t used = 0;
                 try { param = std::stod(w, &used); } catch (...) { used = 0; }
-                if (used != w.size()) throw std::invalid_argument("pipeline: invalid value '" + w + "' in '" + chunk + "'");
+                if (used != w.size() || !std::isfinite(param))
+                    throw std::invalid_argument("pipeline: invalid value '" + w + "' in '" + chunk + "'");
                 has_param = true;
             } else {
                 throw std::invalid_argument("pipeline: surplus '" + w + "' in '" + chunk + "'");
             }
         }
+
         if (oi->needs_param && !has_param)
             throw std::invalid_argument("pipeline: '" + name + "' needs a value");
         if (!oi->needs_param && has_param)

@@ -27,8 +27,9 @@ std::vector<double> get_reference_output(const BackendContext* bctx)
 
 void backend_prepare_args(CampaignArgs& args){
     args.library = "openfhe";
+    if (args.bitsPerCoeff > 64)
+        throw std::invalid_argument("openfhe: bitsPerCoeff <= 64");
 }
-
 
 std::string toLower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),

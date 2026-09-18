@@ -141,6 +141,8 @@ void backend_prepare_args(CampaignArgs& args)
 {
     args.library   = "openfheNN";
     args.scaleTech = "FLEXIBLEAUTO";   // la red no hace rescales a mano
+    if (args.bitsPerCoeff > 64)
+        throw std::invalid_argument("openfhe: bitsPerCoeff <= 64 ");
     if (!args.ops.empty())
         throw std::invalid_argument("openfheNN: the workload is the network; --pipeline must be left empty");
     if ((size_t(1) << args.logSlots) < NN_INPUT)

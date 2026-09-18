@@ -69,7 +69,7 @@ void print_usage(const char* program_name) {
               << "  --logSlots <value>      log Slots used (default: 1)\n"
               << "  --mult_depth <value>    Multiplicative depth (only openfhe, default: 0)\n"
               << "  --withNTT <value>       Turn on or off NTT (only heaan, default: 0)\n"
-              << "  --pipeline              TODO\n"
+              << "  --pipeline <str>        Pipeline of the server, ej: \"add; mul x2; rot 4\" (empty in the workloads NN)\n"
               << "  --op_step <value>       Index of the target operation within the selected stage (0-based, default: 0)\n"
               << "  --op_depth <value>      Depth within the selected operation where the bit flip is applied (0-based, default: 0)\n"
               << "  --isComplex <name>      Complex input, only for HEAAN (default: 0)\n"
@@ -89,9 +89,8 @@ void print_usage(const char* program_name) {
               << "  --verbose, -v           Verbose output\n"
               << "  --help, -h              Show this help\n\n"
               << "Examples:\n"
-              << "  " << program_name << " --library openfhe --logN 16 --stage encrypt\n"
-              << "  " << program_name << " --library heaan --logN 15 --logDelta 60 --seed 123\n"
-              << "  " << program_name << " --stage mul --limbs 4 -v\n";
+              << "  " << program_name << " --logN 6 --logQ 60 --logDelta 30 --logSlots 4 --pipeline \"add; mul x2\" --stage mul --op_step 3\n"
+              << "  " << program_name << " --logN 12 --logQ 60 --logDelta 40 --mult_depth 2 --stage encrypt_c0 --isExhaustive 0 --numSamples 200\n";
 }
 
    // Nombres viejos -> nuevos, para que los configs viejos sigan andando.

@@ -32,8 +32,8 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
 
     const long need = std::max<long>(long(coeff) + 1, N);   // igual que default_flip: estirar, NUNCA normalize
     if (poly.rep.length() < need) poly.SetLength(need);
-
-    const bool is_restore = (g_last_poly == &poly);
+    const bool is_restore = (g_last_poly == &poly) &&
+                            (NTL::coeff(poly, coeff) != g_original);
     const NTL::ZZX before = poly;
     for (uint32_t i = 0; i < width; ++i) NTL::SwitchBit(poly.rep[coeff], long(bit + i));
 
