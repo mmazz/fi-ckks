@@ -24,8 +24,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils.results import load_campaigns, load_data, select, require_single_config  # noqa: E402
-
+from utils.results import load_campaigns, load_data, select, require_single_config, finite_max  # noqa: E402
 # ------------------------------------------------------------------ #
 # Categorias de MREP (en %). Ajusta los umbrales aca.
 # ------------------------------------------------------------------ #
@@ -204,8 +203,9 @@ def main():
         cfg = require_single_config(group).iloc[0]      # solo pueden variar las seeds
         cells = mrep_per_cell(load_data(group, args.results), args.stat)
         per_step[step] = (cfg, cells, group["seed"].nunique())
-    vmax = max(float(cells["mrep"].max()) for _, cells, _ in per_step.values())
-
+    # Ignora inf/NaN: los puntos igual se dibujan (inf satura en el extremo negro,
+    # NaN queda gris), pero la escala de color se calcula solo con valores finitos.
+    vmax = finite_max([cells["mrep"] for _, cells, _ in per_step.values()], MODERATE_PCT)
     IMG_DIR.mkdir(exist_ok=True)
     for step, (cfg, cells, n_seeds) in per_step.items():
         fig, ax = plt.subplots(figsize=(14, 8))

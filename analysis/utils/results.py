@@ -8,8 +8,29 @@ import pandas as pd
 NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id"}
 # Columnas de campaigns_end.csv: son RESULTADOS, nunca features ni parte de la config.
 END_COLS = {"total_bitFlips", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
-ERR_FLOOR = 2.0 ** -60   # piso para log2 cuando el error es exactamente 0
+ERR_FLOOR = 2.0 ** -60    # piso para log2 cuando el error es exactamente 0
+# Techo: solo para que un inf/NaN no arruine la celda entera. Tiene que quedar MUY por
+# encima de cualquier error real (con logQ=840 y logDelta=40 el l2_rel llega a ~2^800),
+# asi que no se clipea nada medible: 2^1000 es practicamente el maximo de un double.
+ERR_CEIL = 2.0 ** 1000
 
+
+def finite_max(arrays, floor=0.0):
+    """Maximo ignorando inf/NaN sobre una o varias secuencias (de largos distintos).
+
+    `floor` es lo que se devuelve si no queda ningun valor finito. Un solo inf
+    (un flip en un bit alto que desborda) basta para romper LogNorm en los mapas de
+    registro, asi que la escala de color nunca se calcula sobre no-finitos.
+    """
+    if isinstance(arrays, (pd.Series, np.ndarray)) or not hasattr(arrays, "__iter__"):
+        arrays = [arrays]
+    out = floor
+    for a in arrays:
+        v = np.asarray(a, dtype=float).ravel()
+        v = v[np.isfinite(v)]
+        if v.size:
+            out = max(out, float(v.max()))
+    return out
 
 def load_campaigns(results_dir):
     """Una fila por campania TERMINADA (start JOIN end), con config_id."""
@@ -54,5 +75,10 @@ def load_data(camps, results_dir):
         df["campaign_id"] = int(cid)
         dfs.append(df)
     data = pd.concat(dfs, ignore_index=True)
-    data["err_bits"] = np.log2(np.maximum(data["l2_rel"].to_numpy(dtype=float), ERR_FLOOR))
+    # Piso Y techo: sin el techo, un solo inf deja err_bits_mean = inf y err_bits_std = NaN
+    # en esa celda para siempre. `err_saturated` dice cuantas filas tocaron el techo.
+    l2 = data["l2_rel"].to_numpy(dtype=float)
+    data["err_saturated"] = (~np.isfinite(l2)) | (l2 > ERR_CEIL)
+    data["err_bits"] = np.log2(np.clip(np.nan_to_num(l2, nan=ERR_CEIL, posinf=ERR_CEIL),
+                                       ERR_FLOOR, ERR_CEIL))
     return data.merge(camps[["campaign_id", "config_id", "seed", "seed_input"]], on="campaign_id")

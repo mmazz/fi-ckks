@@ -4,7 +4,7 @@
 namespace fs = std::filesystem;
 
 std::string BitflipResult::header() {
-    return "limb,coeff,bit,l2_abs,l2_rel,linf_abs,linf_rel,detected,correct,degraded,corrupted,failed,hidden_layer,reduceSum_layer,misclassified";
+    return "limb,coeff,bit,l2_abs,l2_rel,linf_abs,linf_rel,detected,correct,degraded,corrupted,failed,hidden_layer,reduceSum_layer,misclassified,out_of_range";
 }
 
 std::string BitflipResult::row() const {
@@ -14,7 +14,8 @@ std::string BitflipResult::row() const {
        << linf_abs << "," << linf_rel << "," << (detected? 1 : 0) << ","
        << stats.correct << "," << stats.degraded << ","
        << stats.corrupted << "," << stats.failed<< ","
-       << hidden_layer << "," << reduceSum_layer << "," << (misclassified ? 1 : 0);
+       << hidden_layer << "," << reduceSum_layer << "," << (misclassified ? 1 : 0)
+       << "," << (out_of_range ? 1 : 0);
     return ss.str();
 }
 

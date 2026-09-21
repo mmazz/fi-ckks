@@ -25,7 +25,6 @@ from enum import Enum
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import numpy as np
 
 import register_map as rm
 
@@ -118,15 +117,8 @@ def load_comparisons(args, selected):
 def common_vmax(comparisons):
     # Ignora NaN/inf al calcular el limite; NaN conserva el gris del original
     # e inf queda saturado en el extremo negro de la escala.
-    vmax = rm.MODERATE_PCT
-    for panels in comparisons.values():
-        for _, _, cells in panels:
-            values = cells["mrep"].to_numpy()
-            finite = values[np.isfinite(values)]
-            if finite.size:
-                vmax = max(vmax, float(finite.max()))
-    return vmax
-
+    return rm.finite_max((cells["mrep"] for panels in comparisons.values()
+                          for _, _, cells in panels), rm.MODERATE_PCT)
 
 def plot_comparison(panels, vmax, show_legend=True):
     n = len(panels)

@@ -16,7 +16,10 @@ def aggregate(data, keys):
                      err_bits_std=("err_bits", "std"),
                      err_bits_max=("err_bits", "max"),
                      frac_zero=("l2_rel", lambda x: (x == 0).mean()),
-                     frac_failed=("failed", lambda x: (x > 0).mean()))
+                     frac_failed=("failed", lambda x: (x > 0).mean()),
+                     # err_bits viene clipeado: esto dice cuanto de la celda toco el techo
+                     # (o era inf/NaN) y por lo tanto no es un valor de error confiable.
+                     frac_saturated=("err_saturated", "mean"))
                 .reset_index())
 
 

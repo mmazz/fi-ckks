@@ -27,7 +27,7 @@ struct BitflipResult {
     uint32_t hidden_layer    = 0;
     uint32_t reduceSum_layer = 0;
     bool     misclassified   = false;   // solo workloads clasificadores (NN)
-
+    bool     out_of_range    = false;   // el valor inyectado quedo >= q del limb (OpenFHE)
     static std::string header();
     std::string row() const;
 };

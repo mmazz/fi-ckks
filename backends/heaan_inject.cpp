@@ -8,8 +8,13 @@
 namespace {
 
 Injector*       g_inj       = nullptr;
-const NTL::ZZX* g_last_poly = nullptr;   // ultimo poly flipeado: otro flip sobre el es el restore
-NTL::ZZ         g_original;              // valor del coeficiente antes del flip
+// Flip pendiente de restaurar. El fork restaura con OTRO flip sobre el mismo poly
+// (restoreIfStep == flipIfStep), asi que hay que distinguir "segundo flip = restore"
+// de "segundo flip = segunda inyeccion".
+bool            g_pending   = false;
+const NTL::ZZX* g_last_poly = nullptr;   // direccion del poly flipeado
+NTL::ZZ         g_original;              // valor del coeficiente ANTES del flip
+NTL::ZZ         g_flipped;               // valor del coeficiente DESPUES del flip
 long            g_N         = 0;
 
 void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long ring_degree)
@@ -32,14 +37,20 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
 
     const long need = std::max<long>(long(coeff) + 1, N);   // igual que default_flip: estirar, NUNCA normalize
     if (poly.rep.length() < need) poly.SetLength(need);
-    const bool is_restore = (g_last_poly == &poly) &&
-                            (NTL::coeff(poly, coeff) != g_original);
+    // Es el restore solo si hay un flip pendiente, es el MISMO poly y el coeficiente
+    // tiene EXACTAMENTE el valor que dejo ese flip. Con "!= g_original" alcanzaba que
+    // el puntero coincidiera, y &poly puede ser una direccion reusada por otro ZZX
+    // (en heaan_nn.cpp los flips van a copias locales que mueren enseguida): ahi una
+    // segunda inyeccion se contaba como restore y finish() no se enteraba.
+    const bool is_restore = g_pending && (g_last_poly == &poly) &&
+                            (NTL::coeff(poly, coeff) == g_flipped);
     const NTL::ZZX before = poly;
     for (uint32_t i = 0; i < width; ++i) NTL::SwitchBit(poly.rep[coeff], long(bit + i));
 
     if (is_restore) {
         if (poly.rep[coeff] != g_original) throw std::logic_error("the restore didnt recover the original value");
         inj.record_restore();
+        g_pending = false;
         g_last_poly = nullptr;
         return;
     }
@@ -50,7 +61,9 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
     for (long i = 0; i < N; ++i)
         changed += NTL::coeff(before, i) != NTL::coeff(poly, i);
     g_original  = before.rep[coeff];
+    g_flipped   = poly.rep[coeff];
     g_last_poly = &poly;
+    g_pending   = true;
     inj.record_flip(flipped, changed);
 }
 
@@ -63,6 +76,7 @@ InjectorScope::InjectorScope(Injector& inj, long ring_degree)
     g_inj       = &inj;
     g_N         = ring_degree;
     g_last_poly = nullptr;
+    g_pending = false;
 }
 
 InjectorScope::~InjectorScope()

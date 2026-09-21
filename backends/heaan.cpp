@@ -119,7 +119,8 @@ IterationResult run_iteration(
     }
 
     Plaintext plain;
-    Plaintext plain_clean;
+    Plaintext plain_clean;   // operando de add/mul: se cifra, necesita logp/logq de verdad
+    NTL::ZZX  pmul_poly;     // operando de pmul: es un polinomio pelado, NO un Plaintext
 
     if(args.isComplex>0){
         plain = ctx.scheme.encode(
@@ -158,18 +159,31 @@ IterationResult run_iteration(
         }
         c_clean = ctx.scheme.encryptMsg(plain_clean, ctx.seed);
     }
+
     if (has_op(args.ops, OpType::PMul)){
+        // Context::encode devuelve ZZX. Asignarlo a un Plaintext compilaba (el ctor no es
+        // explicit) y dejaba logp=0/logq=0 en silencio; guardamos el ZZX y listo.
         if(args.isComplex){
-            plain_clean =  ctx.cc.encode(baseInputComplex, baseSize, args.logDelta);
+            pmul_poly =  ctx.cc.encode(baseInputComplex, baseSize, args.logDelta);
         } else {
-            plain_clean =  ctx.cc.encode(baseInput, baseSize, args.logDelta);
+            pmul_poly =  ctx.cc.encode(baseInput, baseSize, args.logDelta);
         }
     }
-
     if (inj.here("encrypt_c0")) client_flip(inj, c.bx);
     if (inj.here("encrypt_c1")) client_flip(inj, c.ax);
     // ---- Server side: el pipeline ----
     std::array<uint32_t, kNumOpTypes> occ{};   // ocurrencias por tipo -> op_depth
+                                               //
+                                               //
+    // c_clean se cifro a logQ y c va bajando con cada rescale. Ring2Utils::add usa AddMod
+    // (una sola resta condicional), asi que sumar un operando de modulo mas grande deja
+    // coeficientes sin reducir: el resultado decodifica bien igual, pero el registro queda
+    // con el ancho de bits del modulo viejo y el eje "bit" de las inyecciones posteriores
+    // deja de significar lo mismo. Bajamos c_clean al nivel de c antes de cada op binaria.
+    auto align_clean = [&]() {
+       if (c_clean.logq > c.logq) ctx.scheme.modDownToAndEqual(c_clean, c.logq);
+    };
+
     uint32_t n_rescale = 0;
 
     auto rescale = [&]() {
@@ -186,6 +200,7 @@ IterationResult run_iteration(
        const uint32_t d = occ[size_t(op.type)]++;
        switch (op.type) {
        case OpType::Add:
+           align_clean();
            if (inj.here("add", d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.addBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
@@ -195,11 +210,12 @@ IterationResult run_iteration(
            break;
 
        case OpType::PMul:
-           c = ctx.scheme.multByPoly(c, plain_clean.mx, args.logDelta);
+           c = ctx.scheme.multByPoly(c, pmul_poly, args.logDelta);
            rescale();
            break;
 
        case OpType::Mul:
+           align_clean();
            if (inj.here("mul", d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.multBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);

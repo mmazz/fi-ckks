@@ -99,6 +99,7 @@ static void run_one(BackendContext* ctx, CampaignArgs& args,
     r.hidden_layer    = res.hidden_layer;
     r.reduceSum_layer = res.reduceSum_layer;
     r.misclassified   = s.classifier && argmax(res.values) != s.golden_class;
+    r.out_of_range    = inj.out_of_range();
     s.logger.log(r);
 
     if (s.vlogger) s.vlogger->log(f.limb, f.coeff, f.bit, ckks_golden, res.values);
@@ -164,10 +165,11 @@ int main(int argc, char** argv)
                       << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
                       << ": se barre de menos\n";
         if (args.bitsPerCoeff > real_bits)
-            std::cerr << "WARNING: bitsPerCoeff=" << args.bitsPerCoeff << " supera los "
-                      << real_bits << " bits reales de '" << args.stage
-                      << "': los bits >= " << real_bits
-                      << " dejan el coeficiente fuera de rango\n";
+            std::cerr << "INFO: los coeficientes mas angostos de '" << args.stage << "' tienen "
+                      << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
+                      << ": los flips en bits >= " << real_bits
+                      << " dejan un valor fuera del modulo. Se inyectan igual (es lo que hace"
+                         " el hardware) y quedan marcados en la columna out_of_range\n";
 
         check_transient(ctx.get(), args, ckks_golden);
 

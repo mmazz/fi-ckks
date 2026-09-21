@@ -7,13 +7,6 @@ set -e
 
 echo "=== Setting up project structure ==="
 
-# Clonar HEAAN_PRNG si no existe
-if [ ! -d "HEAAN-PRNG-Control" ]; then
-    echo "Cloning HEAAN-PRNG-Control..."
-    git clone git@github.com:mmazz/HEAAN-PRNG-Control.git
-else
-    echo "HEAAN-PRNG-Control already exists"
-fi
 HEAAN_SHA="5bc81044c30d5b6635e77def2918fca4501ff846"
 [ -d HEAAN-PRNG-Control ] || git clone git@github.com:mmazz/HEAAN-PRNG-Control.git
 git -C HEAAN-PRNG-Control fetch -q

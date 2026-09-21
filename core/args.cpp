@@ -66,7 +66,7 @@ void validateArgs(const CampaignArgs& args)
 std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
 {
     std::vector<uint32_t> res;
-    res.reserve(40);
+    res.reserve(45);
 
     const uint32_t logQ     = args.logQ;
     const uint32_t logDelta = args.logDelta;

@@ -45,10 +45,11 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
     const Format orig = p.GetFormat();
     p.SetFormat(withNTT ? Format::EVALUATION : Format::COEFFICIENT);
     auto& towers = p.GetAllElements();
-
     if (inj.probing()) {
-        uint32_t qbits = 0;
-        for (const auto& t : towers) qbits = std::max<uint32_t>(qbits, t.GetModulus().GetMSB());
+        // El MINIMO: es el primer bit a partir del cual ALGUN limb se sale del modulo.
+        // Con el maximo, un limb de 41 bits al lado de uno de 60 pasaba desapercibido.
+        uint32_t qbits = towers.empty() ? 0 : ~uint32_t(0);
+        for (const auto& t : towers) qbits = std::min<uint32_t>(qbits, t.GetModulus().GetMSB());
         inj.record_probe(uint32_t(towers.size()), qbits);
     } else {
         const FaultSpec& f = inj.spec();
@@ -57,6 +58,10 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
         if (f.coeff >= t.GetLength()) throw std::out_of_range("coeff out of range");
         const uint64_t a = t[f.coeff].ConvertToInt();
         const uint64_t b = a ^ inj.mask64();
+        // El registro es de 64 bits; el modulo del limb no. Inyectamos el valor tal cual
+        // (asi se comporta el hardware) pero marcamos la fila si quedo >= q, porque ahi
+        // la perturbacion ya no es +-2^bit sino (a ^ 2^bit) mod q - a.
+        if (b >= t.GetModulus().ConvertToInt()) inj.record_out_of_range();
         t[f.coeff] = NativeInteger(b);
         const uint64_t got = t[f.coeff].ConvertToInt();
         inj.record_flip(__builtin_popcountll(a ^ got), count_diff(before, p));

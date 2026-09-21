@@ -48,7 +48,11 @@ public:
         if (mode_ != Mode::Probe) throw std::logic_error("record_probe out of Probe mode");
         ++probes_; limbs_ = limbs; coeff_bits_ = coeff_bits;
     }
-
+    // El registro tiene 64 bits, el modulo del limb no: un flip por encima de log2(q)
+    // deja un residuo >= q. Se inyecta igual (es lo que pasaria en el hardware), pero
+    // la fila queda marcada para poder filtrarla en el analisis.
+    void record_out_of_range() { out_of_range_ = true; }
+    bool out_of_range() const { return out_of_range_; }
     void finish() const {
         const std::string where = " (stage=" + f_.stage + " op_depth=" + std::to_string(f_.op_depth) +
                                   " op_step=" + std::to_string(f_.op_step) + ")";
@@ -78,4 +82,5 @@ private:
     FaultSpec f_;
     int applied_ = 0, restored_ = 0, probes_ = 0;
     uint32_t limbs_ = 0, coeff_bits_ = 0;
+    bool out_of_range_ = false;
 };
