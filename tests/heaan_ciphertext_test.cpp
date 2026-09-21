@@ -93,7 +93,7 @@ TEST(client_flip_changes_one_coeff_and_restores)
     const NTL::ZZX before = c.bx;
 
     FaultSpec f;
-    f.stage = "encrypt_c0";
+    f.stage = Stage::EncryptC0;
     f.coeff = 3;
     f.bit = 20;
     f.amountBits = 1;

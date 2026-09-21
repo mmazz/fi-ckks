@@ -84,7 +84,7 @@ std::string CampaignRegistry::csvEscape(const std::string& field)
 std::string CampaignRegistry::makeCampaignKey(const CampaignArgs& args)
 {
     return joinCsvFields(
-        args.library, args.stage, args.logN, args.logQ, args.bitsPerCoeff,
+        args.library, std::string(to_string(args.stage)), args.logN, args.logQ, args.bitsPerCoeff,
         args.logDelta, args.logSlots, args.withNTT, args.mult_depth, args.pipeline,
         args.op_step, args.op_depth, args.amountBits, args.seed,
         args.seed_input, args.isComplex, args.logMin, args.logMax,

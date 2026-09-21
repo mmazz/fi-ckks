@@ -47,7 +47,7 @@ void flip_reg(Ct& c, const CampaignArgs& args, Injector& inj)
 }
 
 // true si esta corrida inyecta en first_step o first_step + 1 (el par c0/c1 del registro).
-bool at_pair(Injector& inj, bool on_site, const char* stage, uint32_t first_step)
+bool at_pair(Injector& inj, bool on_site, Stage stage, uint32_t first_step)
 {
     return at(inj, on_site, stage, first_step) || at(inj, on_site, stage, first_step + 1);
 }
@@ -60,7 +60,7 @@ void reduceSum(NNOpenfheContext& ctx, Ct& ct, const CampaignArgs& args,
         const int32_t k = int32_t(1) << i;
 
         Ct rot;
-        if (at_pair(inj, on_site, "hidden_layer", 4)) {
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 4)) {
             Ct ct_copy = ct->Clone();   // el fault solo lo ve esta rotacion
             flip_reg(ct_copy, args, inj);
             rot = ctx.cc->EvalRotate(ct_copy, k);
@@ -68,10 +68,10 @@ void reduceSum(NNOpenfheContext& ctx, Ct& ct, const CampaignArgs& args,
             rot = ctx.cc->EvalRotate(ct, k);
         }
 
-        if (at_pair(inj, on_site, "hidden_layer", 6)) flip_reg(rot, args, inj);
-        if (at_pair(inj, on_site, "hidden_layer", 8)) flip_reg(ct, args, inj);
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 6)) flip_reg(rot, args, inj);
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 8)) flip_reg(ct, args, inj);
         ct = ctx.cc->EvalAdd(ct, rot);
-        if (at_pair(inj, on_site, "hidden_layer", 10)) flip_reg(ct, args, inj);
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 10)) flip_reg(ct, args, inj);
     }
 }
 
@@ -80,19 +80,19 @@ Ct chebyTanh3(NNOpenfheContext& ctx, Ct& x, const CampaignArgs& args, Injector& 
 {
     auto& cc = ctx.cc;
 
-    if (at_pair(inj, on_site, "cheby_tanh3", 0)) flip_reg(x, args, inj);
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 0)) flip_reg(x, args, inj);
     Ct x2 = cc->EvalMult(x, x);
 
-    if (at_pair(inj, on_site, "cheby_tanh3", 2)) flip_reg(x, args, inj);
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 2)) flip_reg(x, args, inj);
     Ct x3 = cc->EvalMult(x2, x);
 
-    if (at_pair(inj, on_site, "cheby_tanh3", 4)) flip_reg(x3, args, inj);
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 4)) flip_reg(x3, args, inj);
     Ct t1 = cc->EvalMult(x3, -0.23);
 
-    if (at_pair(inj, on_site, "cheby_tanh3", 6)) flip_reg(x, args, inj);
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 6)) flip_reg(x, args, inj);
     Ct t2 = cc->EvalMult(x, 0.98);
 
-    if (at_pair(inj, on_site, "cheby_tanh3", 8)) flip_reg(t2, args, inj);
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 8)) flip_reg(t2, args, inj);
     return cc->EvalAdd(t1, t2);
 }
 
@@ -107,19 +107,19 @@ std::vector<Ct> forward(NNOpenfheContext& ctx, const Ct& c, const CampaignArgs& 
         const bool on_site = (j == site.neuron);
 
         Ct s;
-        if (at_pair(inj, on_site, "hidden_layer", 0)) {
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 0)) {
             Ct c_copy = c->Clone();   // el fault solo lo ve esta neurona
             flip_reg(c_copy, args, inj);
             s = cc->EvalMult(c_copy, ctx.W1[j]);
         } else {
             s = cc->EvalMult(c, ctx.W1[j]);
         }
-        if (at_pair(inj, on_site, "hidden_layer", 2)) flip_reg(s, args, inj);
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 2)) flip_reg(s, args, inj);
 
         reduceSum(ctx, s, args, inj, site, on_site);
 
         s = cc->EvalAdd(s, ctx.b1[j]);
-        if (at_pair(inj, on_site, "hidden_layer", 12)) flip_reg(s, args, inj);
+        if (at_pair(inj, on_site, Stage::HiddenLayer, 12)) flip_reg(s, args, inj);
 
         layer1.push_back(chebyTanh3(ctx, s, args, inj, on_site));
     }
@@ -224,18 +224,18 @@ IterationResult run_iteration(BackendContext* bctx, const CampaignArgs& args, In
     const Site site = pick_site(args, inj);
 
     Plaintext ptxt = ctx.cc->MakeCKKSPackedPlaintext(ctx.model.image);
-    if (inj.here("encode")) inject(ptxt->GetElement<DCRTPoly>(), args.withNTT, inj);
+    if (inj.here(Stage::Encode)) inject(ptxt->GetElement<DCRTPoly>(), args.withNTT, inj);
 
     Ct c = ctx.cc->Encrypt(ctx.keys.publicKey, ptxt);
-    if (inj.here("encrypt_c0")) inject(c->GetElements()[0], args.withNTT, inj);
-    if (inj.here("encrypt_c1")) inject(c->GetElements()[1], args.withNTT, inj);
+    if (inj.here(Stage::EncryptC0)) inject(c->GetElements()[0], args.withNTT, inj);
+    if (inj.here(Stage::EncryptC1)) inject(c->GetElements()[1], args.withNTT, inj);
 
     std::vector<Ct> outs = forward(ctx, c, args, inj, site);
 
     // Los faults de salida van al logit de la clase correcta.
     const size_t target = ctx.model.label;
-    if (inj.here("decrypt_c0")) inject(outs[target]->GetElements()[0], args.withNTT, inj);
-    if (inj.here("decrypt_c1")) inject(outs[target]->GetElements()[1], args.withNTT, inj);
+    if (inj.here(Stage::DecryptC0)) inject(outs[target]->GetElements()[0], args.withNTT, inj);
+    if (inj.here(Stage::DecryptC1)) inject(outs[target]->GetElements()[1], args.withNTT, inj);
 
     IterationResult res;
     res.values.reserve(outs.size());

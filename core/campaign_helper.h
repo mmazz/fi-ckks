@@ -1,6 +1,7 @@
 #pragma once
 #include "attack_mode.h"
 #include "pipeline.h"
+#include "stage.h"
 #include <chrono>
 #include <iomanip>
 #include <string>
@@ -20,8 +21,7 @@ inline std::string timestamp_now() {
 
 struct CampaignArgs {
     std::string library = "none";
-    std::string stage = "none";
-
+    Stage stage = Stage::None;  
     uint32_t bitsPerCoeff = 64;
     uint32_t logN = 3;
     uint32_t logQ = 60;

@@ -100,7 +100,7 @@ TEST(inject_changes_one_coeff)
     const DCRTPoly before = c->GetElements()[0];
 
     FaultSpec f;
-    f.stage = "encrypt_c0";
+    f.stage = Stage::EncryptC0;
     f.limb = 0;
     f.coeff = 3;
     f.bit = 20;
@@ -126,7 +126,7 @@ TEST(probe_measures_limbs_and_bits)
 {
     Env env(7);
     Ciphertext<DCRTPoly> c = encrypt(env, 42);
-    Injector probe = Injector::probe("encrypt_c0", 0, 0);
+    Injector probe = Injector::probe(Stage::EncryptC0, 0, 0);
     inject(c->GetElements()[0], false, probe);
     probe.finish();
     CHECK_EQ(probe.probed_limbs(), uint32_t(DEPTH + 1));

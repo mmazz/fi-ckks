@@ -144,7 +144,7 @@ int main(int argc, char** argv)
         CampaignArgs args = parse_arguments(argc, argv);
         backend_prepare_args(args);
         validateArgs(args);
-        if (args.stage == "none")
+        if (args.stage == Stage::None)
             throw std::invalid_argument("must choose a --stage (ver --help); "
                                         "'none' no inyecta en ningun lado");
         if (args.isExhaustive)
@@ -161,11 +161,11 @@ int main(int argc, char** argv)
         probe.finish();
             const uint32_t real_bits = probe.probed_coeff_bits();
         if (real_bits > args.bitsPerCoeff)
-            std::cerr << "WARNING: los coeficientes de '" << args.stage << "' tienen hasta "
+            std::cerr << "WARNING: los coeficientes de '" << to_string(args.stage) << "' tienen hasta "
                       << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
                       << ": se barre de menos\n";
         if (args.bitsPerCoeff > real_bits)
-            std::cerr << "INFO: los coeficientes mas angostos de '" << args.stage << "' tienen "
+            std::cerr << "INFO: los coeficientes mas angostos de '" << to_string(args.stage) << "' tienen "
                       << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
                       << ": los flips en bits >= " << real_bits
                       << " dejan un valor fuera del modulo. Se inyectan igual (es lo que hace"

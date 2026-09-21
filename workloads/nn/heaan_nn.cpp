@@ -56,24 +56,24 @@ void reduceSum(NNHeaanContext& ctx, Ciphertext& ct, const CampaignArgs& args,
         const long k = 1L << i;
 
         Ciphertext rot;
-        if (at(inj, on_site, "hidden_layer", 4) || at(inj, on_site, "hidden_layer", 5)) {
+        if (at(inj, on_site, Stage::HiddenLayer, 4) || at(inj, on_site, Stage::HiddenLayer, 5)) {
             Ciphertext ct_copy = ct;   // el fault solo lo ve esta rotacion
             client_flip(inj, inj.spec().op_step == 4 ? ct_copy.bx : ct_copy.ax);
             rot = he.leftRotateFast(ct_copy, k);
-        } else if (on_site && inj.here("rot")) {
+        } else if (on_site && inj.here(Stage::Rot)) {
             const FaultSpec& f = inj.spec();
             rot = he.leftRotateFastBitFlip(ct, k, f.op_step, f.coeff, f.bit, f.amountBits);
         } else {
             rot = he.leftRotateFast(ct, k);
         }
 
-        if (at(inj, on_site, "hidden_layer", 6)) client_flip(inj, rot.bx);
-        if (at(inj, on_site, "hidden_layer", 7)) client_flip(inj, rot.ax);
-        if (at(inj, on_site, "hidden_layer", 8)) client_flip(inj, ct.bx);
-        if (at(inj, on_site, "hidden_layer", 9)) client_flip(inj, ct.ax);
+        if (at(inj, on_site, Stage::HiddenLayer, 6)) client_flip(inj, rot.bx);
+        if (at(inj, on_site, Stage::HiddenLayer, 7)) client_flip(inj, rot.ax);
+        if (at(inj, on_site, Stage::HiddenLayer, 8)) client_flip(inj, ct.bx);
+        if (at(inj, on_site, Stage::HiddenLayer, 9)) client_flip(inj, ct.ax);
         he.addAndEqual(ct, rot);
-        if (at(inj, on_site, "hidden_layer", 10)) client_flip(inj, ct.bx);
-        if (at(inj, on_site, "hidden_layer", 11)) client_flip(inj, ct.ax);
+        if (at(inj, on_site, Stage::HiddenLayer, 10)) client_flip(inj, ct.bx);
+        if (at(inj, on_site, Stage::HiddenLayer, 11)) client_flip(inj, ct.ax);
     }
 }
 
@@ -84,40 +84,40 @@ Ciphertext chebyTanh3(NNHeaanContext& ctx, Ciphertext& c, const CampaignArgs& ar
     Scheme& he = ctx.scheme;
     const long logP = args.logDelta;
 
-    if (at(inj, on_site, "cheby_tanh3", 0)) client_flip(inj, c.bx);
-    if (at(inj, on_site, "cheby_tanh3", 1)) client_flip(inj, c.ax);
+    if (at(inj, on_site, Stage::ChebyTanh3, 0)) client_flip(inj, c.bx);
+    if (at(inj, on_site, Stage::ChebyTanh3, 1)) client_flip(inj, c.ax);
     Ciphertext c2 = he.square(c);
     he.reScaleByAndEqual(c2, logP);
 
-    if (at(inj, on_site, "cheby_tanh3", 2)) client_flip(inj, c.bx);
-    if (at(inj, on_site, "cheby_tanh3", 3)) client_flip(inj, c.ax);
+    if (at(inj, on_site, Stage::ChebyTanh3, 2)) client_flip(inj, c.bx);
+    if (at(inj, on_site, Stage::ChebyTanh3, 3)) client_flip(inj, c.ax);
     Ciphertext c3;
-    if (on_site && inj.here("mul")) {
+    if (on_site && inj.here(Stage::Mul)) {
         const FaultSpec& f = inj.spec();
         c3 = he.multBitFlip(c2, c, f.op_step, f.coeff, f.bit, f.amountBits);
     } else {
         c3 = he.mult(c2, c);
     }
-    if (on_site && inj.here("rescale")) {
+    if (on_site && inj.here(Stage::Rescale)) {
         const FaultSpec& f = inj.spec();
         he.reScaleByAndEqualBitFlip(c3, logP, f.op_step, f.coeff, f.bit, f.amountBits);
     } else {
         he.reScaleByAndEqual(c3, logP);
     }
 
-    if (at(inj, on_site, "cheby_tanh3", 4)) client_flip(inj, c3.bx);   // registro x^3
-    if (at(inj, on_site, "cheby_tanh3", 5)) client_flip(inj, c3.ax);
+    if (at(inj, on_site, Stage::ChebyTanh3, 4)) client_flip(inj, c3.bx);   // registro x^3
+    if (at(inj, on_site, Stage::ChebyTanh3, 5)) client_flip(inj, c3.ax);
     he.multByConstAndEqual(c3, -0.23, logP);
     he.reScaleByAndEqual(c3, logP);
 
-    if (at(inj, on_site, "cheby_tanh3", 6)) client_flip(inj, c.bx);
-    if (at(inj, on_site, "cheby_tanh3", 7)) client_flip(inj, c.ax);
+    if (at(inj, on_site, Stage::ChebyTanh3, 6)) client_flip(inj, c.bx);
+    if (at(inj, on_site, Stage::ChebyTanh3, 7)) client_flip(inj, c.ax);
     he.multByConstAndEqual(c, 0.98, logP);
     he.reScaleByAndEqual(c, logP);
 
-    if (at(inj, on_site, "cheby_tanh3", 8)) client_flip(inj, c.bx);
-    if (at(inj, on_site, "cheby_tanh3", 9)) client_flip(inj, c.ax);
-    if (on_site && inj.here("add")) {
+    if (at(inj, on_site, Stage::ChebyTanh3, 8)) client_flip(inj, c.bx);
+    if (at(inj, on_site, Stage::ChebyTanh3, 9)) client_flip(inj, c.ax);
+    if (on_site && inj.here(Stage::Add)) {
         const FaultSpec& f = inj.spec();
         c3 = he.addBitFlip(c3, c, f.op_step, f.coeff, f.bit, f.amountBits);
     } else {
@@ -138,22 +138,22 @@ std::vector<Ciphertext> forward(NNHeaanContext& ctx, Ciphertext& c, const Campai
         const bool on_site = (j == site.neuron);
 
         Ciphertext s;
-        if (at(inj, on_site, "hidden_layer", 0) || at(inj, on_site, "hidden_layer", 1)) {
+        if (at(inj, on_site, Stage::HiddenLayer, 0) || at(inj, on_site, Stage::HiddenLayer, 1)) {
             Ciphertext c_copy = c;   // el fault solo lo ve esta neurona
             client_flip(inj, inj.spec().op_step == 0 ? c_copy.bx : c_copy.ax);
             s = he.multByPoly(c_copy, ctx.W1[j], logP);
         } else {
             s = he.multByPoly(c, ctx.W1[j], logP);
         }
-        if (at(inj, on_site, "hidden_layer", 2)) client_flip(inj, s.bx);
-        if (at(inj, on_site, "hidden_layer", 3)) client_flip(inj, s.ax);
+        if (at(inj, on_site, Stage::HiddenLayer, 2)) client_flip(inj, s.bx);
+        if (at(inj, on_site, Stage::HiddenLayer, 3)) client_flip(inj, s.ax);
         he.reScaleByAndEqual(s, logP);
 
         reduceSum(ctx, s, args, inj, site, on_site);
 
         he.addConstAndEqual(s, ctx.model.weights.b1[j]);
-        if (at(inj, on_site, "hidden_layer", 12)) client_flip(inj, s.bx);
-        if (at(inj, on_site, "hidden_layer", 13)) client_flip(inj, s.ax);
+        if (at(inj, on_site, Stage::HiddenLayer, 12)) client_flip(inj, s.bx);
+        if (at(inj, on_site, Stage::HiddenLayer, 13)) client_flip(inj, s.ax);
 
         layer1.push_back(chebyTanh3(ctx, s, args, inj, on_site));
     }
@@ -249,24 +249,24 @@ IterationResult run_iteration(BackendContext* bctx, const CampaignArgs& args, In
     for (size_t i = 0; i < ctx.model.image.size(); ++i) arr[i] = {ctx.model.image[i], 0.0};
 
     Plaintext plain = ctx.scheme.encode(arr.data(), slots, args.logDelta, args.logQ);
-    if (inj.here("encode")) client_flip(inj, plain.mx);
+    if (inj.here(Stage::Encode)) client_flip(inj, plain.mx);
 
     Ciphertext c = ctx.scheme.encryptMsg(plain, ctx.seed);
-    if (inj.here("encrypt_c0")) client_flip(inj, c.bx);
-    if (inj.here("encrypt_c1")) client_flip(inj, c.ax);
+    if (inj.here(Stage::EncryptC0)) client_flip(inj, c.bx);
+    if (inj.here(Stage::EncryptC1)) client_flip(inj, c.ax);
 
     std::vector<Ciphertext> outs = forward(ctx, c, args, inj, site);
 
     // Los faults de salida van al logit de la clase correcta.
     const size_t target = ctx.model.label;
-    if (inj.here("decrypt_c0")) client_flip(inj, outs[target].bx);
-    if (inj.here("decrypt_c1")) client_flip(inj, outs[target].ax);
+    if (inj.here(Stage::DecryptC0)) client_flip(inj, outs[target].bx);
+    if (inj.here(Stage::DecryptC1)) client_flip(inj, outs[target].ax);
 
     IterationResult res;
     res.values.reserve(outs.size());
     for (size_t o = 0; o < outs.size(); ++o) {
         Plaintext dec = ctx.scheme.decryptMsg(ctx.sk, outs[o]);
-        if (o == target && inj.here("decode")) client_flip(inj, dec.mx);
+        if (o == target && inj.here(Stage::Decode)) client_flip(inj, dec.mx);
         std::unique_ptr<std::complex<double>[]> v(ctx.scheme.decode(dec));
         res.values.push_back(v[0].real());
     }

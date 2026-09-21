@@ -13,8 +13,7 @@
 void CampaignArgs::print(std::ostream& os) const {
     os << "===== CampaignArgs =====\n";
     os << "library: " << library << '\n';
-    os << "stage: " << stage << '\n';
-
+    os << "stage: " << to_string(stage) << '\n';
     os << "bitsPerCoeff: " << bitsPerCoeff << '\n';
     os << "logN: " << logN << '\n';
     os << "logQ: " << logQ << '\n';
@@ -59,9 +58,11 @@ void CampaignArgs::print(std::ostream& os) const {
 
 
 void print_usage(const char* program_name) {
+    std::string stages;
+    for (const auto& e : kStageNames) stages += std::string(stages.empty() ? "" : ", ") + e.name;
     std::cout << "Usage: " << program_name << " [OPTIONS]\n\n"
               << "Options:\n"
-              << "  --stage <name>          Stage to target: none, encode, encrypt_c0, encrypt_c1, decrypt_c0, decrypt_c1, decode, mul_inside, mul_outside, add_inside, add_outside, rot_inside, rot_outside (default: none)\n"
+              << "  --stage <name>          Stage to target: " << stages << " (default: none)\n"
               << "  --bitsPerCoeff <value>  Max bits per coeff (default: 64)\n"
               << "  --logN <value>          log Ring dimension (default: 3 = 2^3 = 8)\n"
               << "  --logQ <value>          First mod bits (default: 60)\n"
@@ -92,25 +93,6 @@ void print_usage(const char* program_name) {
               << "  " << program_name << " --logN 6 --logQ 60 --logDelta 30 --logSlots 4 --pipeline \"add; mul x2\" --stage mul --op_step 3\n"
               << "  " << program_name << " --logN 12 --logQ 60 --logDelta 40 --mult_depth 2 --stage encrypt_c0 --isExhaustive 0 --numSamples 200\n";
 }
-
-   // Nombres viejos -> nuevos, para que los configs viejos sigan andando.
-   static std::string canonical_stage(const std::string& s) {
-       static const std::map<std::string, std::string> alias = {
-           {"add_inside", "add"},         {"mul_inside", "mul"},  {"mul_inside_asplos", "mul_asplos"},
-           {"rescale_inside", "rescale"}, {"rot_inside", "rot"},  {"rot_inside_asplos", "rot_asplos"},
-           {"boot_outside", "boot"},
-       };
-       static const std::set<std::string> valid = {
-           "none", "encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode",
-           "add", "pmul", "mul", "mul_asplos", "scalar", "rescale", "rot", "rot_asplos",
-           "boot", "boot_coeff", "boot_eval", "boot_slot", "cheby_tanh3", "hidden_layer",
-       };
-       auto it = alias.find(s);
-       const std::string st = (it != alias.end()) ? it->second : s;
-       if (!valid.count(st)) throw std::invalid_argument("stage invalido: '" + s + "'");
-       return st;
-   }
-
 
 CampaignArgs parse_arguments(int argc, char* argv[]) {
     CampaignArgs args;
@@ -186,8 +168,7 @@ CampaignArgs parse_arguments(int argc, char* argv[]) {
                 break;
             case 'P': args.pipeline = optarg; break;
             case 'S':
-                args.stage = canonical_stage(optarg); break;
-               
+                args.stage = parse_stage(optarg); break;
             case 'X':
                 args.isComplex= std::stoul(optarg);
                 break;

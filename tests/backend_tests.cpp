@@ -25,7 +25,7 @@ static std::vector<double> run_clean(BackendContext* ctx, const CampaignArgs& ar
     return values;
 }
 
-static FaultSpec fault(const CampaignArgs& args, const std::string& stage,
+static FaultSpec fault(const CampaignArgs& args, Stage stage,
                        uint32_t op_step, uint32_t coeff, uint32_t bit)
 {
     FaultSpec f;
@@ -38,19 +38,20 @@ static FaultSpec fault(const CampaignArgs& args, const std::string& stage,
     f.amountBits = args.amountBits;
     return f;
 }
-
-// (stage, op_step) que tienen que existir en cada backend con el pipeline de los tests.
-static std::vector<std::pair<std::string, uint32_t>> stages_to_probe(const CampaignArgs& args)
+static std::vector<std::pair<Stage, uint32_t>> stages_to_probe(const CampaignArgs& args)
 {
-    std::vector<std::pair<std::string, uint32_t>> v = {
-        {"encode", 0}, {"encrypt_c0", 0}, {"encrypt_c1", 0}, {"decrypt_c0", 0}, {"decrypt_c1", 0},
+    std::vector<std::pair<Stage, uint32_t>> v = {
+        {Stage::Encode, 0}, {Stage::EncryptC0, 0}, {Stage::EncryptC1, 0},
+        {Stage::DecryptC0, 0}, {Stage::DecryptC1, 0},
     };
     if (args.library == "heaan")
-        for (auto s : {std::pair<std::string, uint32_t>{"decode", 0}, {"add", 0}, {"add", 5},
-                       {"mul", 0}, {"mul", 25}, {"rescale", 0}, {"rot", 0}, {"rot", 11}})
+        for (auto s : {std::pair<Stage, uint32_t>{Stage::Decode, 0}, {Stage::Add, 0}, {Stage::Add, 5},
+                       {Stage::Mul, 0}, {Stage::Mul, 25}, {Stage::Rescale, 0},
+                       {Stage::Rot, 0}, {Stage::Rot, 11}})
             v.push_back(s);
     return v;
 }
+
 
 // ------------------------------------------------------------------ //
 
@@ -109,7 +110,7 @@ TEST(probe_rejects_unreachable_point)
 {
     CtxPtr ctx = make_ctx(g_args);
     const bool heaan = g_args.library == "heaan";
-    Injector probe = Injector::probe(heaan ? "mul" : "add", 0, heaan ? 999 : 0);
+    Injector probe = Injector::probe(heaan ? Stage::Mul : Stage::Add, 0, heaan ? 999 : 0);
     run_iteration(ctx.get(), g_args, probe);
     CHECK_THROWS(probe.finish());
 }
@@ -118,7 +119,7 @@ TEST(probe_rejects_unreachable_point)
 TEST(probe_rejects_unreachable_depth)
 {
     CtxPtr ctx = make_ctx(g_args);
-    Injector probe = Injector::probe("encrypt_c0", 5, 0);
+    Injector probe = Injector::probe(Stage::EncryptC0, 5, 0);
     run_iteration(ctx.get(), g_args, probe);
     CHECK_THROWS(probe.finish());
 }
@@ -129,7 +130,7 @@ TEST(fault_changes_output)
     CtxPtr ctx = make_ctx(g_args);
     const std::vector<double> golden = run_clean(ctx.get(), g_args);
 
-    Injector inj = Injector::fault(fault(g_args, "encrypt_c0", 0, 1, g_args.logDelta));
+    Injector inj = Injector::fault(fault(g_args, Stage::EncryptC0, 0, 1, g_args.logDelta));
     std::vector<double> values = run_iteration(ctx.get(), g_args, inj).values;
     inj.finish();                                        // valida cantidad de bits y coeficientes
     CHECK_NE(values, golden);
@@ -155,7 +156,7 @@ TEST(amount_bits_flips_exactly_n)
     CampaignArgs args = g_args;
     args.amountBits = 3;
     CtxPtr ctx = make_ctx(args);
-    Injector inj = Injector::fault(fault(args, "encrypt_c1", 0, 2, args.logDelta));
+    Injector inj = Injector::fault(fault(args, Stage::EncryptC1, 0, 2, args.logDelta));
     run_iteration(ctx.get(), args, inj);
     inj.finish();
 }
@@ -166,7 +167,7 @@ TEST(same_fault_gives_same_output)
     CtxPtr ctx = make_ctx(g_args);
     std::vector<std::vector<double>> out;
     for (int i = 0; i < 2; ++i) {
-        Injector inj = Injector::fault(fault(g_args, "encrypt_c0", 0, 3, g_args.logDelta + 1));
+        Injector inj = Injector::fault(fault(g_args, Stage::EncryptC0, 0, 3, g_args.logDelta + 1));
         out.push_back(run_iteration(ctx.get(), g_args, inj).values);
         inj.finish();
     }

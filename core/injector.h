@@ -1,11 +1,11 @@
 #pragma once
 #include <cstdint>
 #include <stdexcept>
+#include "stage.h"
 #include <string>
-#include <string_view>
 
 struct FaultSpec {
-    std::string stage;
+    Stage stage = Stage::None;
     uint32_t op_depth = 0, op_step = 0;
     uint32_t limb = 0, coeff = 0, bit = 0, amountBits = 1;
 };
@@ -14,12 +14,12 @@ class Injector {
 public:
     static Injector none() { return Injector(Mode::None, {}); }
     static Injector fault(const FaultSpec& f) { return Injector(Mode::Fault, f); }
-    static Injector probe(const std::string& stage, uint32_t op_depth, uint32_t op_step) {
+    static Injector probe(Stage stage, uint32_t op_depth, uint32_t op_step) {
         FaultSpec f; f.stage = stage; f.op_depth = op_depth; f.op_step = op_step;
         return Injector(Mode::Probe, f);
     }
 
-    bool here(std::string_view stage, uint32_t depth = 0) const {
+    bool here(Stage stage, uint32_t depth = 0) const {
         return mode_ != Mode::None && f_.stage == stage && f_.op_depth == depth;
     }
     bool probing() const { return mode_ == Mode::Probe; }
@@ -54,8 +54,8 @@ public:
     void record_out_of_range() { out_of_range_ = true; }
     bool out_of_range() const { return out_of_range_; }
     void finish() const {
-        const std::string where = " (stage=" + f_.stage + " op_depth=" + std::to_string(f_.op_depth) +
-                                  " op_step=" + std::to_string(f_.op_step) + ")";
+        const std::string where = std::string(" (stage=") + to_string(f_.stage) + " op_depth=" + std::to_string(f_.op_depth) +
+                          " op_step=" + std::to_string(f_.op_step) + ")";
         switch (mode_) {
         case Mode::None:
             if (applied_ || restored_ || probes_)

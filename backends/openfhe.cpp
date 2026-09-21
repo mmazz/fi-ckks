@@ -115,14 +115,14 @@ IterationResult run_iteration(BackendContext* bctx,
     Plaintext result_bitFlip;
     Plaintext ptxt = ctx.cc->MakeCKKSPackedPlaintext(ctx.baseInput);
 
-    if (inj.here("encode")) inject(ptxt->GetElement<DCRTPoly>(), args.withNTT, inj);
+    if (inj.here(Stage::Encode)) inject(ptxt->GetElement<DCRTPoly>(), args.withNTT, inj);
 
     Ciphertext<DCRTPoly> c = ctx.cc->Encrypt(ctx.keys.publicKey, ptxt);
 
 
 
-    if (inj.here("encrypt_c0")) inject(c->GetElements()[0], args.withNTT, inj);
-    if (inj.here("encrypt_c1")) inject(c->GetElements()[1], args.withNTT, inj);
+    if (inj.here(Stage::EncryptC0)) inject(c->GetElements()[0], args.withNTT, inj);
+    if (inj.here(Stage::EncryptC1)) inject(c->GetElements()[1], args.withNTT, inj);
 
    auto operand_pt = [&]() { return ctx.cc->MakeCKKSPackedPlaintext(ctx.baseInput, 1, c->GetLevel()); };
    auto operand_ct = [&]() { return ctx.cc->Encrypt(ctx.keys.publicKey, operand_pt()); };
@@ -138,8 +138,8 @@ IterationResult run_iteration(BackendContext* bctx,
        case OpType::Boot:   throw std::logic_error("openfhe: boot hasn't been implemented yet");
        }
    }
-    if (inj.here("decrypt_c0")) inject(c->GetElements()[0], args.withNTT, inj);
-    if (inj.here("decrypt_c1")) inject(c->GetElements()[1], args.withNTT, inj);
+    if (inj.here(Stage::DecryptC0)) inject(c->GetElements()[0], args.withNTT, inj);
+    if (inj.here(Stage::DecryptC1)) inject(c->GetElements()[1], args.withNTT, inj);
 
     ctx.cc->Decrypt(ctx.keys.secretKey, c, &result_bitFlip);
 

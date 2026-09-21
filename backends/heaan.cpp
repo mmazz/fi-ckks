@@ -139,7 +139,7 @@ IterationResult run_iteration(
     }
 
 
-    if (inj.here("encode")) client_flip(inj, plain.mx);
+    if (inj.here(Stage::Encode)) client_flip(inj, plain.mx);
 
     Ciphertext c = ctx.scheme.encryptMsg(plain, ctx.seed);
     Ciphertext c_clean;
@@ -169,8 +169,8 @@ IterationResult run_iteration(
             pmul_poly =  ctx.cc.encode(baseInput, baseSize, args.logDelta);
         }
     }
-    if (inj.here("encrypt_c0")) client_flip(inj, c.bx);
-    if (inj.here("encrypt_c1")) client_flip(inj, c.ax);
+    if (inj.here(Stage::EncryptC0)) client_flip(inj, c.bx);
+    if (inj.here(Stage::EncryptC1)) client_flip(inj, c.ax);
     // ---- Server side: el pipeline ----
     std::array<uint32_t, kNumOpTypes> occ{};   // ocurrencias por tipo -> op_depth
                                                //
@@ -188,7 +188,7 @@ IterationResult run_iteration(
 
     auto rescale = [&]() {
        const uint32_t r = n_rescale++;
-       if (inj.here("rescale", r)) {
+       if (inj.here(Stage::Rescale, r)) {
            const FaultSpec& f = inj.spec();
            ctx.scheme.reScaleByAndEqualBitFlip(c, args.logDelta, f.op_step, f.coeff, f.bit, f.amountBits);
        } else {
@@ -201,7 +201,7 @@ IterationResult run_iteration(
        switch (op.type) {
        case OpType::Add:
            align_clean();
-           if (inj.here("add", d)) {
+           if (inj.here(Stage::Add, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.addBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
@@ -216,10 +216,10 @@ IterationResult run_iteration(
 
        case OpType::Mul:
            align_clean();
-           if (inj.here("mul", d)) {
+           if (inj.here(Stage::Mul, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.multBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
-           } else if (inj.here("mul_asplos", d)) {
+           } else if (inj.here(Stage::MulAsplos, d)) {
                const FaultSpec& f = inj.spec();
                Ciphertext operand = c_clean;
                c = ctx.scheme.multBitFlipAsplos(c, operand, f.op_step, f.coeff, f.bit, f.amountBits);
@@ -236,10 +236,10 @@ IterationResult run_iteration(
 
        case OpType::Rot: {
            const long k = long(op.param);
-           if (inj.here("rot", d)) {
+           if (inj.here(Stage::Rot, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.leftRotateFastBitFlip(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
-           } else if (inj.here("rot_asplos", d)) {
+           } else if (inj.here(Stage::RotAsplos, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.leftRotateFastBitFlipAsplos(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
@@ -250,12 +250,12 @@ IterationResult run_iteration(
 
     //cipher, logq, logQ, logT, logI=4
        case OpType::Boot:
-           if (inj.here("boot", d)) {
+           if (inj.here(Stage::Boot, d)) {
                const FaultSpec& f = inj.spec();
                ctx.scheme.bootstrapAndEqualBitFlip(c, logq_boot, args.logQ, 4, 4, f.op_step, f.coeff, f.bit, f.amountBits);
-           } else if (inj.here("boot_coeff", d) || inj.here("boot_eval", d) || inj.here("boot_slot", d)) {
+           } else if (inj.here(Stage::BootCoeff, d) || inj.here(Stage::BootSlot, d) || inj.here(Stage::BootEval, d)) {
                const FaultSpec& f = inj.spec();
-               ctx.scheme.bootstrapAndEqualBitFlip_inside(c, logq_boot, args.logQ, 4, 4, f.stage, f.op_step, f.coeff, f.bit, f.amountBits);
+               ctx.scheme.bootstrapAndEqualBitFlip_inside(c, logq_boot, args.logQ, 4, 4, to_string(f.stage), f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
                ctx.scheme.bootstrapAndEqual(c, logq_boot, args.logQ, 4, 4);
            }
@@ -264,14 +264,14 @@ IterationResult run_iteration(
     }
 
     // ---- Back to client side (despues de TODO el pipeline, incluido el boot) ----
-    if (inj.here("decrypt_c0")) client_flip(inj, c.bx);
-    if (inj.here("decrypt_c1")) client_flip(inj, c.ax);
+    if (inj.here(Stage::DecryptC0)) client_flip(inj, c.bx);
+    if (inj.here(Stage::DecryptC1)) client_flip(inj, c.ax);
 
 
 
     Plaintext decrypt_plain = ctx.scheme.decryptMsg(ctx.sk, c);
 
-    if (inj.here("decode")) client_flip(inj, decrypt_plain.mx);
+    if (inj.here(Stage::Decode)) client_flip(inj, decrypt_plain.mx);
 
     complex<double>* decoded = ctx.scheme.decode(decrypt_plain);
 
