@@ -15,7 +15,7 @@
 #include "nn_site.h"
 #include "openfhe_inject.h"
 #include "openfhe.h"
-
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -34,11 +34,30 @@ struct NNOpenfheContext : BackendContext {
     PRNG*                   prng = nullptr;
 
     NNModel model;
-    std::vector<Plaintext>              W1;   // fila j de W1 (una por neurona)
-    std::vector<Plaintext>              b1;   // b1[j] replicado en todos los slots
-    std::vector<std::vector<Plaintext>> W2;   // W2[o][h] replicado en todos los slots
-    std::vector<Plaintext>              b2;   // b2[o] replicado en todos los slots
+    // Plain values, not Plaintexts: a Plaintext has to carry the level of the
+    // ciphertext it multiplies, and that level is only known inside forward().
+    std::vector<std::vector<double>>              W1;   // row j of W1, zero padded
+    std::vector<std::vector<double>>              b1;   // b1[j] broadcast to all slots
+    std::vector<std::vector<std::vector<double>>> W2;   // W2[o][h] broadcast
+    std::vector<std::vector<double>>              b2;   // b2[o] broadcast
+
+    // (operand id, level) -> encoded Plaintext. The levels are the same on every
+    // iteration, so each operand is encoded once for the whole campaign.
+    std::map<uint64_t, Plaintext> operands;
 };
+// Operand ids, so W1[0] and b1[0] do not collide in the cache.
+enum : uint64_t { kW1 = 0, kB1 = 1u << 20, kW2 = 2u << 20, kB2 = 3u << 20 };
+
+// Encodes `v` at `level` (cached). openfhe.cpp already did this with
+// MakeCKKSPackedPlaintext(vec, 1, c->GetLevel()); the network was encoding everything
+// at level 0 and relying on FLEXIBLEAUTO to fix the scaling factor behind our back.
+Plaintext& operand(NNOpenfheContext& ctx, uint64_t id, const std::vector<double>& v, uint32_t level)
+{
+    const uint64_t key = (uint64_t(level) << 32) | id;
+    auto it = ctx.operands.find(key);
+    if (it != ctx.operands.end()) return it->second;
+    return ctx.operands.emplace(key, ctx.cc->MakeCKKSPackedPlaintext(v, 1, level)).first->second;
+}
 
 // Registro de la red: step par -> c0, step impar -> c1 (igual que bx/ax en HEAAN).
 void flip_reg(Ct& c, const CampaignArgs& args, Injector& inj)
@@ -110,15 +129,14 @@ std::vector<Ct> forward(NNOpenfheContext& ctx, const Ct& c, const CampaignArgs& 
         if (at_pair(inj, on_site, Stage::HiddenLayer, 0)) {
             Ct c_copy = c->Clone();   // el fault solo lo ve esta neurona
             flip_reg(c_copy, args, inj);
-            s = cc->EvalMult(c_copy, ctx.W1[j]);
+            s = cc->EvalMult(c_copy, operand(ctx, kW1 + j, ctx.W1[j], c_copy->GetLevel()));
         } else {
-            s = cc->EvalMult(c, ctx.W1[j]);
+            s = cc->EvalMult(c, operand(ctx, kW1 + j, ctx.W1[j], c->GetLevel()));
         }
         if (at_pair(inj, on_site, Stage::HiddenLayer, 2)) flip_reg(s, args, inj);
 
         reduceSum(ctx, s, args, inj, site, on_site);
-
-        s = cc->EvalAdd(s, ctx.b1[j]);
+        s = cc->EvalAdd(s, operand(ctx, kB1 + j, ctx.b1[j], s->GetLevel()));
         if (at_pair(inj, on_site, Stage::HiddenLayer, 12)) flip_reg(s, args, inj);
 
         layer1.push_back(chebyTanh3(ctx, s, args, inj, on_site));
@@ -127,10 +145,12 @@ std::vector<Ct> forward(NNOpenfheContext& ctx, const Ct& c, const CampaignArgs& 
     std::vector<Ct> out;
     out.reserve(NN_OUTPUT);
     for (size_t o = 0; o < NN_OUTPUT; ++o) {
-        Ct acc = cc->EvalMult(layer1[0], ctx.W2[o][0]);
+        Ct acc = cc->EvalMult(layer1[0], operand(ctx, kW2 + o * NN_HIDDEN, ctx.W2[o][0],
+                                                 layer1[0]->GetLevel()));
         for (size_t h = 1; h < NN_HIDDEN; ++h)
-            acc = cc->EvalAdd(acc, cc->EvalMult(layer1[h], ctx.W2[o][h]));
-        out.push_back(cc->EvalAdd(acc, ctx.b2[o]));
+            acc = cc->EvalAdd(acc, cc->EvalMult(layer1[h],
+                     operand(ctx, kW2 + o * NN_HIDDEN + h, ctx.W2[o][h], layer1[h]->GetLevel())));
+        out.push_back(cc->EvalAdd(acc, operand(ctx, kB2 + o, ctx.b2[o], acc->GetLevel())));
     }
     return out;
 }
@@ -183,12 +203,11 @@ BackendContext* setup_campaign(const CampaignArgs& args)
     ctx->model = load_nn_model(nn_data_dir(), args.seed_input);
     const NNWeights& w = ctx->model.weights;
     const size_t slots = size_t(1) << args.logSlots;
-    auto constant = [&](double v) { return ctx->cc->MakeCKKSPackedPlaintext(std::vector<double>(slots, v)); };
-
+    auto constant = [&](double v) { return std::vector<double>(slots, v); };
     for (size_t j = 0; j < NN_HIDDEN; ++j) {
         std::vector<double> row(slots, 0.0);
         std::copy(w.W1[j].begin(), w.W1[j].end(), row.begin());
-        ctx->W1.push_back(ctx->cc->MakeCKKSPackedPlaintext(row));
+        ctx->W1.push_back(std::move(row));
         ctx->b1.push_back(constant(w.b1[j]));
     }
     ctx->W2.resize(NN_OUTPUT);
