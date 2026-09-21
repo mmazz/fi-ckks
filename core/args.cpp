@@ -61,6 +61,19 @@ void validateArgs(const CampaignArgs& args)
         throw std::invalid_argument(
             "Log slots is bigger than or equal to logN"
         );
+    // The plaintext model rotates by k % slots (pipeline.h); HEAAN indexes
+    // context.rotGroup[k], an array of 2^(logN-1) entries, so k out of range is an
+    // out-of-bounds read (segfault at k == 2^(logN-1)). Keep both in the same domain.
+    const double max_rot = double(1u << args.logSlots);
+    for (const Op& op : args.ops)
+        if (op.type == OpType::Rot && (op.param < 1.0 || op.param >= max_rot))
+            throw std::invalid_argument("pipeline: rot must be in [1, 2^logSlots) = [1, " +
+                                        std::to_string(uint64_t(max_rot)) + ")");
+
+    if (args.amountBits == 0)
+        throw std::invalid_argument("amountBits must be >= 1");
+    if (args.amountBits > args.bitsPerCoeff)
+        throw std::invalid_argument("amountBits > bitsPerCoeff: the sweep would be empty");
 }
 
 std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)

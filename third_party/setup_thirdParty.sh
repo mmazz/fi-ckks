@@ -7,20 +7,17 @@ set -e
 
 echo "=== Setting up project structure ==="
 
-HEAAN_SHA="5bc81044c30d5b6635e77def2918fca4501ff846"
+HEAAN_SHA="c24295a1577e3c9248278cf4eeb7d786c041bbaa"
 [ -d HEAAN-PRNG-Control ] || git clone git@github.com:mmazz/HEAAN-PRNG-Control.git
 git -C HEAAN-PRNG-Control fetch -q
 git -C HEAAN-PRNG-Control checkout -q "$HEAAN_SHA"
 make -C HEAAN-PRNG-Control lib
 
-# Clonar openfhe-PRNG-Control si no existe
-if [ ! -d "openfhe-PRNG-Control" ]; then
-    echo "Cloning openfhe-PRNG-Control..."
-    git clone git@github.com:mmazz/openfhe-PRNG-Control.git
-else
-    echo "openfhe-PRNG-Control already exists"
-fi
-
+OPENFHE_SHA="6826c05ce64198018c3c08cee9709fd9f9888853"
+[ -d openfhe-PRNG-Control ] || git clone git@github.com:mmazz/openfhe-PRNG-Control.git
+git -C openfhe-PRNG-Control fetch -q
+git -C openfhe-PRNG-Control checkout -q "$OPENFHE_SHA"
+make -C openfhe-PRNG-Control lib
 echo ""
 echo "=== Building libraries ==="
 

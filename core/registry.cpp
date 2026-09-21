@@ -17,6 +17,7 @@ template <typename... Ts>
 std::string joinCsvFields(const Ts&... fields)
 {
     std::ostringstream oss;
+    oss << std::setprecision(std::numeric_limits<double>::max_digits10);
     bool first = true;
 
     auto append = [&](const auto& value) {

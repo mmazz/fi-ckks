@@ -92,12 +92,19 @@ Ciphertext chebyTanh3(NNHeaanContext& ctx, Ciphertext& c, const CampaignArgs& ar
     if (at(inj, on_site, Stage::ChebyTanh3, 2)) client_flip(inj, c.bx);
     if (at(inj, on_site, Stage::ChebyTanh3, 3)) client_flip(inj, c.ax);
     Ciphertext c3;
+
+    // c2 was already rescaled, c was not: mult() is numerically fine (Ring2Utils::mult
+    // does a final rem) but the operand register stays ~logDelta bits wider, so the
+    // "bit" axis of op_steps 2/3 would not mean the same as 0/1. Align first.
+    Ciphertext c_lo = c;
+    if (c_lo.logq > c2.logq) he.modDownToAndEqual(c_lo, c2.logq);
     if (on_site && inj.here(Stage::Mul)) {
         const FaultSpec& f = inj.spec();
-        c3 = he.multBitFlip(c2, c, f.op_step, f.coeff, f.bit, f.amountBits);
+        c3 = he.multBitFlip(c2, c_lo, f.op_step, f.coeff, f.bit, f.amountBits);
     } else {
-        c3 = he.mult(c2, c);
+        c3 = he.mult(c2, c_lo);
     }
+
     if (on_site && inj.here(Stage::Rescale)) {
         const FaultSpec& f = inj.spec();
         he.reScaleByAndEqualBitFlip(c3, logP, f.op_step, f.coeff, f.bit, f.amountBits);
@@ -115,6 +122,7 @@ Ciphertext chebyTanh3(NNHeaanContext& ctx, Ciphertext& c, const CampaignArgs& ar
     he.multByConstAndEqual(c, 0.98, logP);
     he.reScaleByAndEqual(c, logP);
 
+    if (c.logq > c3.logq) he.modDownToAndEqual(c, c3.logq);
     if (at(inj, on_site, Stage::ChebyTanh3, 8)) client_flip(inj, c.bx);
     if (at(inj, on_site, Stage::ChebyTanh3, 9)) client_flip(inj, c.ax);
     if (on_site && inj.here(Stage::Add)) {

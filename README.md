@@ -29,7 +29,7 @@ A fault is described by:
 |--------------|----------------------------------------------------------|
 | `stage`      | where in the pipeline the fault happens (see below)      |
 | `op_depth`   | which occurrence of that op (0 = first `mul`, 1 = second, ...) |
-| `op_step`    | which internal step of the op (only for `*_inside` stages) |
+| `op_step`    | which internal step of the op (only for operations stages) |
 | `limb`       | RNS limb (always 0 for HEAAN)                            |
 | `coeff`      | coefficient index, `0 .. N-1`                            |
 | `bit`        | first bit to flip                                        |
@@ -80,7 +80,7 @@ The server-side workload is a string, executed left to right:
 
 `x N` repeats an op N times, so `mul x3` is the same as `mul; mul; mul`.
 `op_depth` counts occurrences of the op targeted by the stage, e.g. with
-`add; mul x3` and `--stage mul_inside --op_depth 2` the fault lands in the
+`add; mul x3` and `--stage mul --op_depth 2` the fault lands in the
 third multiplication.
 
 The same pipeline is applied to the plaintext input to get the reference
@@ -110,7 +110,7 @@ Exhaustive campaign (every limb, coefficient and bit):
 ```sh
 ./build/bin/fi_heaan --logN 6 --logQ 60 --logDelta 30 --logSlots 4 \
     --pipeline "add; mul x2" \
-    --stage mul_inside --op_depth 1 --op_step 3 \
+    --stage mul --op_depth 1 --op_step 3 \
     --isExhaustive 1 --seed 1 --seed_input 1
 ```
 
@@ -244,7 +244,7 @@ apps/        fi_main.cpp, the single entry point
 core/        args, pipeline parser, injector, metrics, logger, registry
 backends/    heaan.cpp, openfhe.cpp (+ the NN workloads)
 analysis/    plotting scripts
-ML_tree/     error prediction models
+ML_tree/     error prediction models (TODO)
 mathTest/    small sanity scripts (conjugation, roots of unity)
 third_party/ setup script; the library forks get cloned here
 backends/    heaan.cpp, openfhe.cpp, *_inject.{h,cpp} (injector <-> library glue)
@@ -259,9 +259,7 @@ without a fault), return the reference output and the number of limbs.
 
 ## Status / known gaps
 
-- OpenFHE: only client-side stages are implemented. `*_inside` and `boot_*`
-  stages are HEAAN only for now.
-  haven't been moved to the single main.
+
 - `--scaleTech` other than `FIXEDMANUAL` may drop limbs during the pipeline;
   the number of limbs to sweep is still computed as `mult_depth + 1`.
 - Pass stage as an enum to prevent silent errors.

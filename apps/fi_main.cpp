@@ -119,19 +119,22 @@ static void run_exhaustive(BackendContext* ctx, CampaignArgs& args, const std::v
 
 static void run_random(BackendContext* ctx, CampaignArgs& args, const std::vector<double>& ckks_golden, Sink& s)
 {
+    const uint32_t N = (1U << args.logN);
+
     // Con amountBits > 1 las posiciones mas altas no entran: se descartan.
     std::vector<uint32_t> bits_to_flip;
     for (uint32_t bit : bitsToFlipGenerator(args))
         if (bit + args.amountBits <= args.bitsPerCoeff) bits_to_flip.push_back(bit);
-    const uint32_t N = (1U << args.logN);
     std::set<std::pair<uint32_t, uint32_t>> seen;
     for (uint32_t sample = 0; sample < args.numSamples; sample++) {
         uint32_t limb = 0, coeff = 0;
-        for (int tries = 0; tries < 100; ++tries) {
+        // Rejection sampling: never sample the same coefficient twice. main() already
+        // checked numSamples <= num_limbs * N, so this always terminates.
+        do {
             limb  = random_int(0, s.num_limbs - 1);
             coeff = random_int(0, N - 1);
-            if (seen.insert({limb, coeff}).second) break;   // no repetir coeficiente
-        }
+        } while (!seen.insert({limb, coeff}).second);
+
         for (uint32_t bit : bits_to_flip)
             run_one(ctx, args, ckks_golden, make_fault(args, limb, coeff, bit), s);
     }
@@ -165,7 +168,7 @@ int main(int argc, char** argv)
         Injector probe = Injector::probe(args.stage, args.op_depth, args.op_step);
         run_iteration(ctx.get(), args, probe);
         probe.finish();
-            const uint32_t real_bits = probe.probed_coeff_bits();
+        const uint32_t real_bits = probe.probed_coeff_bits();
         if (real_bits > args.bitsPerCoeff)
             std::cerr << "WARNING: los coeficientes de '" << to_string(args.stage) << "' tienen hasta "
                       << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
@@ -176,7 +179,14 @@ int main(int argc, char** argv)
                       << ": los flips en bits >= " << real_bits
                       << " dejan un valor fuera del modulo. Se inyectan igual (es lo que hace"
                          " el hardware) y quedan marcados en la columna out_of_range\n";
-
+        // Before registering: a random campaign cannot ask for more coefficients than
+        // exist, or run_random would repeat one (duplicate rows, double weight when the
+        // seeds are averaged). Checked here so an invalid config leaves no row behind.
+        const uint64_t available = uint64_t(probe.probed_limbs()) << args.logN;
+        if (!args.isExhaustive && args.numSamples > available)
+            throw std::invalid_argument("numSamples (" + std::to_string(args.numSamples) +
+                                        ") > available (limb, coeff) pairs (" +
+                                        std::to_string(available) + ")");
         check_transient(ctx.get(), args, ckks_golden);
 
         CampaignRegistry registry(args);

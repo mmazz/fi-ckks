@@ -50,8 +50,10 @@ CKKSAccuracyMetrics EvaluateCKKSAccuracy(
     const double l2_golden    = scaled_norm(max_golden, [&](size_t i) { return golden[i]; });
 
     const double l2_rel_error = l2_abs_error / std::max(l2_golden, zero_eps);
-    const double bits_precision = (l2_rel_error > 0.0) ? -std::log2(l2_rel_error)
-                                    : std::numeric_limits<double>::infinity();
+    const double bits_precision = std::isnan(l2_rel_error)
+                                ? std::numeric_limits<double>::quiet_NaN()
+                                : (l2_rel_error > 0.0 ? -std::log2(l2_rel_error)
+                                                      : std::numeric_limits<double>::infinity());
     return {
         l2_abs_error,
         l2_rel_error,
@@ -88,6 +90,9 @@ SlotErrorStats categorize_slots_relative(
             rel_err = diff / std::abs(g);
         }
 
+        // NaN comes from inf - inf in the decoder FFT: the slot is destroyed, not correct.
+        // std::max / the comparison chain below would silently classify it as "correct".
+        if (!std::isfinite(rel_err)) { stats.failed++; continue; }
         // -------------------------
         // Clasificación
         // -------------------------

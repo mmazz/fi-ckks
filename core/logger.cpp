@@ -9,6 +9,7 @@ std::string BitflipResult::header() {
 
 std::string BitflipResult::row() const {
     std::ostringstream ss;
+    ss << std::setprecision(std::numeric_limits<double>::max_digits10);
     ss << limb << "," << coeff << "," << bit << ","
        << l2_abs << ","<< l2_rel << ","
        << linf_abs << "," << linf_rel << "," << (detected? 1 : 0) << ","
@@ -72,10 +73,12 @@ void CampaignLogger::close() {
     compress_and_cleanup();
 
 }
-void CampaignLogger::compress_and_cleanup() {
-    std::string gz_path = csv_path_ + ".gz";
 
-    std::string cmd = "gzip -f " + csv_path_;
+void CampaignLogger::compress_and_cleanup() {
+    if (!fs::exists(csv_path_)) return;          // already compressed or never written
+    const std::string gz_path = csv_path_ + ".gz";
+    const std::string cmd = "gzip -f \"" + csv_path_ + "\"";
+
     int ret = std::system(cmd.c_str());
 
     if (ret != 0) {

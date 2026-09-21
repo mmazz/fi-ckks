@@ -157,7 +157,8 @@ IterationResult run_iteration(
                                 args.logQ
                             );
         }
-        c_clean = ctx.scheme.encryptMsg(plain_clean, ctx.seed);
+        // So we are not then adding or mul the exactly same cipher, rather than a cipher with the same message
+        c_clean = ctx.scheme.encryptMsg(plain_clean, ctx.seed+1);
     }
 
     if (has_op(args.ops, OpType::PMul)){
@@ -173,8 +174,6 @@ IterationResult run_iteration(
     if (inj.here(Stage::EncryptC1)) client_flip(inj, c.ax);
     // ---- Server side: el pipeline ----
     std::array<uint32_t, kNumOpTypes> occ{};   // ocurrencias por tipo -> op_depth
-                                               //
-                                               //
     // c_clean se cifro a logQ y c va bajando con cada rescale. Ring2Utils::add usa AddMod
     // (una sola resta condicional), asi que sumar un operando de modulo mas grande deja
     // coeficientes sin reducir: el resultado decodifica bien igual, pero el registro queda
