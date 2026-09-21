@@ -180,6 +180,19 @@ bool CampaignRegistry::idInCsv(const std::string& csvFile, uint32_t id)
     return false;
 }
 
+bool CampaignRegistry::is_already_done(const CampaignArgs& args)
+{
+    const std::string start_csv = args.results_dir + "/campaigns_start.csv";
+    const std::string end_csv   = args.results_dir + "/campaigns_end.csv";
+
+    // Nothing written yet: nothing to skip, and we must not create the directory here.
+    if (!fs::exists(start_csv) || !fs::exists(end_csv)) return false;
+
+    FileLock lock(args.results_dir + "/.registry.lock");
+    const auto scan = scanCsv(start_csv, makeCampaignKey(args));
+    return scan.existing_id != kInvalidId && idInCsv(end_csv, scan.existing_id);
+}
+
 CampaignRegistry::CampaignRegistry(const CampaignArgs& args)
 {
     const std::string& results_dir = args.results_dir;

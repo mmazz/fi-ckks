@@ -149,7 +149,13 @@ int main(int argc, char** argv)
                                         "'none' no inyecta en ningun lado");
         if (args.isExhaustive)
             args.numSamples = 0;
-
+        // Skip before paying for setup + baseline + probe (a full network run each).
+        // Read-only: nothing is registered here, so an invalid config still leaves
+        // campaigns_start.csv untouched.
+        if (CampaignRegistry::is_already_done(args)) {
+            std::cout << "Campaign already done" << std::endl;
+            return 0;
+        }
         CtxPtr ctx(setup_campaign(args), destroy_campaign);
         const std::vector<double> ckks_golden  = run_clean(ctx.get(), args);
         const std::vector<double> plain_golden = get_reference_output(ctx.get());

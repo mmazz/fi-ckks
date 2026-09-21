@@ -24,12 +24,18 @@ class CampaignRegistry {
 public:
     explicit CampaignRegistry(const CampaignArgs& args);
 
-    std::string makeCampaignKey(const CampaignArgs& args);
     void register_end(const CampaignEndRecord& rec);
 
     uint32_t campaign_id;
     bool already_done = false; 
     static std::string csvEscape(const std::string& field);
+        // Read-only check, does not create or write anything: a config that is already in
+    // campaigns_end.csv can be skipped before paying for setup_campaign + baseline +
+    // probe. The real registration still happens through the constructor, after the
+    // probe, so an invalid config never leaves a row behind.
+    static bool is_already_done(const CampaignArgs& args);
+
+    static std::string makeCampaignKey(const CampaignArgs& args);   // antes no era static
 private:
     static constexpr uint32_t kInvalidId = std::numeric_limits<uint32_t>::max();
 
