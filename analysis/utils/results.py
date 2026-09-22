@@ -81,4 +81,28 @@ def load_data(camps, results_dir):
     data["err_saturated"] = (~np.isfinite(l2)) | (l2 > ERR_CEIL)
     data["err_bits"] = np.log2(np.clip(np.nan_to_num(l2, nan=ERR_CEIL, posinf=ERR_CEIL),
                                        ERR_FLOOR, ERR_CEIL))
+        # Rate metrics, from the slot counters the injector already logs. They are all plain
+    # columns, so they work as --metric in bit_curve.py / flat_curve.py: with --stat mean
+    # an indicator column becomes a PROBABILITY per bit, which is the other half of the
+    # story (how often a flip is visible at all, next to how big the error is).
+    slots = data[["correct", "degraded", "corrupted", "failed"]].sum(axis=1)
+    data["n_slots"] = slots
+    data["frac_bad"] = (data["degraded"] + data["corrupted"] + data["failed"]) / slots
+    data["frac_failed"] = data["failed"] / slots
+    data["is_sdc"] = ((data["corrupted"] + data["failed"]) > 0).astype(float)
+    data["is_masked"] = (data["correct"] == slots).astype(float)
+    data["detected"] = data["detected"].astype(float)            # OpenFHE SDC detector
+    data["misclassified"] = data["misclassified"].astype(float)  # NN workloads only
+    # Detector outcome vs ground truth, for coverage / false-alarm tables (OpenFHE).
+    data["sdc_undetected"] = ((data["is_sdc"] > 0) & (data["detected"] == 0)).astype(float)
+    data["false_alarm"] = ((data["is_sdc"] == 0) & (data["detected"] > 0)).astype(float)
     return data.merge(camps[["campaign_id", "config_id", "seed", "seed_input"]], on="campaign_id")
+
+def parse_value(v):
+    """CLI value -> int, float or str. Shared by the plotting scripts."""
+    for cast in (int, float):
+        try:
+            return cast(v)
+        except ValueError:
+            pass
+    return v

@@ -17,6 +17,13 @@ def aggregate(data, keys):
                      err_bits_max=("err_bits", "max"),
                      frac_zero=("l2_rel", lambda x: (x == 0).mean()),
                      frac_failed=("failed", lambda x: (x > 0).mean()),
+                     # Rate targets: err_bits says HOW BIG the error is, these say HOW
+                     # OFTEN it is visible. Useful as a second ML target (classification).
+                     sdc_rate=("is_sdc", "mean"),
+                     masked_rate=("is_masked", "mean"),
+                     detected_rate=("detected", "mean"),
+                     frac_bad_mean=("frac_bad", "mean"),
+                     misclassified_rate=("misclassified", "mean"),
                      # err_bits viene clipeado: esto dice cuanto de la celda toco el techo
                      # (o era inf/NaN) y por lo tanto no es un valor de error confiable.
                      frac_saturated=("err_saturated", "mean"))

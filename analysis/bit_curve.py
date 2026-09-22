@@ -30,8 +30,10 @@ IMG_DIR = Path(__file__).resolve().parent / "img"
 COLORS = ["#E31A1C", "#4382B4", "#EE7733", "#31A354", "#AA3377", "#663333", "#66CCEE", "#CCBB44"]
 STATS = {"mean": "mean", "median": "median",
          "geomean": lambda x: float(np.exp(np.log(np.maximum(x, 1e-300)).mean()))}
-
-
+# Metrics that live in [0, 1]: with --stat mean they are probabilities, so they get a
+# linear y axis instead of symlog. See load_data() in utils/results.py.
+RATE_METRICS = {"is_sdc", "is_masked", "frac_bad", "frac_failed", "detected",
+                "misclassified", "sdc_undetected", "false_alarm"}
 # ------------------------------------------------------------------ #
 # CLI
 # ------------------------------------------------------------------ #
@@ -59,6 +61,9 @@ def parse_args():
     p.add_argument("--drop_coeffs", nargs="*", default=[], help="coeficientes a excluir: 0 N/2 ...")
     p.add_argument("--band", action="store_true", help="sombrea percentil 10-90 entre coeficientes")
     p.add_argument("--title", default="bit_curve")
+    p.add_argument("--yscale", choices=["auto", "linear", "log", "symlog"], default="auto",
+                   help="auto: linear for the rate metrics (is_sdc, frac_bad, detected, "
+                        "misclassified), symlog for the error magnitudes")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -106,7 +111,12 @@ def x_values(bits, df, xnorm):
 def plot_curves(ax, data, vary, args, subset_label=""):
     groups = data.groupby(vary) if vary else [(None, data)]
     for i, (val, d) in enumerate(groups):
-        per_bit = d.groupby("bit")[args.metric]
+        # A non-finite value (a flip in a high bit can overflow the decode) makes the mean
+        # of that bit inf, and matplotlib drops the point SILENTLY: the curve just stops
+        # early and nothing says why. Average over the finite rows and mark those bits.
+        finite = np.isfinite(d[args.metric].to_numpy(dtype=float))
+        overflow_bits = np.unique(d.loc[~finite, "bit"].to_numpy())
+        per_bit = d[finite].groupby("bit")[args.metric]
         y = per_bit.agg(STATS[args.stat])
         x = x_values(y.index.to_numpy(), d, args.xnorm)
         yv = y.to_numpy(dtype=float)
@@ -116,6 +126,14 @@ def plot_curves(ax, data, vary, args, subset_label=""):
             vals = val if isinstance(val, tuple) else (val,)
             label = ", ".join(f"{k}={v}" for k, v in zip(vary, vals))
         ax.plot(x, yv, marker="o", ms=4, lw=1.8, color=color, label=label)
+        if overflow_bits.size:
+            ax.plot(x_values(overflow_bits, d, args.xnorm),
+                    np.full(overflow_bits.size, 0.97), ls="none", marker="|", ms=9,
+                    color=color, alpha=0.8, transform=ax.get_xaxis_transform(), zorder=4,
+                    label=None if i else f"bits with non-finite {args.metric}")
+            print(f"  {(~finite).sum()} non-finite {args.metric} rows on "
+                  f"{overflow_bits.size} bit(s) {list(overflow_bits[:6])}: averaged over the "
+                  f"rest, marked at the top (use --metric err_bits to keep them, clipped)")
         if args.band:
             lo, hi = per_bit.quantile(0.1).to_numpy(), per_bit.quantile(0.9).to_numpy()
             ax.fill_between(x, lo, hi, color=color, alpha=0.15, lw=0)
@@ -128,9 +146,27 @@ def plot_curves(ax, data, vary, args, subset_label=""):
             ax.axvline(ref, color="black", ls="--", lw=1)
             ax.text(ref, 1.0, f" {name}", transform=ax.get_xaxis_transform(),
                     va="bottom", ha="center", fontsize=FONT - 4)
-
-    ax.set_yscale("symlog", linthresh=_linthresh(data[args.metric]))   # symlog: el 0 (masked) se ve
-    ax.set_ylim(bottom=0)
+    # The top has to be set from the finite values: autoscaling with an inf in the frame
+    # leaves the limit at inf and the whole figure collapses into one line.
+    finite_vals = data[args.metric].to_numpy(dtype=float)
+    finite_vals = finite_vals[np.isfinite(finite_vals)]
+    scale = args.yscale
+    if scale == "auto":
+        scale = "linear" if args.metric in RATE_METRICS else "symlog"
+    if scale == "symlog":
+        # symlog so a 0 (fully masked fault) is still visible.
+        ax.set_yscale("symlog", linthresh=_linthresh(finite_vals))
+    else:
+        ax.set_yscale(scale)
+    if scale == "log":
+        pos = finite_vals[finite_vals > 0]
+        if pos.size:
+            ax.set_ylim(float(pos.min()) / 3.0, float(pos.max()) * 3.0)
+    elif args.metric in RATE_METRICS and scale == "linear":
+        ax.set_ylim(-0.02, 1.02)
+    else:
+        top = float(finite_vals.max()) * 3.0 if finite_vals.size else 1.0
+        ax.set_ylim(0, top if np.isfinite(top) and top > 0 else float(finite_vals.max()))
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
               "over_q": r"Bit index / $\log Q$"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
