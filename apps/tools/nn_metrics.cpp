@@ -79,7 +79,7 @@ void print_metrics(const std::string& name, const Metrics& m)
               << name << ": accuracy " << m.accuracy << ", macro-F1 " << m.macro_f1 << "\n";
     for (size_t c = 0; c < NN_OUTPUT; ++c)
         if (m.support[c])
-            std::cout << "    clase " << c << "  F1 " << m.f1[c] << "  (n=" << m.support[c] << ")\n";
+            std::cout << "    class " << c << "  F1 " << m.f1[c] << "  (n=" << m.support[c] << ")\n";
 }
 
 } // namespace
@@ -119,7 +119,7 @@ int main(int argc, char** argv)
         for (size_t k = 0; k < labels.size(); ++k)
             if (plain_preds[k] == labels[k]) { seed_image = first + k; break; }
         if (seed_image == SIZE_MAX)
-            throw std::runtime_error("la red en claro no acierta ninguna de esas imagenes");
+            throw std::runtime_error("the plain network gets none of those images right");
         args.seed_input = uint32_t(seed_image);
 
         CtxPtr ctx(setup_campaign(args), destroy_campaign);
@@ -140,13 +140,13 @@ int main(int argc, char** argv)
             worst_rel = std::max(worst_rel, rel);
             std::cout << "." << std::flush;
         }
-        std::cout << "\n\n" << args.library << ", imagenes " << first << ".." << first + images - 1 << "\n";
+        std::cout << "\n\n" << args.library << ", images " << first << ".." << first + images - 1 << "\n";
         print_metrics("plain", evaluate(labels, plain_preds));
         print_metrics("ckks ", evaluate(labels, ckks_preds));
-        std::cout << "acuerdo plain vs ckks: " << agree << "/" << labels.size()
+        std::cout << "plain vs ckks agreement: " << agree << "/" << labels.size()
                   << std::scientific << std::setprecision(2)
-                  << ", error relativo de los logits: medio " << sum_rel / double(labels.size())
-                  << ", peor " << worst_rel << "\n";
+                  << ", logit relative error: mean " << sum_rel / double(labels.size())
+                  << ", worst" << worst_rel << "\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << '\n';

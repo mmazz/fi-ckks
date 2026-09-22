@@ -76,6 +76,11 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric):
         N = 1 << int(cfg["logN"])
         gap = (N // 2) // (1 << int(cfg["logSlots"]))
         d = load_data(g, results)
+        n_before = len(d)
+        d = d[np.isfinite(d[metric].to_numpy())]
+        if len(d) < n_before:
+            print(f"  {n_before - len(d)} non-finite {metric} rows dropped "
+                  f"(use --metric err_bits to keep them, clipped)")
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
         d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # promedio entre seeds
@@ -175,7 +180,7 @@ def main():
     filters = {k: parse_value(v) for k, v in (w.split("=", 1) for w in args.where)}
     camps = select(load_campaigns(args.results), **filters)
     if camps.empty:
-        sys.exit(f"No hay campanias terminadas que cumplan {filters}")
+        sys.exit(f"No finished campaigns match {filters}")
 
     per_values = sorted(camps[args.per].unique()) if args.per else [None]
     for pv in per_values:
@@ -183,7 +188,7 @@ def main():
         try:
             data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric)
         except ValueError as e:
-            sys.exit(f"ERROR: {e}\n  -> agrega un filtro con --where, o usa --vary/--per sobre esas columnas")
+            sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"
         make_figure(data, args.vary, args, name)
 

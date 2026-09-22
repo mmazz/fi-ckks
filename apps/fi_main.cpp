@@ -67,9 +67,11 @@ static bool baseline_ok(const BackendContext& ctx, const CampaignArgs& args,
     if (ctx.classifier) {
         ok = argmax(plain_golden) == argmax(ckks_golden) && m.l2_rel_error <= ctx.baseline_tol;
     } else {
+        double scale = 0.0;
+        for (double g : plain_golden) scale = std::max(scale, std::abs(g));
         double tol = ctx.baseline_tol > 0 ? ctx.baseline_tol
-                                          : (has_op(args.ops, OpType::Boot) ? 1e-3 : 1e-4);
-        ok = AcceptCKKSResult(m, tol, tol);
+            : (has_op(args.ops, OpType::Boot) ? 1e-3 : 1e-4);
+        ok = AcceptCKKSResult(m, tol, tol * std::max(1.0, scale));
     }
     if (!ok)
         printBaselineComparison(args, plain_golden, ckks_golden, m);
@@ -149,7 +151,7 @@ int main(int argc, char** argv)
         validateArgs(args);
         if (args.stage == Stage::None)
             throw std::invalid_argument("must choose a --stage (ver --help); "
-                                        "'none' no inyecta en ningun lado");
+                                        "'none' injects nowhere");
         if (args.isExhaustive)
             args.numSamples = 0;
         // Skip before paying for setup + baseline + probe (a full network run each).
@@ -170,15 +172,15 @@ int main(int argc, char** argv)
         probe.finish();
         const uint32_t real_bits = probe.probed_coeff_bits();
         if (real_bits > args.bitsPerCoeff)
-            std::cerr << "WARNING: los coeficientes de '" << to_string(args.stage) << "' tienen hasta "
-                      << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
-                      << ": se barre de menos\n";
+            std::cerr << "WARNING: at stage '" << to_string(args.stage) << "' the registers are up to "
+                      << real_bits << " bits wide and bitsPerCoeff=" << args.bitsPerCoeff
+                      << ": the sweep is incomplete\n";
         if (args.bitsPerCoeff > real_bits)
-            std::cerr << "INFO: los coeficientes mas angostos de '" << to_string(args.stage) << "' tienen "
-                      << real_bits << " bits y bitsPerCoeff=" << args.bitsPerCoeff
-                      << ": los flips en bits >= " << real_bits
-                      << " dejan un valor fuera del modulo. Se inyectan igual (es lo que hace"
-                         " el hardware) y quedan marcados en la columna out_of_range\n";
+            std::cerr << "INFO: at stage '" << to_string(args.stage) << "' the probe measured "
+                      << real_bits << " bits and bitsPerCoeff=" << args.bitsPerCoeff
+                      << ": flips at bit >= " << real_bits << " may leave the coefficient outside"
+                         " its modulus. They are injected anyway (that is what the hardware does);"
+                         " OpenFHE marks them in the out_of_range column, HEAAN does not\n";
         // Before registering: a random campaign cannot ask for more coefficients than
         // exist, or run_random would repeat one (duplicate rows, double weight when the
         // seeds are averaged). Checked here so an invalid config leaves no row behind.

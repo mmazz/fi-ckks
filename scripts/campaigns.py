@@ -73,7 +73,7 @@ def main(groups, description):
     names = list(groups) if "all" in args.groups else args.groups
     unknown = [n for n in names if n not in groups]
     if unknown:
-        sys.exit(f"unknow grupos: {unknown}. Available: {list(groups)}")
+        sys.exit(f"unknown grupos: {unknown}. Available: {list(groups)}")
 
     runs = [r for n in names for r in groups[n]]
     sys.exit(1 if run_all(runs, args.jobs, args.dry_run) else 0)

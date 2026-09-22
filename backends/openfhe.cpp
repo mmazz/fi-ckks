@@ -27,6 +27,7 @@ std::vector<double> get_reference_output(const BackendContext* bctx)
 
 void backend_prepare_args(CampaignArgs& args){
     args.library = "openfhe";
+    args.isComplex = 0;            // HEAAN only: CKKS here is real-packed
     if (args.bitsPerCoeff > 64)
         throw std::invalid_argument("openfhe: bitsPerCoeff <= 64");
 }

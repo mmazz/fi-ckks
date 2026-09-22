@@ -32,7 +32,7 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
     }
     const FaultSpec& f = inj.spec();
     if (coeff != f.coeff || bit != f.bit || width != f.amountBits)
-        throw std::logic_error("the fork ask a flip different than FaultSpec");
+        throw std::logic_error("the fork asked for a flip that does not match FaultSpec");
     if (long(coeff) >= N) throw std::out_of_range("coeff >= N");
 
     const long need = std::max<long>(long(coeff) + 1, N);   // igual que default_flip: estirar, NUNCA normalize
@@ -48,7 +48,7 @@ void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long 
     for (uint32_t i = 0; i < width; ++i) NTL::SwitchBit(poly.rep[coeff], long(bit + i));
 
     if (is_restore) {
-        if (poly.rep[coeff] != g_original) throw std::logic_error("the restore didnt recover the original value");
+        if (poly.rep[coeff] != g_original) throw std::logic_error("the restore did not recover the original value");
         inj.record_restore();
         g_pending = false;
         g_last_poly = nullptr;
@@ -87,7 +87,7 @@ InjectorScope::~InjectorScope()
 
 void client_flip(Injector& inj, NTL::ZZX& poly)
 {
-    if (&inj != g_inj) throw std::logic_error("client_flip with one Injector that is not of the active scope");
+    if (&inj != g_inj) throw std::logic_error("client_flip called with an Injector that is not the active scope");
     const FaultSpec& f = inj.spec();
     heaanfi::flip(poly, f.coeff, f.bit, f.amountBits, g_N);
 }

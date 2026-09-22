@@ -89,8 +89,6 @@ Ciphertext chebyTanh3(NNHeaanContext& ctx, Ciphertext& c, const CampaignArgs& ar
     Ciphertext c2 = he.square(c);
     he.reScaleByAndEqual(c2, logP);
 
-    if (at(inj, on_site, Stage::ChebyTanh3, 2)) client_flip(inj, c.bx);
-    if (at(inj, on_site, Stage::ChebyTanh3, 3)) client_flip(inj, c.ax);
     Ciphertext c3;
 
     // c2 was already rescaled, c was not: mult() is numerically fine (Ring2Utils::mult
@@ -98,6 +96,8 @@ Ciphertext chebyTanh3(NNHeaanContext& ctx, Ciphertext& c, const CampaignArgs& ar
     // "bit" axis of op_steps 2/3 would not mean the same as 0/1. Align first.
     Ciphertext c_lo = c;
     if (c_lo.logq > c2.logq) he.modDownToAndEqual(c_lo, c2.logq);
+    if (at(inj, on_site, Stage::ChebyTanh3, 2)) client_flip(inj, c_lo.bx);
+    if (at(inj, on_site, Stage::ChebyTanh3, 3)) client_flip(inj, c_lo.ax);
     if (on_site && inj.here(Stage::Mul)) {
         const FaultSpec& f = inj.spec();
         c3 = he.multBitFlip(c2, c_lo, f.op_step, f.coeff, f.bit, f.amountBits);
@@ -188,6 +188,11 @@ void backend_prepare_args(CampaignArgs& args)
 {
     args.library    = "heaanNN";
     args.mult_depth = 0;
+    args.withNTT   = false;
+    args.scaleTech = "none";
+    args.dnum      = 0;
+    args.isComplex = 0;
+    args.logMin = args.logMax = 0; // the input is an MNIST image, not a random vector
     if (!args.ops.empty())
         throw std::invalid_argument("heaanNN: the workload is the network; --pipeline must be left empty");
     if ((size_t(1) << args.logSlots) < NN_INPUT)

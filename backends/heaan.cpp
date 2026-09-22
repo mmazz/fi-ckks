@@ -64,11 +64,34 @@ std::vector<double> get_reference_output(const BackendContext* bctx)
     return ctx.goldenOutput;
 }
 
-void backend_prepare_args(CampaignArgs& args){
-    args.library = "heaan";
+void backend_prepare_args(CampaignArgs& args)
+{
+    args.library    = "heaan";
     args.mult_depth = 0;
+    args.withNTT   = false;        // OpenFHE only
+    args.scaleTech = "none";       // OpenFHE only
+    args.dnum      = 0;            // OpenFHE only
+    // Each level-consuming op costs logDelta bits of logq, and bootstrapping needs the
+    // ciphertext to still be above logDelta+10 (the logq we hand to bootstrapAndEqual).
+    // Without this check HEAAN indexes qpows[] with a negative exponent.
+    const long logq_boot = long(args.logDelta) + 10;
+    long logq = long(args.logQ);
+    for (const Op& op : args.ops) {
+        if (op.type == OpType::Boot) {
+            if (logq < logq_boot)
+                throw std::invalid_argument(
+                    "heaan: not enough modulus left for 'boot' (logq=" + std::to_string(logq) +
+                    " < logDelta+10=" + std::to_string(logq_boot) + ")");
+            logq = long(args.logQ);          // bootstrapping restores the chain
+            continue;
+        }
+        if (is_mult(op.type)) logq -= long(args.logDelta);
+        if (logq <= 0)
+            throw std::invalid_argument(
+                "heaan: the pipeline needs more than logQ=" + std::to_string(args.logQ) +
+                " with logDelta=" + std::to_string(args.logDelta));
+    }
 }
-
 
 BackendContext* setup_campaign(const CampaignArgs& args)
 {

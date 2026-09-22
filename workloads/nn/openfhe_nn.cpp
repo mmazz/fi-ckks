@@ -101,9 +101,15 @@ Ct chebyTanh3(NNOpenfheContext& ctx, Ct& x, const CampaignArgs& args, Injector& 
 
     if (at_pair(inj, on_site, Stage::ChebyTanh3, 0)) flip_reg(x, args, inj);
     Ct x2 = cc->EvalMult(x, x);
+    //
+    // Only the x^2*x operand sees the fault; the 0.98*x term is op_steps 6/7.
+    Ct x_cube = x;                          // shared_ptr copy, no deep copy on the fast path
+    if (at_pair(inj, on_site, Stage::ChebyTanh3, 2)) {
+        x_cube = x->Clone();
+        flip_reg(x_cube, args, inj);
+    }
+    Ct x3 = cc->EvalMult(x2, x_cube);
 
-    if (at_pair(inj, on_site, Stage::ChebyTanh3, 2)) flip_reg(x, args, inj);
-    Ct x3 = cc->EvalMult(x2, x);
 
     if (at_pair(inj, on_site, Stage::ChebyTanh3, 4)) flip_reg(x3, args, inj);
     Ct t1 = cc->EvalMult(x3, -0.23);
@@ -161,6 +167,8 @@ void backend_prepare_args(CampaignArgs& args)
 {
     args.library   = "openfheNN";
     args.scaleTech = "FLEXIBLEAUTO";   // la red no hace rescales a mano
+    args.isComplex = 0;
+    args.logMin = args.logMax = 0;
     if (args.bitsPerCoeff > 64)
         throw std::invalid_argument("openfhe: bitsPerCoeff <= 64 ");
     if (!args.ops.empty())

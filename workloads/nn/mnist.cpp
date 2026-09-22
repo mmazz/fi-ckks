@@ -31,7 +31,7 @@ std::vector<std::vector<double>> loadCSVMatrix(const std::string& path, size_t r
         row.reserve(cols);
         while (row.size() < cols && std::getline(ss, cell, ',')) row.push_back(std::stod(cell));
         if (row.size() != cols)
-            throw std::runtime_error(path + ": fila " + std::to_string(matrix.size()) + " has " +
+            throw std::runtime_error(path + ": row " + std::to_string(matrix.size()) + " has " +
                                      std::to_string(row.size()) + " columns, they were expected " + std::to_string(cols));
         matrix.push_back(std::move(row));
     }

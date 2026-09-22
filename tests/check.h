@@ -29,7 +29,7 @@ struct Register {
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 {
-    os << "[" << v.size() << " valores:";
+    os << "[" << v.size() << " values:";
     for (size_t i = 0; i < v.size() && i < 4; ++i) os << " " << v[i];
     return os << (v.size() > 4 ? " ...]" : "]");
 }
@@ -52,7 +52,7 @@ void eq(const A& a, const B& b, const char* expr, const char* file, int line)
 template <typename A, typename B>
 void ne(const A& a, const B& b, const char* expr, const char* file, int line)
 {
-    if (a == b) fail(std::string(expr) + "  (los dos son iguales)", file, line);
+    if (a == b) fail(std::string(expr) + "  (both are equal)", file, line);
 }
 
 inline void near(double a, double b, double tol, const char* expr, const char* file, int line)
@@ -77,7 +77,7 @@ inline int run_all()
             std::cout << "  FAIL  " << t.name << "\n        " << e.what() << "\n" << std::flush;
         }
     }
-    std::cout << "== " << registry().size() - failed << " pasaron, " << failed << " fallaron ==\n";
+    std::cout << "== " << registry().size() - failed << " passed, " << failed << " failed ==\n";
     return failed == 0 ? 0 : 1;
 }
 

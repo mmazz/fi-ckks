@@ -181,7 +181,7 @@ int main(int argc, char** argv)
         backend_prepare_args(g_args);
         validateArgs(g_args);
     } catch (const std::exception& e) {
-        std::cerr << "ERROR en los argumentos: " << e.what() << '\n';
+        std::cerr << "ERROR in arguments: " << e.what() << '\n';
         return 2;
     }
     std::cout << "== backend " << g_args.library << " [" << g_args.pipeline << "] ==\n";

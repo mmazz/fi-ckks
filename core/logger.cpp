@@ -134,7 +134,7 @@ void VectorLogger::write_row_locked(long long limb,
 {
     if (v.size() != n_slots_) {
         std::ostringstream e;
-        e << "VectorLogger: waiting " << n_slots_ << " values but only " << v.size() << " arrive";
+        e << "VectorLogger: expected " << n_slots_ << " values, got " << v.size();
         throw std::invalid_argument(e.str());
     }
  

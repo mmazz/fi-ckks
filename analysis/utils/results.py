@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 # Todo lo que NO define el experimento. El resto de las columnas del start CSV es la config.
-NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id"}
+NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id", "saveVectors"}
 # Columnas de campaigns_end.csv: son RESULTADOS, nunca features ni parte de la config.
 END_COLS = {"total_bitFlips", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
 ERR_FLOOR = 2.0 ** -60    # piso para log2 cuando el error es exactamente 0
@@ -53,7 +53,7 @@ def select(camps, **filters):
     mask = np.ones(len(camps), dtype=bool)
     for col, val in filters.items():
         if col not in camps.columns:
-            raise KeyError(f"columna inexistente: {col}")
+            raise KeyError(f"unknown column: {col}")
         mask &= (camps[col] == val).to_numpy()
     return camps[mask]
 
@@ -62,7 +62,7 @@ def require_single_config(camps):
     """Falla si el filtro dejo mas de una config, y dice en que columnas difieren."""
     if camps["config_id"].nunique() != 1:
         cols = [c for c in config_columns(camps) if camps[c].nunique() > 1]
-        raise ValueError(f"{camps['config_id'].nunique()} configs distintas; difieren en: {cols}")
+        raise ValueError(f"{camps['config_id'].nunique()} different configs; they differ in: {cols}")
     return camps
 
 

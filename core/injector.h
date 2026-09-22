@@ -24,7 +24,7 @@ public:
     }
     bool probing() const { return mode_ == Mode::Probe; }
     const FaultSpec& spec() const {
-        if (mode_ == Mode::None) throw std::logic_error("Injector::spec() in modo None");
+        if (mode_ == Mode::None) throw std::logic_error("Injector::spec() called in None mode");
         return f_;
     }
     uint64_t mask64() const {
@@ -40,7 +40,7 @@ public:
         if (flipped_bits != int(f_.amountBits))
             throw std::logic_error(std::to_string(flipped_bits) + " bits flipped, " + std::to_string(f_.amountBits) + " requested");
         if (changed_coeffs != 1)
-            throw std::logic_error(std::to_string(changed_coeffs) + " coefficients change, no 1");
+            throw std::logic_error(std::to_string(changed_coeffs) + " coefficients changed, expected exactly 1");
         ++applied_;
     }
     void record_restore() { ++restored_; }
@@ -59,16 +59,16 @@ public:
         switch (mode_) {
         case Mode::None:
             if (applied_ || restored_ || probes_)
-                throw std::logic_error("were flips in the run without fault");
+                throw std::logic_error("flips happened during a fault-free run");
             break;
         case Mode::Fault:
             if (applied_ != 1 || restored_ > 1)
-                throw std::runtime_error("fault apply " + std::to_string(applied_) +
-                                         " times, restaured " + std::to_string(restored_) + where);
+                throw std::runtime_error("fault applied " + std::to_string(applied_) +
+                                         " times, restored " + std::to_string(restored_) + where);
             break;
         case Mode::Probe:
             if (probes_ == 0)
-                throw std::runtime_error("the injection point was never reach " + where);
+                throw std::runtime_error("the injection point was never reached " + where);
             break;
         }
     }

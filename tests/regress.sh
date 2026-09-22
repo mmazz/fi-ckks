@@ -68,6 +68,7 @@ MUST_FAIL=(
   "heaannn_mal_clasif  | fi_heaan_nn   | --stage encode $NN_H --seed_input 3            | The plain network misclassifies the image"
   "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | --pipeline must be left empty"
   "openfhenn_mul       | fi_openfhe_nn | --stage mul $NN_O                              | never reach"
+  "heaan_sin_niveles   | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x3' $HEAAN_S | needs more than logQ"
 )
 
 
