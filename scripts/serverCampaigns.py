@@ -64,7 +64,7 @@ INPUT_SWEEP = [0,9,19,29]
 # RES 2
 # Operaciones del servidor, anillo chico
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)
+              logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64)
 
 # Bootstrapping: aleatorio, logQ grande
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
@@ -107,8 +107,14 @@ GROUPS = {
                     for run in grid(dict(BASE, logDelta=20, logMin=x, logMax=x + 1),
                                     stage=["encrypt_c0", "encrypt_c1"],
                                     seed=SEEDS, seed_input=INPUTS)],
-
+    "add_rot": grid(dict(SERVER, pipeline="add; rot 3"),
+                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 4, 5],
+                    seed=SEEDS, seed_input=INPUTS),
+    "mul": grid(dict(SERVER, logQ=120, bitsPerCoeff=150),
+                stage=["encrypt_c0", "encrypt_c1"], pipeline=["mul", "mul x2", "mul x3"],
+                seed=SEEDS, seed_input=INPUTS),
     # RES 2
+
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
     "op_mul": steps(dict(SERVER, stage="mul_asplos", pipeline="mul"), MUL_STEPS,

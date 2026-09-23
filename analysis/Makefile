@@ -74,6 +74,21 @@ LogInput:
 	    --query 'logMax == logMin + 1 and stage in ["encrypt_c0", "encrypt_c1"]' \
 	    --vary logMin --per stage \
 	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+addRot:
+	python3 bit_curve.py --title addRot \
+	    --where library=heaan pipeline="add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
+	    --query 'logSlots in [3, 4, 5]' \
+	    --vary logSlots --split gap --per stage \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+mul:
+	python3 bit_curve.py --title mul \
+	    --where library=heaan logN=6 logSlots=4 logQ=120 logDelta=30 bitsPerCoeff=150 \
+	    --query 'pipeline in ["mul", "mul x2", "mul x3"]' \
+	    --vary pipeline --split gap --per stage \
+	    --labels 'mul' 'mul x2' 'mul x3' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 # --- cliente ---
 encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
 encrypt_c0_reg:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline= --show
