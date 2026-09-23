@@ -78,6 +78,8 @@ def parse_args():
                         "'stage in [\"encode\", \"encrypt_c0\"]'")
     p.add_argument("--no_refs", action="store_true",
                    help="do not draw the logDelta / logQ reference lines")
+    p.add_argument("--suptitle", default="",
+                   help="text above the figure (default: none). --title is only the file name")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -117,11 +119,17 @@ def x_values(bits, df, xnorm):
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
-def plot_curves(ax, data, vary, args, subset_label=""):
+def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
+    """yref: frame the y scale and limits come from. With --split the panels share the y
+    axis, so it has to be the FULL data: otherwise the last panel drawn resets the limits."""
+    yref = data if yref is None else yref
     groups = list(data.groupby(vary)) if vary else [(None, data)]
-    if args.labels and len(args.labels) != len(groups):
-        sys.exit(f"--labels has {len(args.labels)} entries but there are {len(groups)} curves")
-    for i, (val, d) in enumerate(groups):
+    keys = getattr(args, "curve_keys", [k for k, _ in groups])
+    if args.labels and len(args.labels) != len(keys):
+        sys.exit(f"--labels has {len(args.labels)} entries but there are {len(keys)} curves: "
+                 f"{vary} = {keys}")
+    for val, d in groups:
+        i = keys.index(val)          # position among ALL curves, not among this panel's
         # A non-finite value (a flip in a high bit can overflow the decode) makes the mean
         # of that bit inf, and matplotlib drops the point SILENTLY: the curve just stops
         # early and nothing says why. Average over the finite rows and mark those bits.
@@ -141,7 +149,7 @@ def plot_curves(ax, data, vary, args, subset_label=""):
 
         # First curve biggest and at the back, last one at SCATER_SIZE on top: when two
         # curves coincide, the bigger dot behind still shows as a ring.
-        size = SCATER_SIZE + (len(groups) - 1 - i) * SIZE_STEP
+        size = SCATER_SIZE + (len(keys) - 1 - i) * SIZE_STEP
         ax.scatter(x, yv, s=size, color=color, label=label, zorder=2 + i)
         if overflow_bits.size:
             ax.plot(x_values(overflow_bits, d, args.xnorm),
@@ -183,7 +191,7 @@ def plot_curves(ax, data, vary, args, subset_label=""):
                     va="bottom", ha="center", fontsize=FONT - 4)
     # The top has to be set from the finite values: autoscaling with an inf in the frame
     # leaves the limit at inf and the whole figure collapses into one line.
-    finite_vals = data[args.metric].to_numpy(dtype=float)
+    finite_vals = yref[args.metric].to_numpy(dtype=float)
     finite_vals = finite_vals[np.isfinite(finite_vals)]
     scale = args.yscale
     if scale == "auto":
@@ -200,8 +208,9 @@ def plot_curves(ax, data, vary, args, subset_label=""):
     elif args.metric in RATE_METRICS and scale == "linear":
         ax.set_ylim(-0.02, 1.02)
     else:
-        top = float(finite_vals.max()) * 3.0 if finite_vals.size else 1.0
-        ax.set_ylim(0, top if np.isfinite(top) and top > 0 else float(finite_vals.max()))
+        top = float(finite_vals.max()) if finite_vals.size else 0.0
+        if top > 0:            # all zeros: leave matplotlib's default instead of an empty range
+            ax.set_ylim(0, top * 3.0 if np.isfinite(top * 3.0) else top)
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
               "over_q": r"Bit index relative to $\log Q$"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
@@ -212,7 +221,8 @@ def plot_curves(ax, data, vary, args, subset_label=""):
         ax.set_title(subset_label, fontsize=FONT, pad=26)
     if vary or args.labels or args.band == "std" or args.minmax:
         ax.legend(fontsize=FONT - 6, frameon=False)
-
+    if legend and (vary or args.labels or args.band == "std" or args.minmax):
+        ax.legend(fontsize=FONT - 6, frameon=False)
 
 def _linthresh(values):
     """symlog lineal solo cerca de 0: por debajo del menor error no nulo."""
@@ -221,22 +231,20 @@ def _linthresh(values):
 
 
 def make_figure(data, vary, args, name):
+    # Curve identity comes from the FULL data, so a curve missing from one panel (e.g. no
+    # non-aligned coefficients when gap=1) keeps its color, size and label in the other.
+    args.curve_keys = [k for k, _ in data.groupby(vary)] if vary else [None]
     if args.split == "gap":
         fig, axes = plt.subplots(1, 2, figsize=(16, 5), sharey=True)
-        gap = data["gap"].iloc[0] if data["gap"].nunique() == 1 else "var"
-        plot_curves(axes[0], data[data["gap_aligned"]], vary, args, f"coeff % gap == 0  (gap={gap})")
-        plot_curves(axes[1], data[~data["gap_aligned"]], vary, args, "coeff % gap != 0")
+        # Left: coefficients the decode reads (coeff % gap == 0). Right: the rest.
+        plot_curves(axes[0], data[data["gap_aligned"]], vary, args, yref=data)
+        plot_curves(axes[1], data[~data["gap_aligned"]], vary, args, yref=data, legend=False)
         axes[1].set_ylabel("")
     else:
         fig, ax = plt.subplots(figsize=(12, 5))
         plot_curves(ax, data, vary, args)
-
-    def show(col):
-        vals = data[col].unique()
-        return str(vals[0]) if len(vals) == 1 else f"{col}: varios"
-    fig.suptitle(f"{show('stage')}  [{show('pipeline')}]", fontsize=FONT - 2,
-                 y=1.06 if args.split == "gap" else 1.02)
-
+    if args.suptitle:
+        fig.suptitle(args.suptitle, fontsize=FONT - 2, y=1.02)
     IMG_DIR.mkdir(exist_ok=True)
     out = IMG_DIR / name
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")

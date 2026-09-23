@@ -12,6 +12,12 @@ P      = library=$(LIB) logN=6 logSlots=4 logQ=60 logDelta=25 bitsPerCoeff=64
 P2      = library=$(LIB) logN=4 logQ=1200 logDelta=35 bitsPerCoeff=1210 logSlots=3 stage=encrypt_c0 pipeline="mul x6; boot"
 FLAT   = python3 flat_curve.py   --results $(RES)
 
+seeds:
+	python3 bit_curve.py --title enc_seeds --where library=heaan\
+		stage=encrypt_c0 logN=6 logQ=60 logDelta=40 logSlots=5 \
+		isExhaustive=1 --drop_coeffs N/2 --band std \
+		--minmax --linthresh 1 --show
+
 
 LogDelta:
 	python3 bit_curve.py --title logDelta \
@@ -38,7 +44,6 @@ PlainVsCipher:
 	    --vary stage \
 	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 
-
 LibCompare:
 	python3 encode_shift.py --title plain_heaan_vs_openfhe \
 	    --where stage=encode pipeline= logN=6 logSlots=5 logQ=60 logDelta=40 \
@@ -47,11 +52,28 @@ LibCompare:
 	    --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' \
 	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 
-seeds:
-	python3 bit_curve.py --title enc_seeds --where library=heaan stage=encrypt_c0 logN=6 logQ=60 logDelta=40 logSlots=5 isExhaustive=1 --drop_coeffs N/2 --band std --minmax --linthresh 1 --show
+LogSlotsC0:
+	python3 bit_curve.py --title logSlots \
+	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logQ=60 logDelta=40 \
+	    --query 'logSlots in [3, 4, 5]' \
+	    --vary logSlots --split gap \
+	    --labels 'logSlots=3 Mean $$L_2$$' 'logSlots=4 Mean $$L_2$$' 'logSlots=5 Mean $$L_2$$' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 
+LogSlotsC1:
+	python3 bit_curve.py --title logSlots \
+	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logQ=60 logDelta=40 \
+	    --query 'logSlots in [3, 4, 5]' \
+	    --vary logSlots --split gap \
+	    --labels 'logSlots=3 Mean $$L_2$$' 'logSlots=4 Mean $$L_2$$' 'logSlots=5 Mean $$L_2$$' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 
-
+LogInput:
+	python3 bit_curve.py --title logInput \
+	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=20 bitsPerCoeff=64 \
+	    --query 'logMax == logMin + 1 and stage in ["encrypt_c0", "encrypt_c1"]' \
+	    --vary logMin --per stage \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
 # --- cliente ---
 encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
 encrypt_c0_reg:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline= --show

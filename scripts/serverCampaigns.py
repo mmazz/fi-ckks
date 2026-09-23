@@ -34,25 +34,16 @@ ROT_STEPS = 12
 BOOT_STEPS = 8           # boot (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16     # boot_eval (evalExpAndEqualBitFlip)
 
+
+## RES 1
 BASE = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
 
 BASE_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
-
-# Operaciones del servidor, anillo chico
-SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)
-
-# Bootstrapping: aleatorio, logQ grande
-BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
-            logN=4, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
-
-# ASPLOS: exhaustivo, parametros chicos
-ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=3, logQ=60, logDelta=25, bitsPerCoeff=64, pipeline="add; mul")
-
-
+# logN comparison: random on both sides so both have the same number of sampled coefficients
+LOGN_CMP = dict(binary="fi_heaan", results_dir=RESULTS,
+                logQ=60, logDelta=40, bitsPerCoeff=64, stage="encrypt_c0")
 # logQ sweep at a fixed ratio: logDelta = 3/4 logQ, bitsPerCoeff = 5/4 logQ
 LOGQ_SWEEP = [40, 60, 80, 100]
 SWEEP_Q = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
@@ -66,9 +57,25 @@ LOGSLOTS_SWEEP = [3,4,5]
 SWEEP_SLOTS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
                logN=6, logQ=60, logDelta=40, bitsPerCoeff=64)
 
-# logN comparison: random on both sides so both have the same number of sampled coefficients
-LOGN_CMP = dict(binary="fi_heaan", results_dir=RESULTS,
-                logQ=60, logDelta=40, bitsPerCoeff=64, stage="encrypt_c0")
+
+
+INPUT_SWEEP = [0,9,19,29]
+
+# RES 2
+# Operaciones del servidor, anillo chico
+SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)
+
+# Bootstrapping: aleatorio, logQ grande
+BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
+            logN=4, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
+
+# ASPLOS: exhaustivo, parametros chicos
+ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=3, logQ=60, logDelta=25, bitsPerCoeff=64, pipeline="add; mul")
+
+
+
 
 def steps(base, n, seeds=SEEDS, inputs=INPUTS, **sweep):
     """Barrido de op_step 0..n-1 (y lo que se pase en sweep) sobre seeds x inputs."""
@@ -83,17 +90,25 @@ def sweep_q(stage, seeds=SEEDS, inputs=INPUTS):
                             seed=seeds, seed_input=inputs)]
 
 GROUPS = {
+        # RES 1
     "enc_seeds": grid(dict(BASE), stage=["encrypt_c0", "encrypt_c1"], seed= SEEDS_ANALYSIS, seed_input=SEEDS_ANALYSIS),
     "logN_cmp": grid(dict(LOGN_CMP, logN=6, logSlots=5,  isExhaustive=1),  seed=SEEDS, seed_input=INPUTS)
               + grid(dict(LOGN_CMP, logN=16, logSlots=15,  isExhaustive=0, numSamples=50 ), seed=SEEDS, seed_input=INPUTS),
-    "plain_cmp": grid(dict(BASE, stage="encode", bitsPerCoeff=128),  seed=SEEDS, seed_input=INPUTS)
+    "plain_cmp": grid(dict(BASE, stage="encode", bitsPerCoeff=128),  seed=SEEDS, seed_input=INPUTS) # Also to compare plain wint c0 and c1 all in heaan
               + grid(dict(BASE_OPENFHE, stage="encode"),  seed=SEEDS, seed_input=INPUTS),
     "sweep_q": sweep_q("encrypt_c0"),
 
     "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"),
                         logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
-    "sweep_slots": grid(dict(SWEEP_SLOTS, stage="encrypt_c0"),
-                        logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
+    "sweep_slots": grid(dict(SWEEP_SLOTS), stage=["encrypt_c0", "encrypt_c1"], logSlots=LOGSLOTS_SWEEP,
+                         seed=SEEDS, seed_input=INPUTS),
+    # Input magnitude sweep: logMin = x, logMax = x + 1 (paired, not a cartesian product).
+    "sweep_input": [run for x in INPUT_SWEEP
+                    for run in grid(dict(BASE, logDelta=20, logMin=x, logMax=x + 1),
+                                    stage=["encrypt_c0", "encrypt_c1"],
+                                    seed=SEEDS, seed_input=INPUTS)],
+
+    # RES 2
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
     "op_mul": steps(dict(SERVER, stage="mul_asplos", pipeline="mul"), MUL_STEPS,
