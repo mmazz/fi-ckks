@@ -39,9 +39,21 @@ def load_campaigns(results_dir):
     end = pd.read_csv(results_dir / "campaigns_end.csv")
     camps = start.merge(end, on="campaign_id", how="inner")   # las interrumpidas quedan afuera
 
-    key = camps[config_columns(start)].astype(str).agg("|".join, axis=1)
+    return assign_config_id(camps)
+
+
+def assign_config_id(camps):
+    """(Re)compute config_id from the CURRENT column values.
+
+    load_campaigns() calls it once. Any caller that overwrites a config column (so that
+    campaigns which differ only in that column count as one) has to call it again:
+    config_id is a stored hash, not a view, so overwriting the column alone leaves the
+    old hash in place and require_single_config() still sees two configs.
+    """
+    camps = camps.copy()
+    key = camps[config_columns(camps)].astype(str).agg("|".join, axis=1)
     camps["config_id"] = key.map(lambda s: hashlib.sha1(s.encode()).hexdigest()[:10])
-    return camps
+    return camps
 
 
 def config_columns(df):

@@ -33,6 +33,8 @@ ROT_STEPS = 12
 BOOT_STEPS = 8           # boot (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16     # boot_eval (evalExpAndEqualBitFlip)
 
+SEEDS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64, )
 # Operaciones del servidor, anillo chico
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)

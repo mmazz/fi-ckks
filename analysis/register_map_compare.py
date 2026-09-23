@@ -21,21 +21,21 @@ Si --vary es op_step, se guarda una sola figura comparando esos pasos.
 --no-legend oculta la leyenda superior; conserva los numeros de los paneles.
 """
 import argparse
-from enum import Enum
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-
 import register_map as rm
+from utils.results import assign_config_id          # nuevo
 
 
-# EDITA ESTE ENUM: (valor exacto en campaigns_start, numero bajo el panel).
-class Panel(Enum):
-    ENCRYPT_C1 = ("encrypt_c1", 1)
-    ADD = ("add", 3)
-    MUL = ("mul", 4)
-    RESCALE = ("rescale", 7)
-
+def panel_selection(values, numbers):
+    """[(value, panel number)] in the order the panels are drawn."""
+    if len(values) != len(set(values)):
+        raise ValueError(f"--values has repeated entries: {values}")
+    numbers = list(range(1, len(values) + 1)) if not numbers else numbers
+    if len(numbers) != len(values):
+        raise ValueError(f"--numbers has {len(numbers)} entries, --values has {len(values)}")
+    return list(zip(values, numbers))
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
@@ -43,8 +43,10 @@ def parse_args():
     p.add_argument("--results", default="../../results")
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
     p.add_argument("--vary", default="stage", help="unica columna que cambia entre paneles")
-    p.add_argument("--values", nargs="+", type=rm.parse_value,
-                   help="valores a comparar, en el orden deseado; por defecto, todo Panel")
+    p.add_argument("--values", nargs="+", type=rm.parse_value, required=True,
+                   help="values of --vary to compare, one panel each, in this order")
+    p.add_argument("--numbers", nargs="*", type=int, default=None,
+                   help="number drawn under each panel (default: 1..n); must match --values")
     p.add_argument("--op_step", default="all", help="all | 5 | 0,5,10 | 0-25")
     p.add_argument("--stat", choices=["median", "mean", "max"], default="median")
     p.add_argument("--title", default="register_compare", help="prefijo de los archivos de salida")
@@ -95,7 +97,8 @@ def load_comparisons(args, selected):
         comparable = group.copy()
         comparable[args.vary] = group[args.vary].iloc[0]
         try:
-            rm.require_single_config(comparable)
+            rm.require_single_config(assign_config_id(comparable))
+
         except ValueError as exc:
             raise ValueError(f"op_step={step}: ademas de {args.vary!r}, cambia otra "
                              f"parte de la configuracion. Ajusta --where. {exc}") from exc

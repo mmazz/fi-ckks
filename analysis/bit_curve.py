@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils.results import load_campaigns, load_data, select, require_single_config  # noqa: E402
+from utils.results import load_campaigns, load_data, select, require_single_config, parse_value  # noqa: E402
 
 FONT = 18
 IMG_DIR = Path(__file__).resolve().parent / "img"
@@ -37,14 +37,6 @@ RATE_METRICS = {"is_sdc", "is_masked", "frac_bad", "frac_failed", "detected",
 # ------------------------------------------------------------------ #
 # CLI
 # ------------------------------------------------------------------ #
-def parse_value(v):
-    for cast in (int, float):
-        try:
-            return cast(v)
-        except ValueError:
-            pass
-    return v
-
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
