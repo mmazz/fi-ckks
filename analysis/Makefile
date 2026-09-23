@@ -89,6 +89,15 @@ mul:
 	    --vary pipeline --split gap --per stage \
 	    --labels 'mul' 'mul x2' 'mul x3' \
 	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+boot:
+	python3 bit_curve.py --title boot --results ../results_boot \
+	    --where library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860 \
+	    --query 'pipeline in ["mul x4", "mul x4; boot"]' \
+	    --vary pipeline --per stage \
+	    --labels 'mul x4' 'mul x4; boot' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
 # --- cliente ---
 encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
 encrypt_c0_reg:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline= --show
@@ -101,7 +110,6 @@ gap:          ; $(CURVE) --title gap        --where $(P) stage=encrypt_c0 pipeli
 stages:       ; $(CURVE) --title stages     --where $(P) pipeline= --vary stage
 logQ:         ; $(CURVE) --title logQ       --where library=$(LIB) logN=6 stage=encrypt_c0 pipeline= --vary logQ --xnorm over_q
 libs:         ; $(CURVE) --title libs       --where logN=6 logQ=60 stage=encrypt_c0 pipeline= --vary library
-boot: 		  ; $(REG)   --title boot --where  $(P2) --show
 
 # same thing but as two curves on one axes, which is easier to compare than two panels
 gap_vary:     ; $(CURVE) --title gap_vary   --where $(P) stage=encrypt_c0 pipeline= --vary gap_aligned

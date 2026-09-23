@@ -68,7 +68,7 @@ SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
 
 # Bootstrapping: aleatorio, logQ grande
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
-            logN=4, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
+            logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 
 # ASPLOS: exhaustivo, parametros chicos
 ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
@@ -113,6 +113,9 @@ GROUPS = {
     "mul": grid(dict(SERVER, logQ=120, bitsPerCoeff=150),
                 stage=["encrypt_c0", "encrypt_c1"], pipeline=["mul", "mul x2", "mul x3"],
                 seed=SEEDS, seed_input=INPUTS),
+
+    "boot": grid(BOOT, pipeline=["mul x4", "mul x4; boot"],
+                 stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
     # RES 2
 
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
