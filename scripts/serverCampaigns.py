@@ -19,6 +19,7 @@ from campaigns import ROOT, grid, main
 RESULTS = str(ROOT / "results")
 RESULTS_BOOT = str(ROOT / "results_boot")
 
+SEEDS_ANALYSIS = range(25)
 SEEDS = [1, 2]           # --seed
 INPUTS = [1, 2]          # --seed_input
 SEEDS_MUL = [3, 4, 5]    # las campanias de mul usaban otra lista de seeds; se conserva
@@ -33,8 +34,12 @@ ROT_STEPS = 12
 BOOT_STEPS = 8           # boot (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16     # boot_eval (evalExpAndEqualBitFlip)
 
-SEEDS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64, )
+BASE = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
+
+BASE_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
+
 # Operaciones del servidor, anillo chico
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=4, logQ=120, logDelta=40, bitsPerCoeff=144)
@@ -48,12 +53,47 @@ ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=25, bitsPerCoeff=64, pipeline="add; mul")
 
 
+# logQ sweep at a fixed ratio: logDelta = 3/4 logQ, bitsPerCoeff = 5/4 logQ
+LOGQ_SWEEP = [40, 60, 80, 100]
+SWEEP_Q = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+               logN=6, logSlots=5)
+
+LOGDELTA_SWEEP = [25,35,45,55]
+SWEEP_DELTA = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+               logN=6, logSlots=5, logQ=60, bitsPerCoeff=64)
+
+LOGSLOTS_SWEEP = [3,4,5]
+SWEEP_SLOTS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+               logN=6, logQ=60, logDelta=40, bitsPerCoeff=64)
+
+# logN comparison: random on both sides so both have the same number of sampled coefficients
+LOGN_CMP = dict(binary="fi_heaan", results_dir=RESULTS,
+                logQ=60, logDelta=40, bitsPerCoeff=64, stage="encrypt_c0")
+
 def steps(base, n, seeds=SEEDS, inputs=INPUTS, **sweep):
     """Barrido de op_step 0..n-1 (y lo que se pase en sweep) sobre seeds x inputs."""
     return grid(base, op_step=range(n), seed=seeds, seed_input=inputs, **sweep)
 
+def sweep_q(stage, seeds=SEEDS, inputs=INPUTS):
+    """One campaign per logQ in LOGQ_SWEEP (x seeds x inputs), with logDelta and
+    bitsPerCoeff scaled with logQ so every run sits at the same relative position."""
+    return [run for q in LOGQ_SWEEP
+            for run in grid(dict(SWEEP_Q, stage=stage, logQ=q,
+                                 logDelta=3 * q // 4, bitsPerCoeff=5 * q // 4),
+                            seed=seeds, seed_input=inputs)]
 
 GROUPS = {
+    "enc_seeds": grid(dict(BASE), stage=["encrypt_c0", "encrypt_c1"], seed= SEEDS_ANALYSIS, seed_input=SEEDS_ANALYSIS),
+    "logN_cmp": grid(dict(LOGN_CMP, logN=6, logSlots=5,  isExhaustive=1),  seed=SEEDS, seed_input=INPUTS)
+              + grid(dict(LOGN_CMP, logN=16, logSlots=15,  isExhaustive=0, numSamples=50 ), seed=SEEDS, seed_input=INPUTS),
+    "plain_cmp": grid(dict(BASE, stage="encode", bitsPerCoeff=128),  seed=SEEDS, seed_input=INPUTS)
+              + grid(dict(BASE_OPENFHE, stage="encode"),  seed=SEEDS, seed_input=INPUTS),
+    "sweep_q": sweep_q("encrypt_c0"),
+
+    "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"),
+                        logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
+    "sweep_slots": grid(dict(SWEEP_SLOTS, stage="encrypt_c0"),
+                        logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
     "op_mul": steps(dict(SERVER, stage="mul_asplos", pipeline="mul"), MUL_STEPS,

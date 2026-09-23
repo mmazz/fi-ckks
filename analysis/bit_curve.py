@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""Curva de error por bit: eje x = bit flipeado, eje y = l2_rel promediado sobre coeficientes.
+"""Error per bit: x = flipped bit, y = l2_rel combined over coefficients.
 
-Primero combina las seeds de la misma config en cada (limb, coeff, bit) con la media,
-despues combina los coeficientes de cada bit con --stat.
+Seeds of the same config are first averaged in each (limb, coeff, bit); then the
+coefficients of each bit are combined with --stat.
 
-  --split gap   dos subplots: coeficientes con coeff % gap == 0 y el resto,
-                con gap = (N/2) / slots = 2^(logN - 1 - logSlots)
-  --vary COL    una curva por cada valor de COL (logQ, stage, library, amountBits, seed, limb...)
-  --per COL     una figura por cada valor de COL (tipicamente op_step)
+  --split gap   two subplots: coefficients with coeff % gap == 0 and the rest,
+                with gap = (N/2) / slots = 2^(logN - 1 - logSlots)
+  --vary COL    one curve per value of COL (logN, logQ, stage, library, gap_aligned, limb...)
+  --per COL     one figure per value of COL (typically op_step)
+  --labels ...  legend labels, one per curve, overriding the automatic ones
 
-Ejemplos:
+Examples:
   python3 bit_curve.py --title decode --where library=heaan stage=decode pipeline=add logQ=60
   python3 bit_curve.py --title logQ   --where stage=decode pipeline=add --vary logQ --xnorm over_q
   python3 bit_curve.py --title add_gap --where stage=add pipeline=add --per op_step --split gap
+  python3 bit_curve.py --title logN --where library=heaan stage=encrypt_c0 pipeline= --vary logN \\
+      --labels 'logN=6 - Mean $L_2$' 'logN=16 - Mean $L_2$'
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -24,10 +28,12 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent))
 from utils.results import load_campaigns, load_data, select, require_single_config, parse_value  # noqa: E402
-
-FONT = 18
+SIZE_STEP = 20   # each earlier curve is this much bigger, so identical curves stay visible
+SCATER_SIZE = 24
+FONT = 24
+TICK_FONT = 18
 IMG_DIR = Path(__file__).resolve().parent / "img"
-COLORS = ["#E31A1C", "#4382B4", "#EE7733", "#31A354", "#AA3377", "#663333", "#66CCEE", "#CCBB44"]
+COLORS = ["#4382B4", "#E31A1C", "#EE7733", "#31A354", "#AA3377", "#663333", "#66CCEE", "#CCBB44"]
 STATS = {"mean": "mean", "median": "median",
          "geomean": lambda x: float(np.exp(np.log(np.maximum(x, 1e-300)).mean()))}
 # Metrics that live in [0, 1]: with --stat mean they are probabilities, so they get a
@@ -51,11 +57,27 @@ def parse_args():
     p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q"], default="none",
                    help="eje x: bit | bit - logDelta | bit / logQ")
     p.add_argument("--drop_coeffs", nargs="*", default=[], help="coeficientes a excluir: 0 N/2 ...")
-    p.add_argument("--band", action="store_true", help="sombrea percentil 10-90 entre coeficientes")
+    p.add_argument("--band", nargs="?", const="p10_90", default=None, choices=["p10_90", "std"],
+                   help="shaded band across coefficients: p10_90 (default if no value) or std (mean +- 1 std)")
+    p.add_argument("--minmax", action="store_true",
+                   help="also mark the min and max across coefficients of each bit")
+    p.add_argument("--linthresh", type=float, default=None,
+                   help="symlog: linear region is [0, linthresh] (default: below the smallest non-zero error)")
     p.add_argument("--title", default="bit_curve")
     p.add_argument("--yscale", choices=["auto", "linear", "log", "symlog"], default="auto",
                    help="auto: linear for the rate metrics (is_sdc, frac_bad, detected, "
                         "misclassified), symlog for the error magnitudes")
+    p.add_argument("--labels", nargs="+", default=None,
+                   help="legend labels, one per curve, in the order of the sorted --vary values; "
+                        "overrides the automatic 'col=value' labels")
+    p.add_argument("--ylabel", default=None,
+                   help="y axis label (default: '<stat> <metric> (<scale>)')")
+    p.add_argument("--query", default=None,
+                   help="extra pandas filter over the campaigns, for conditions --where cannot "
+                        "express, e.g. 'logSlots == logN - 1', 'logDelta == 0.75 * logQ', "
+                        "'stage in [\"encode\", \"encrypt_c0\"]'")
+    p.add_argument("--no_refs", action="store_true",
+                   help="do not draw the logDelta / logQ reference lines")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -73,15 +95,10 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric):
         N = 1 << int(cfg["logN"])
         gap = (N // 2) // (1 << int(cfg["logSlots"]))
         d = load_data(g, results)
-        n_before = len(d)
-        d = d[np.isfinite(d[metric].to_numpy())]
-        if len(d) < n_before:
-            print(f"  {n_before - len(d)} non-finite {metric} rows dropped "
-                  f"(use --metric err_bits to keep them, clipped)")
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
         d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # promedio entre seeds
-        for c in ["logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
+        for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
         d["gap"] = gap
         d["gap_aligned"] = (d["coeff"] % gap == 0)
@@ -101,7 +118,9 @@ def x_values(bits, df, xnorm):
 # Plot
 # ------------------------------------------------------------------ #
 def plot_curves(ax, data, vary, args, subset_label=""):
-    groups = data.groupby(vary) if vary else [(None, data)]
+    groups = list(data.groupby(vary)) if vary else [(None, data)]
+    if args.labels and len(args.labels) != len(groups):
+        sys.exit(f"--labels has {len(args.labels)} entries but there are {len(groups)} curves")
     for i, (val, d) in enumerate(groups):
         # A non-finite value (a flip in a high bit can overflow the decode) makes the mean
         # of that bit inf, and matplotlib drops the point SILENTLY: the curve just stops
@@ -117,7 +136,13 @@ def plot_curves(ax, data, vary, args, subset_label=""):
         if vary:
             vals = val if isinstance(val, tuple) else (val,)
             label = ", ".join(f"{k}={v}" for k, v in zip(vary, vals))
-        ax.plot(x, yv, marker="o", ms=4, lw=1.8, color=color, label=label)
+        if args.labels:
+            label = args.labels[i]
+
+        # First curve biggest and at the back, last one at SCATER_SIZE on top: when two
+        # curves coincide, the bigger dot behind still shows as a ring.
+        size = SCATER_SIZE + (len(groups) - 1 - i) * SIZE_STEP
+        ax.scatter(x, yv, s=size, color=color, label=label, zorder=2 + i)
         if overflow_bits.size:
             ax.plot(x_values(overflow_bits, d, args.xnorm),
                     np.full(overflow_bits.size, 0.97), ls="none", marker="|", ms=9,
@@ -126,15 +151,33 @@ def plot_curves(ax, data, vary, args, subset_label=""):
             print(f"  {(~finite).sum()} non-finite {args.metric} rows on "
                   f"{overflow_bits.size} bit(s) {list(overflow_bits[:6])}: averaged over the "
                   f"rest, marked at the top (use --metric err_bits to keep them, clipped)")
-        if args.band:
+        if args.band == "p10_90":
             lo, hi = per_bit.quantile(0.1).to_numpy(), per_bit.quantile(0.9).to_numpy()
             ax.fill_between(x, lo, hi, color=color, alpha=0.15, lw=0)
+        elif args.band == "std":
+            # std across coefficients; clipped at 0 because an error is never negative
+            sd = per_bit.std().fillna(0).to_numpy()
+            ax.fill_between(x, np.maximum(yv - sd, 0), yv + sd, color=color, alpha=0.2, lw=0,
+                            label=None if i else r"$\pm 1$ std")
+        if args.minmax:
+            ax.plot(x, per_bit.min().to_numpy(), ls="none", marker="_", ms=8, color="red",
+                    alpha=0.8, label=None if i else "min over coeffs")
+            ax.plot(x, per_bit.max().to_numpy(), ls="none", marker="+", ms=8, color="green",
+                    alpha=0.8, label=None if i else "max over coeffs")
 
-    # Referencias logDelta / logQ solo si son las mismas para todas las curvas
-    same_params = data["logDelta"].nunique() == 1 and data["logQ"].nunique() == 1
+        # A reference line is drawn when it falls at the same x for every curve, in the plotted
+    # units: with --xnorm over_q and logDelta = 0.75 logQ, logDelta sits at 0.75 and logQ at 1.
     for col, name in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
-        if data[col].nunique() == 1 and (args.xnorm == "none" or same_params):
-            ref = x_values(np.array([data[col].iloc[0]]), data, args.xnorm)[0]
+        if args.no_refs:
+            break
+        if args.xnorm == "over_q":
+            refs = data[col] / data["logQ"]
+        elif args.xnorm == "minus_delta":
+            refs = data[col] - data["logDelta"]
+        else:
+            refs = data[col]
+        if refs.nunique() == 1:
+            ref = float(refs.iloc[0])
             ax.axvline(ref, color="black", ls="--", lw=1)
             ax.text(ref, 1.0, f" {name}", transform=ax.get_xaxis_transform(),
                     va="bottom", ha="center", fontsize=FONT - 4)
@@ -147,7 +190,7 @@ def plot_curves(ax, data, vary, args, subset_label=""):
         scale = "linear" if args.metric in RATE_METRICS else "symlog"
     if scale == "symlog":
         # symlog so a 0 (fully masked fault) is still visible.
-        ax.set_yscale("symlog", linthresh=_linthresh(finite_vals))
+        ax.set_yscale("symlog", linthresh=args.linthresh or _linthresh(finite_vals))
     else:
         ax.set_yscale(scale)
     if scale == "log":
@@ -160,13 +203,14 @@ def plot_curves(ax, data, vary, args, subset_label=""):
         top = float(finite_vals.max()) * 3.0 if finite_vals.size else 1.0
         ax.set_ylim(0, top if np.isfinite(top) and top > 0 else float(finite_vals.max()))
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
-              "over_q": r"Bit index / $\log Q$"}[args.xnorm]
+              "over_q": r"Bit index relative to $\log Q$"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
-    ax.set_ylabel(f"{args.stat} {args.metric} over coeffs", fontsize=FONT)
+    ax.tick_params(labelsize=TICK_FONT)
+    ax.set_ylabel(args.ylabel or f"{args.stat} {args.metric} ({scale})", fontsize=FONT)
     ax.grid(True, ls="--", alpha=0.3)
     if subset_label:
         ax.set_title(subset_label, fontsize=FONT, pad=26)
-    if vary:
+    if vary or args.labels or args.band == "std" or args.minmax:
         ax.legend(fontsize=FONT - 6, frameon=False)
 
 
@@ -202,14 +246,19 @@ def make_figure(data, vary, args, name):
         plt.show()
     plt.close(fig)
 
+def select_campaigns(args):
+    """Finished campaigns matching --where (fixed values) and --query (any pandas expression)."""
+    filters = {k: parse_value(v) for k, v in (w.split("=", 1) for w in args.where)}
+    camps = select(load_campaigns(args.results), **filters)
+    if args.query:
+        camps = camps.query(args.query)
+    if camps.empty:
+        sys.exit(f"No finished campaigns match --where {args.where} --query {args.query!r}")
+    return camps
 
 def main():
     args = parse_args()
-    filters = {k: parse_value(v) for k, v in (w.split("=", 1) for w in args.where)}
-    camps = select(load_campaigns(args.results), **filters)
-    if camps.empty:
-        sys.exit(f"No finished campaigns match {filters}")
-
+    camps = select_campaigns(args)
     per_values = sorted(camps[args.per].unique()) if args.per else [None]
     for pv in per_values:
         sub = camps if pv is None else camps[camps[args.per] == pv]

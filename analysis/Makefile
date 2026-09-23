@@ -1,3 +1,9 @@
+# 	python3 bit_curve.py --title logN \
+    --where library=heaan stage=<stage> pipeline=<...> logQ=<...> logDelta=<...> \
+    --vary logN \
+    --labels 'logN=6 – Mean $L_2$' 'logN=16 – Mean $L_2$' \
+    --ylabel 'L$_2$ norm (symlog)'
+
 RES   ?= ../results
 LIB   ?= heaan
 CURVE  = python3 bit_curve.py    --results $(RES)
@@ -5,6 +11,47 @@ REG    = python3 register_map.py --results $(RES)
 P      = library=$(LIB) logN=6 logSlots=4 logQ=60 logDelta=25 bitsPerCoeff=64
 P2      = library=$(LIB) logN=4 logQ=1200 logDelta=35 bitsPerCoeff=1210 logSlots=3 stage=encrypt_c0 pipeline="mul x6; boot"
 FLAT   = python3 flat_curve.py   --results $(RES)
+
+
+LogDelta:
+	python3 bit_curve.py --title logDelta \
+	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 \
+	    --query 'logDelta in [25, 35, 45, 55]' \
+	    --vary logDelta \
+	    --labels 'logDelta=25 Mean $$L_2$$' 'logDelta=35 Mean $$L_2$$' \
+	             'logDelta=45 Mean $$L_2$$' 'logDelta=55 Mean $$L_2$$' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+LogQ:
+	python3 bit_curve.py --title logQ \
+	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
+	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
+	    --vary logQ --xnorm over_q \
+	    --labels 'logQ=40 Mean $$L_2$$' 'logQ=60 Mean $$L_2$$' \
+	             'logQ=80 Mean $$L_2$$' 'logQ=100 Mean $$L_2$$' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+PlainVsCipher:
+	python3 encode_shift.py --title plain_vs_cipher \
+	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=40 \
+	    --query '(stage == "encode" and bitsPerCoeff == 128) or (stage in ["encrypt_c0", "encrypt_c1"] and bitsPerCoeff == 64)' \
+	    --vary stage \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+
+LibCompare:
+	python3 encode_shift.py --title plain_heaan_vs_openfhe \
+	    --where stage=encode pipeline= logN=6 logSlots=5 logQ=60 logDelta=40 \
+	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
+	    --vary library \
+	    --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' \
+	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+seeds:
+	python3 bit_curve.py --title enc_seeds --where library=heaan stage=encrypt_c0 logN=6 logQ=60 logDelta=40 logSlots=5 isExhaustive=1 --drop_coeffs N/2 --band std --minmax --linthresh 1 --show
+
+
+
 # --- cliente ---
 encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
 encrypt_c0_reg:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline= --show
@@ -13,7 +60,7 @@ encrypt_c1:      ; $(CURVE) --title encrypt_c1 --where $(P) stage=encrypt_c1 pip
 encrypt_c1_reg:  ; $(REG)   --title encrypt_c1 --where $(P) stage=encrypt_c1 pipeline= --show
 encrypt_c1_reg_mul:  ; $(REG)   --title encrypt_c1 --where $(P) stage=encrypt_c1 pipeline=mul --show
 gap:          ; $(CURVE) --title gap        --where $(P) stage=encrypt_c0 pipeline= --split gap
-seeds:        ; $(CURVE) --title seeds      --where $(P) stage=encrypt_c0 pipeline= --vary seed
+#seeds:        ; $(CURVE) --title seeds      --where $(P) stage=encrypt_c-1 pipeline= --vary seed
 stages:       ; $(CURVE) --title stages     --where $(P) pipeline= --vary stage
 logQ:         ; $(CURVE) --title logQ       --where library=$(LIB) logN=6 stage=encrypt_c0 pipeline= --vary logQ --xnorm over_q
 libs:         ; $(CURVE) --title libs       --where logN=6 logQ=60 stage=encrypt_c0 pipeline= --vary library

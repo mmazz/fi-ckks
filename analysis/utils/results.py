@@ -53,7 +53,7 @@ def assign_config_id(camps):
     camps = camps.copy()
     key = camps[config_columns(camps)].astype(str).agg("|".join, axis=1)
     camps["config_id"] = key.map(lambda s: hashlib.sha1(s.encode()).hexdigest()[:10])
-    return camps
+    return camps
 
 
 def config_columns(df):
