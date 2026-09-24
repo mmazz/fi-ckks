@@ -68,3 +68,13 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
     }
     p.SetFormat(orig);
 }
+
+ArmedFault::ArmedFault(fi::Op op, bool withNTT, Injector& inj)
+{
+    fi::Arm(op, inj.spec().op_step, [&inj, withNTT](DCRTPoly& p) { inject(p, withNTT, inj); });
+}
+
+ArmedFault::~ArmedFault()
+{
+    fi::Disarm();
+}

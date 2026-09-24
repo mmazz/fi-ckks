@@ -5,7 +5,7 @@
 #include "constants-defs.h"
 #include "metrics.h"
 #include "args.h"
-
+#include <array>
 using namespace lbcrypto;
 
 struct OpenFHEContext final : BackendContext {
@@ -30,6 +30,12 @@ void backend_prepare_args(CampaignArgs& args){
     args.isComplex = 0;            // HEAAN only: CKKS here is real-packed
     if (args.bitsPerCoeff > 64)
         throw std::invalid_argument("openfhe: bitsPerCoeff <= 64");
+        // In-operation sites of the fork (fault-hook.h). Out-of-range steps would only
+    // fail later with "never reached"; better to say why right away.
+    if (args.stage == Stage::Add && args.op_step >= fi::ADD_NUM_STEPS)
+        throw std::invalid_argument("openfhe: add has op_step 0.." + std::to_string(fi::ADD_NUM_STEPS - 1));
+    if (args.stage == Stage::Mul && args.op_step >= fi::MULT_NUM_STEPS)
+        throw std::invalid_argument("openfhe: mul has op_step 0.." + std::to_string(fi::MULT_NUM_STEPS - 1));
 }
 
 std::string toLower(std::string s) {
@@ -128,12 +134,29 @@ IterationResult run_iteration(BackendContext* bctx,
    auto operand_pt = [&]() { return ctx.cc->MakeCKKSPackedPlaintext(ctx.baseInput, 1, c->GetLevel()); };
    auto operand_ct = [&]() { return ctx.cc->Encrypt(ctx.keys.publicKey, operand_pt()); };
    auto rescale    = [&]() { if (ctx.manualRescale) ctx.cc->RescaleInPlace(c); };
+   // Runs `call` with the fork's fault site armed when this occurrence is the target.
+   auto armed = [&](Stage st, fi::Op site, uint32_t d, auto&& call) {
+       if (!inj.here(st, d)) return call();
+       ArmedFault guard(site, args.withNTT, inj);
+       return call();
+   };
 
+   std::array<uint32_t, kNumOpTypes> occ{};   // occurrences per op type -> op_depth
    for (const Op& op : args.ops) {
+       const uint32_t d = occ[size_t(op.type)]++;
        switch (op.type) {
-       case OpType::Add:    c = ctx.cc->EvalAdd(c, operand_ct());                   break;
+       case OpType::Add: {
+           const auto rhs = operand_ct();   // encrypt outside the armed scope
+           c = armed(Stage::Add, fi::Op::Add, d, [&] { return ctx.cc->EvalAdd(c, rhs); });
+           break;
+       }
        case OpType::PMul:   c = ctx.cc->EvalMult(c, operand_pt());   rescale();     break;
-       case OpType::Mul:    c = ctx.cc->EvalMult(c, operand_ct());   rescale();     break;
+       case OpType::Mul: {
+           const auto rhs = operand_ct();
+           c = armed(Stage::Mul, fi::Op::Mult, d, [&] { return ctx.cc->EvalMult(c, rhs); });
+           rescale();
+           break;
+       }
        case OpType::Scalar: c = ctx.cc->EvalMult(c, op.param);       rescale();     break;
        case OpType::Rot:    c = ctx.cc->EvalRotate(c, int32_t(op.param));           break;
        case OpType::Boot:   throw std::logic_error("openfhe: boot hasn't been implemented yet");

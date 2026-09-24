@@ -47,6 +47,8 @@ CASES=(
   "heaannn_hidden      | fi_heaan_nn   | --stage hidden_layer --op_step 4 $NN_H"
   "heaannn_mul         | fi_heaan_nn   | --stage mul --op_step 25 $NN_H"
   "openfhenn_cheby     | fi_openfhe_nn | --stage cheby_tanh3 --op_step 9 $NN_O"
+    "openfhe_add_inside  | fi_openfhe | --isExhaustive 1 --stage add --op_step 1 --pipeline 'add' $OFHE_S"
+  "openfhe_mul_inside  | fi_openfhe | --isExhaustive 1 --stage mul --op_step 6 --pipeline 'mul' $OFHE_S"
 )
 if [[ "$SLOW" == "--slow" ]]; then
   CASES+=(
@@ -69,6 +71,7 @@ MUST_FAIL=(
   "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | --pipeline must be left empty"
   "openfhenn_mul       | fi_openfhe_nn | --stage mul $NN_O                              | never reach"
   "heaan_sin_niveles   | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x3' $HEAAN_S | needs more than logQ"
+  "openfhe_step_fuera  | fi_openfhe | --isExhaustive 1 --stage mul --op_step 11 --pipeline 'mul' $OFHE_S      | op_step 0..10"
 )
 
 

@@ -49,6 +49,11 @@ static std::vector<std::pair<Stage, uint32_t>> stages_to_probe(const CampaignArg
                        {Stage::Mul, 0}, {Stage::Mul, 25}, {Stage::Rescale, 0},
                        {Stage::Rot, 0}, {Stage::Rot, 11}})
             v.push_back(s);
+    if (args.library == "openfhe") {
+        // Every in-operation site of the fork (fault-hook.h): add 0..5, mul 0..10.
+        for (uint32_t k = 0; k < 6; ++k)  v.push_back({Stage::Add, k});
+        for (uint32_t k = 0; k < 11; ++k) v.push_back({Stage::Mul, k});
+    }
     return v;
 }
 
@@ -106,11 +111,12 @@ TEST(probe_reaches_every_stage)
 
 // Un punto de inyeccion que no existe: en HEAAN un op_step fuera de rango,
 // en OpenFHE un stage interno que todavia no esta implementado.
+// // An injection point that does not exist: an op_step out of range.
 TEST(probe_rejects_unreachable_point)
 {
     CtxPtr ctx = make_ctx(g_args);
     const bool heaan = g_args.library == "heaan";
-    Injector probe = Injector::probe(heaan ? Stage::Mul : Stage::Add, 0, heaan ? 999 : 0);
+    Injector probe = Injector::probe(Stage::Mul, 0, 999);
     run_iteration(ctx.get(), g_args, probe);
     CHECK_THROWS(probe.finish());
 }
