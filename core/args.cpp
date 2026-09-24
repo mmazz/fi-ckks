@@ -1,7 +1,9 @@
 #include "args.h"
+#include "pipeline.h"
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
+#include <algorithm>
 
 void printVector(const std::vector<double>& v,
                  const std::string& name,
@@ -118,6 +120,27 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
 
     const uint32_t gapQ = (maxBits - logQ > 10) ? 3 : 1;
     addRange(logQ + gapQ, M);
+    // HEAAN + boot: a fault in bit b is masked by the boot iff b minus the bits consumed
+    // before the boot is >= logq_boot = logDelta + 10 (same constant as backends/heaan.cpp).
+    // The coarse points above are ~(logQ - logDelta)/14 bits apart, far too sparse to locate
+    // that edge, so sample EVERY bit in a window around each candidate edge
+    // logq_boot + k*logDelta, k = 0..(mults in the pipeline). That covers any injection point.
+    const bool has_boot = std::any_of(args.ops.begin(), args.ops.end(),
+                                      [](const Op& op) { return op.type == OpType::Boot; });
+    if (args.library == "heaan" && has_boot) {
+        uint32_t n_mults = 0;
+        for (const Op& op : args.ops) n_mults += is_mult(op.type);
+        constexpr uint32_t kWindow = 8;
+        for (uint32_t k = 0; k <= n_mults; ++k) {
+            const uint32_t edge = logDelta + 10 + k * logDelta;
+            const uint32_t lo = edge > kWindow ? edge - kWindow : 0;
+            for (uint32_t b = lo; b <= std::min(edge + kWindow, M); ++b) res.push_back(b);
+        }
+        // The windows overlap the coarse points: keep the list sorted and without repeats
+        // (a repeated bit would count twice when averaging).
+        std::sort(res.begin(), res.end());
+        res.erase(std::unique(res.begin(), res.end()), res.end());
+    }
     return res;
 }
 

@@ -58,14 +58,14 @@ LOGSLOTS_SWEEP = [3,4,5]
 SWEEP_SLOTS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
                logN=6, logQ=60, logDelta=40, bitsPerCoeff=64)
 
-
-
 INPUT_SWEEP = [0,9,19,29]
 
 # RES 2
 # Operaciones del servidor, anillo chico
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64)
+SERVER_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64, withNTT=0)
 
 # Bootstrapping: aleatorio, logQ grande
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
@@ -117,6 +117,15 @@ GROUPS = {
 
     "boot": grid(BOOT, pipeline=["mul x4", "mul x4; boot"],
                  stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
+    "add_rotRNS": grid(dict(SERVER_OPENFHE, pipeline="add; rot 3", mult_depth=3),
+                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
+                    seed=SEEDS, seed_input=INPUTS),
+    "mulRNS": grid(dict(SERVER_OPENFHE, pipeline="mul", mult_depth=3),
+                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
+                    seed=SEEDS, seed_input=INPUTS),
+    "addNTT": grid(dict(SERVER_OPENFHE, pipeline="add; rot 3", withNTT=1),
+                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
+                    seed=SEEDS, seed_input=INPUTS),
     # RES 2
 
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
@@ -160,22 +169,24 @@ GROUPS = {
 
 BASE_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=1,
               logN=6, logSlots=5, logQ=60, logDelta=25, bitsPerCoeff=64)
+
 BASE_OpenFHE_TACO = dict(binary="fi_openfhe", results_dir=RESULTS_TACO, isExhaustive=1,
               logN=4, logSlots=2, logQ=60, logDelta=50, bitsPerCoeff=64, withNTT=0, mult_depth=3)
+
 BOOT_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=0, numSamples=NUM_SAMPLES,
-            logN=6, logSlots=4, logQ=800, logDelta=40, bitsPerCoeff=820)
+            logN=6, logSlots=4, logQ=840, logDelta=40, bitsPerCoeff=860)
 
 GROUPS_TACO = {
-        "mul_taco": grid(dict(BASE_TACO, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "logQ_taco": grid(dict(BASE_TACO, logQ=45, logDelta=15), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "gap_add_taco": grid(dict(BASE_TACO, logSlots=3, pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "gap_mul_taco": grid(dict(BASE_TACO, logSlots=3, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_add_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_mul1_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_mul3_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul x3"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_NTT_add_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul", withNTT=1, mult_depth=0), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "boot_taco": grid(BOOT_TACO, pipeline=["mul x3", "mul x3; boot"],
-                 stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
+        "mul_taco":           grid(dict(BASE_TACO, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "logQ_taco":          grid(dict(BASE_TACO, logQ=45, logDelta=15), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "gap_add_taco":       grid(dict(BASE_TACO, logSlots=3, pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "gap_mul_taco":       grid(dict(BASE_TACO, logSlots=3, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_add_taco":  grid(dict(BASE_OpenFHE_TACO,  pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_mul1_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_mul3_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul x3"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_NTT_add_taco":  grid(dict(BASE_OpenFHE_TACO,  pipeline="add", withNTT=1, mult_depth=0), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
+        "boot_taco":          grid(dict(BOOT_TACO), pipeline=["mul x3", "mul x3; boot", "pmul x3; boot", "mul x5; boot", "mul; boot", "boot"],stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"], seed=SEEDS, seed_input=INPUTS),
+        "mul_multiBit_taco":           grid(dict(BASE_TACO, pipeline="mul"), amountBits=[3,6], stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
         }
 ALL_GROUPS = {**GROUPS, **GROUPS_TACO}
 assert len(ALL_GROUPS) == len(GROUPS) + len(GROUPS_TACO), "a group name is defined twice"

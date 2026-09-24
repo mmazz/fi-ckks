@@ -1,201 +1,180 @@
 #!/usr/bin/env python3
-"""Compara mapas de registro lado a lado usando register_map.py.
+"""Register maps side by side, one panel per numbered injection site.
 
-Guarda este archivo en la MISMA carpeta que register_map.py.
-Edita Panel: cada entrada contiene (valor del parametro variable, numero).
-Los numeros iniciales son ejemplos; reemplazalos por los de tu enum.
+The panels come from an enum in utils/sites.py: each member is
+(panel number, stage, op_step). --diagram picks the enum and --panels picks which
+numbers to draw, in that order. Everything else must be the same config (only seed and
+seed_input may vary, and they are combined with --stat).
 
-Ejemplo:
-  python3 register_map_compare.py --results ../../results \
-      --where library=heaan logN=6 "pipeline=add; mul" \
-      --vary stage --values encrypt_c1 add mul rescale --op_step 0 \
-      --title stages
+Examples:
+  python3 register_map_compare.py --title mul --diagram mul --panels 1 3 4 7 8 9 \\
+      --where library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64 "pipeline=add; mul"
 
---values selecciona y ordena los paneles. Si se omite, se usa todo el enum
-en el orden de declaracion. El parametro de --vary no debe estar en --where.
-Para comparar otra columna, cambia --vary y los valores del enum; por ejemplo,
-con --vary logDelta podrias definir D40 = (40, 1) y D45 = (45, 3).
+  python3 register_map_compare.py --title client --diagram client \\
+      --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
 
-Se guarda una figura por op_step, con una escala de color comun a todas.
-Si --vary es op_step, se guarda una sola figura comparando esos pasos.
---no-legend oculta la leyenda superior; conserva los numeros de los paneles.
+--where must not contain stage or op_step: the enum sets them.
+One color scale is shared by all panels.
 """
 import argparse
+import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import register_map as rm
-from utils.results import assign_config_id          # nuevo
+import numpy as np
+import pandas as pd
+from matplotlib.patches import Patch
+from matplotlib.ticker import MaxNLocator
 
+sys.path.append(str(Path(__file__).resolve().parent))
+import register_map as rm                                              # noqa: E402
+from utils.results import (load_campaigns, load_data, select, require_single_config,  # noqa: E402
+                           assign_config_id, finite_max, parse_value)
+from utils.sites import DIAGRAMS, select_sites                         # noqa: E402
 
-def panel_selection(values, numbers):
-    """[(value, panel number)] in the order the panels are drawn."""
-    if len(values) != len(set(values)):
-        raise ValueError(f"--values has repeated entries: {values}")
-    numbers = list(range(1, len(values) + 1)) if not numbers else numbers
-    if len(numbers) != len(values):
-        raise ValueError(f"--numbers has {len(numbers)} entries, --values has {len(values)}")
-    return list(zip(values, numbers))
+EMPTY = (1.0, 1.0, 1.0, 1.0)     # (coeff, bit) that was never injected: white
+
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--results", default="../../results")
-    p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
-    p.add_argument("--vary", default="stage", help="unica columna que cambia entre paneles")
-    p.add_argument("--values", nargs="+", type=rm.parse_value, required=True,
-                   help="values of --vary to compare, one panel each, in this order")
-    p.add_argument("--numbers", nargs="*", type=int, default=None,
-                   help="number drawn under each panel (default: 1..n); must match --values")
-    p.add_argument("--op_step", default="all", help="all | 5 | 0,5,10 | 0-25")
-    p.add_argument("--stat", choices=["median", "mean", "max"], default="median")
-    p.add_argument("--title", default="register_compare", help="prefijo de los archivos de salida")
+    p.add_argument("--results", default="../results")
+    p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL",
+                   help='exact filters, e.g. library=heaan "pipeline=add; mul"')
+    p.add_argument("--diagram", required=True, choices=list(DIAGRAMS),
+                   help="which enum of utils/sites.py defines the panels")
+    p.add_argument("--panels", nargs="+", type=int, default=None,
+                   help="panel numbers to draw, in this order (default: the whole enum)")
+    p.add_argument("--stat", choices=["median", "mean", "max"], default="median",
+                   help="how to combine the seeds in each (coeff, bit)")
+    p.add_argument("--title", default="register_compare", help="output file name prefix")
     p.add_argument("--no-legend", "--no_legend", dest="no_legend", action="store_true")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
 
-def panel_selection(values):
-    entries = [member.value for member in Panel]
-    numbers = dict(entries)
-    if len(numbers) != len(entries):
-        raise ValueError("Panel contiene mas de una entrada para el mismo valor.")
-    values = list(numbers) if values is None else values
-    if not values or len(values) != len(set(values)):
-        raise ValueError("Selecciona al menos un panel, sin valores repetidos.")
-    missing = [value for value in values if value not in numbers]
-    if missing:
-        raise ValueError(f"Faltan estos valores en el enum Panel: {missing}")
-    return [(value, numbers[value]) for value in values]
+# ------------------------------------------------------------------ #
+# Data
+# ------------------------------------------------------------------ #
+def load_panels(args, sites):
+    """[(number, cfg, cells, n_campaigns)], one per site, in the order of `sites`."""
+    filters = {k: parse_value(v) for k, v in (w.split("=", 1) for w in args.where)}
+    for col in ("stage", "op_step"):
+        if col in filters:
+            raise ValueError(f"remove {col} from --where: the diagram enum sets it")
+
+    camps = select(load_campaigns(args.results), **filters)
+    per_site = []
+    for number, stage, op_step in sites:
+        group = camps[(camps["stage"] == stage) & (camps["op_step"] == op_step)]
+        if group.empty:
+            raise ValueError(f"panel {number}: no finished campaigns with "
+                             f"stage={stage} op_step={op_step} and {filters}")
+        per_site.append((number, group))
+
+    # All panels must share the config except for stage/op_step. Overwrite those two
+    # columns with a constant, recompute config_id, and let the usual check say which
+    # other column differs (typically op_depth or pipeline missing from --where).
+    together = pd.concat([g for _, g in per_site], ignore_index=True)
+    together[["stage", "op_step"]] = ["*", -1]
+    try:
+        require_single_config(assign_config_id(together))
+    except ValueError as exc:
+        raise ValueError(f"the panels differ in more than stage/op_step: {exc}. "
+                         f"Add those columns to --where.") from exc
+
+    panels = []
+    for number, group in per_site:
+        cfg = require_single_config(group).iloc[0]          # only seeds may vary
+        cells = rm.mrep_per_cell(load_data(group, args.results), args.stat)
+        panels.append((number, cfg, cells, len(group)))
+    return panels
 
 
-def load_comparisons(args, selected):
-    filters = {key: rm.parse_value(value)
-               for key, value in (item.split("=", 1) for item in args.where)}
-    if args.vary in filters:
-        raise ValueError(f"Quita {args.vary} de --where; selecciona sus valores con --values.")
-    camps = rm.select(rm.load_campaigns(args.results), **filters)
-    if args.vary not in camps.columns:
-        raise ValueError(f"No existe la columna {args.vary!r} en las campanias.")
-    camps = camps[camps[args.vary].isin([value for value, _ in selected])]
-    if camps.empty:
-        raise ValueError("No hay campanias terminadas para esos filtros y paneles.")
-
-    steps = rm.parse_op_steps(args.op_step, camps["op_step"].unique())
-    missing_steps = sorted(set(steps) - set(camps["op_step"]))
-    if missing_steps:
-        raise ValueError(f"No hay campanias para los op_step solicitados: {missing_steps}")
-    camps = camps[camps["op_step"].isin(steps)]
-    if camps.empty:
-        raise ValueError("No quedaron campanias despues de filtrar --op_step.")
-
-    groups = [(None, camps)] if args.vary == "op_step" else camps.groupby("op_step", sort=True)
-    comparisons = {}
-    for step, group in groups:
-        # Reutiliza la validacion del proyecto: las seeds pueden variar.
-        # Al igualar SOLO --vary, cualquier otra diferencia sigue siendo un error.
-        comparable = group.copy()
-        comparable[args.vary] = group[args.vary].iloc[0]
-        try:
-            rm.require_single_config(assign_config_id(comparable))
-
-        except ValueError as exc:
-            raise ValueError(f"op_step={step}: ademas de {args.vary!r}, cambia otra "
-                             f"parte de la configuracion. Ajusta --where. {exc}") from exc
-
-        panels = []
-        for value, number in selected:
-            panel_camps = group[group[args.vary] == value]
-            if panel_camps.empty:
-                raise ValueError(f"Falta el panel {args.vary}={value!r} en op_step={step}.")
-            cfg = rm.require_single_config(panel_camps).iloc[0]
-            cells = rm.mrep_per_cell(rm.load_data(panel_camps, args.results), args.stat)
-            if cells.empty:
-                raise ValueError(f"Sin datos para {args.vary}={value!r}, op_step={step}.")
-            panels.append((number, cfg, cells))
-        comparisons[step] = panels
-    return comparisons
+# ------------------------------------------------------------------ #
+# Plot
+# ------------------------------------------------------------------ #
+def panel_image(cells, cfg, vmax):
+    """(bits, x, RGBA) image: one pixel per (coeff, bit), limbs side by side."""
+    N = 1 << int(cfg["logN"])
+    n_limbs = int(cells["limb"].max()) + 1
+    n_bits = int(cfg["bitsPerCoeff"])
+    img = np.tile(np.array(EMPTY), (n_bits, N * n_limbs, 1))
+    x = cells["limb"].to_numpy() * N + cells["coeff"].to_numpy()
+    y = cells["bit"].to_numpy()
+    img[y, x] = rm.mrep_colors(cells["mrep"].to_numpy(dtype=float), vmax)
+    return img, N, n_limbs
 
 
-def common_vmax(comparisons):
-    # Ignora NaN/inf al calcular el limite; NaN conserva el gris del original
-    # e inf queda saturado en el extremo negro de la escala.
-    return rm.finite_max((cells["mrep"] for panels in comparisons.values()
-                          for _, _, cells in panels), rm.MODERATE_PCT)
+def draw_panel(ax, number, cells, cfg, vmax, first):
+    img, N, n_limbs = panel_image(cells, cfg, vmax)
+    n_bits, n_x = img.shape[:2]
+    # One pixel per cell: no marker-size tuning, no gaps, exact at any figure size.
+    ax.imshow(img, origin="lower", aspect="auto", interpolation="nearest",
+              extent=(-0.5, n_x - 0.5, -0.5, n_bits - 0.5))
+    for limb in range(1, n_limbs):                   # limb separators (OpenFHE)
+        ax.axvline(limb * N - 0.5, color="black", lw=1)
 
-def plot_comparison(panels, vmax, show_legend=True):
+    ax.set_xticks([0, n_x - 1])
+    ax.set_xticklabels(["0", str(n_x - 1)], fontsize=rm.FONT - 8)
+    ax.yaxis.set_major_locator(MaxNLocator(4, integer=True))
+    ax.tick_params(axis="y", labelsize=rm.FONT - 8, left=first, labelleft=first)
+    ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
+            color="white", fontsize=rm.FONT - 6, fontweight="bold", clip_on=False,
+            bbox=dict(boxstyle="circle,pad=0.3", facecolor="red", edgecolor="black", lw=0.8))
+
+
+def plot_comparison(panels, vmax, show_legend):
     n = len(panels)
-    fig, axes = plt.subplots(1, n, figsize=(max(14, 3.5 * n), 6.5), squeeze=False)
+    fig, axes = plt.subplots(1, n, figsize=(max(6.0, 1.9 * n + 1.0), 4.2),
+                             sharey=True, squeeze=False)
     axes = axes[0]
-    left, right, bottom, top = 0.075, 0.985, 0.22, 0.84
-    # Fija el layout ANTES de dibujar: register_map usa el tamano del eje
-    # para calcular el diametro de los circulos.
-    fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, wspace=0.10)
-    same_bits = len({int(cfg["bitsPerCoeff"]) for _, cfg, _ in panels}) == 1
+    left, right, bottom, top = 0.10, 0.98, 0.26, (0.88 if show_legend else 0.95)
+    fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, wspace=0.12)
 
-    for i, (ax, (number, cfg, cells)) in enumerate(zip(axes, panels)):
-        rm.plot_register_map(ax, cells, cfg, vmax)
-        # La imagen conjunta solo lleva ejes, leyenda y numeros de panel.
-        for text in list(ax.texts):
-            text.remove()  # etiquetas logDelta/logQ del mapa individual
-        for line in list(ax.lines):
-            if line.get_linestyle() == "--":
-                line.remove()  # conserva los separadores verticales de limb
-        ax.set_xlabel("")
-        ax.set_ylabel("")
-        n_x = (1 << int(cfg["logN"])) * (int(cells["limb"].max()) + 1)
-        # Etiqueta los bordes de las columnas: 0 y N, como en la referencia.
-        ax.set_xticks([-0.5, n_x - 0.5])
-        ax.set_xticklabels(["0", str(n_x)], rotation=0, fontsize=rm.FONT - 8)
-        n_bits = int(cfg["bitsPerCoeff"])
-        ax.set_yticks(range(0, n_bits, 5 if n_bits <= 128 else 32))
-        ax.tick_params(axis="y", labelsize=rm.FONT - 8)
-        if i and same_bits:
-            ax.tick_params(axis="y", left=False, labelleft=False)
-            ax.spines["left"].set_visible(False)
-        ax.text(0.5, -0.09, str(number), transform=ax.transAxes,
-                ha="center", va="center", color="white", fontsize=rm.FONT - 2,
-                bbox=dict(boxstyle="circle,pad=0.35", facecolor="red", edgecolor="none"),
-                clip_on=False)
+    for i, (ax, (number, cfg, cells, _)) in enumerate(zip(axes, panels)):
+        draw_panel(ax, number, cells, cfg, vmax, first=(i == 0))
 
-    for ax, next_ax in zip(axes, axes[1:]):
-        x = (ax.get_position().x1 + next_ax.get_position().x0) / 2
-        fig.add_artist(Line2D([x, x], [bottom - 0.11, top + 0.025],
-                              transform=fig.transFigure, color="black", lw=1, ls=":"))
-
-    fig.text(0.02, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
-             ha="center", va="center", fontsize=rm.FONT - 4)
-    fig.text((left + right) / 2, bottom - 0.14, "Coefficients",
-             ha="center", va="center", fontsize=rm.FONT - 4)
+    fig.text(0.05, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
+             ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
+    fig.text((left + right) / 2, 0.03, "Coefficients",
+             ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
     if show_legend:
-        # Un eje transparente abarca todos los paneles para reutilizar
-        # la leyenda de register_map sin duplicarla en cada subplot.
-        host = fig.add_axes([left, bottom, right - left, top - bottom], frameon=False)
-        host.set_axis_off()
-        rm.add_legend(fig, host, vmax)
+        # One compact row. register_map.add_legend() is sized for one big panel and
+        # overlaps short panels; the severe gradient is still red -> black in the plot.
+        handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
+                   for color, label in [
+                       (rm.GREEN, rf"Masked ($\leq${rm.MASKED_PCT:g}%)"),
+                       (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
+                       (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+                       (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%)")]]
+        fig.legend(handles=handles, loc="upper center", ncol=4, frameon=False,
+                   fontsize=rm.FONT - 8, bbox_to_anchor=((left + right) / 2, 1.0))
     return fig
 
 
+# ------------------------------------------------------------------ #
 def main():
     args = parse_args()
     try:
-        selected = panel_selection(args.values)
-        comparisons = load_comparisons(args, selected)
+        sites = select_sites(args.diagram, args.panels)
+        panels = load_panels(args, sites)
     except (ValueError, KeyError) as exc:
-        raise SystemExit(str(exc)) from exc
+        sys.exit(f"ERROR: {exc}")
 
-    vmax = common_vmax(comparisons)
+    vmax = finite_max([cells["mrep"] for _, _, cells, _ in panels], rm.MODERATE_PCT)
+    fig = plot_comparison(panels, vmax, show_legend=not args.no_legend)
+
     rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
-    for step, panels in comparisons.items():
-        fig = plot_comparison(panels, vmax, show_legend=not args.no_legend)
-        suffix = "" if step is None else f"_op_step_{step}"
-        out = rm.IMG_DIR / f"{args.title}{suffix}"
-        fig.savefig(f"{out}.pdf", bbox_inches="tight")
-        fig.savefig(f"{out}.png", bbox_inches="tight", dpi=120)
-        print(f"{args.vary}: {[value for value, _ in selected]} -> {out}.png / .pdf")
-        if args.show:
-            plt.show()
-        plt.close(fig)
+    out = rm.IMG_DIR / args.title
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
+    for number, _, cells, reps in panels:
+        print(f"  panel {number}: {len(cells)} cells, {reps} repetition(s)")
+    print(f"-> {out}.png / .pdf")
+    if args.show:
+        plt.show()
+    plt.close(fig)
 
 
 if __name__ == "__main__":

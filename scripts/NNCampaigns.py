@@ -11,10 +11,9 @@ o en $FI_NN_DATA si esta definida.
 """
 from campaigns import ROOT, grid, main
 RESULTS = str(ROOT / "results_NN")
-
+IMAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]     # --seed_input: index of the image in mnist_test.csv
+NUM_SAMPLES = 20             
 SEEDS = [1]              # --seed: claves y ruido
-IMAGES = [0]             # --seed_input: indice de la imagen en mnist_test.csv
-NUM_SAMPLES = 50         # coeficientes al azar por campania, cada uno con todos los bits
 
 HEAAN = dict(binary="fi_heaan_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
              logN=12, logQ=220, logDelta=30, logSlots=10, bitsPerCoeff=250)

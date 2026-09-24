@@ -100,7 +100,12 @@ static void run_one(BackendContext* ctx, CampaignArgs& args,
     r.stats           = categorize_slots_relative(ckks_golden, res.values, ckks_golden.size());
     r.hidden_layer    = res.hidden_layer;
     r.reduceSum_layer = res.reduceSum_layer;
-    r.misclassified   = s.classifier && argmax(res.values) != s.golden_class;
+    // A NaN/inf logit makes argmax meaningless (NaN never compares greater), so a destroyed
+    // output could land on the golden class and count as correct. Any non-finite logit is
+    // a misclassification.
+    const bool finite_out = std::all_of(res.values.begin(), res.values.end(),
+                                        [](double x) { return std::isfinite(x); });
+    r.misclassified   = s.classifier && (!finite_out || argmax(res.values) != s.golden_class);
     r.out_of_range    = inj.out_of_range();
     s.logger.log(r);
 

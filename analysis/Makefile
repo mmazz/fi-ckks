@@ -11,6 +11,12 @@ REG    = python3 register_map.py --results $(RES)
 P      = library=$(LIB) logN=6 logSlots=4 logQ=60 logDelta=25 bitsPerCoeff=64
 P2      = library=$(LIB) logN=4 logQ=1200 logDelta=35 bitsPerCoeff=1210 logSlots=3 stage=encrypt_c0 pipeline="mul x6; boot"
 FLAT   = python3 flat_curve.py   --results $(RES)
+CMP    = python3 register_map_compare.py --results $(RES)
+PA     = library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64
+
+# datapath figure: panels chosen by their number in utils/sites.py
+mul_panels:    ; $(CMP) --title mul_panels    --diagram mul    --panels 1 3 4 7 8 9 --no-legend --where $(PA) "pipeline=add; mul"
+client_panels: ; $(CMP) --title client_panels --diagram client --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
 
 seeds:
 	python3 bit_curve.py --title enc_seeds --where library=heaan\
@@ -97,6 +103,59 @@ boot:
 	    --vary pipeline --per stage \
 	    --labels 'mul x4' 'mul x4; boot' \
 	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+
+# --- taco ---
+boot_tacoC00:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c0" pipeline="boot"\
+	    --show
+boot_tacoC01:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c0" pipeline="mul; boot"\
+	    --show
+boot_tacoC03:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c0" pipeline="mul x3; boot"\
+	    --show
+boot_tacoC05:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c0" pipeline="mul x5; boot"\
+	    --show
+boot_tacoC1:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c1" pipeline="mul x3; boot"\
+	    --show
+
+boot_tacoDecC0:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="decrypt_c0" pipeline="mul x3; boot"\
+	    --show
+
+boot_tacoDecC1:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="decrypt_c1" pipeline="mul x3; boot"\
+	    --show
+
+
+boot_tacopmulC0:
+	python3 register_map.py --title boot --results ../results_taco \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+		stage="encrypt_c0" pipeline="pmul x3; boot"\
+	    --show
+
+NN     = python3 nn_sdc_curve.py --results ../results_NN
+
+nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
+nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
+nn_client_ofhe:  ; $(NN) --title nn_client_openfhe     --where library=openfheNN
+
 
 # --- cliente ---
 encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
