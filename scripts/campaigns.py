@@ -5,6 +5,7 @@ Valores None o "" no se pasan. El registry de --results_dir saltea las campanias
 terminaron, asi que volver a correr un grupo es seguro: solo corre lo que falta.
 """
 import argparse
+import fnmatch
 import itertools
 import shlex
 import subprocess
@@ -33,6 +34,28 @@ def command(run):
         cmd += [f"--{key}", str(value)]
     return cmd
 
+def dedupe(runs):
+    """Drop repeated configs. Two identical runs launched in parallel get the same
+    campaign_id and write the same data file, so they must never both be scheduled."""
+    seen, out = set(), []
+    for r in runs:
+        key = tuple(sorted((k, str(v)) for k, v in r.items() if v is not None and v != ""))
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
+def select(groups, patterns):
+    """Group names from the command line. Accepts exact names, 'all' and shell-style
+    patterns ('*_taco', 'Open_*'), so a whole family of groups runs with one argument."""
+    names = []
+    for p in patterns:
+        hits = list(groups) if p == "all" else fnmatch.filter(groups, p)
+        if not hits:
+            sys.exit(f"no group matches '{p}'. Available: {list(groups)}")
+        names += [n for n in hits if n not in names]
+    return names
 
 def run_all(runs, jobs, dry_run):
     cmds = [command(r) for r in runs]
@@ -69,11 +92,12 @@ def main(groups, description):
         for name, runs in groups.items():
             print(f"{name:24s} {len(runs):5d} runs")
         return
-
-    names = list(groups) if "all" in args.groups else args.groups
-    unknown = [n for n in names if n not in groups]
-    if unknown:
-        sys.exit(f"unknown grupos: {unknown}. Available: {list(groups)}")
-
+    names = select(groups, args.groups)
     runs = [r for n in names for r in groups[n]]
+    unique = dedupe(runs)
+    if len(unique) < len(runs):
+        print(f"{len(runs) - len(unique)} repeated run(s) dropped (same config in more than one group)",
+              file=sys.stderr)
+    runs = unique
+
     sys.exit(1 if run_all(runs, args.jobs, args.dry_run) else 0)

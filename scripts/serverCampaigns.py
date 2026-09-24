@@ -17,11 +17,12 @@ Equivalencias con la version vieja (doAdd/doMul/... -> --pipeline):
 from campaigns import ROOT, grid, main
 
 RESULTS = str(ROOT / "results")
+RESULTS_TACO = str(ROOT / "results_taco")
 RESULTS_BOOT = str(ROOT / "results_boot")
 
 SEEDS_ANALYSIS = range(25)
-SEEDS = [1, 2]           # --seed
-INPUTS = [1, 2]          # --seed_input
+SEEDS = [1, 2, 3]           # --seed
+INPUTS = [1, 2, 3]          # --seed_input
 SEEDS_MUL = [3, 4, 5]    # las campanias de mul usaban otra lista de seeds; se conserva
 SEEDS_BOOT = [1]         # boot es caro: una sola seed
 NUM_SAMPLES = 50
@@ -157,5 +158,28 @@ GROUPS = {
     "asplos_add": steps(dict(ASPLOS, stage="add"), ADD_STEPS, seeds=[1], inputs=[1]),
 }
 
+BASE_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=1,
+              logN=6, logSlots=5, logQ=60, logDelta=25, bitsPerCoeff=64)
+BASE_OpenFHE_TACO = dict(binary="fi_openfhe", results_dir=RESULTS_TACO, isExhaustive=1,
+              logN=4, logSlots=2, logQ=60, logDelta=50, bitsPerCoeff=64, withNTT=0, mult_depth=3)
+BOOT_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=0, numSamples=NUM_SAMPLES,
+            logN=6, logSlots=4, logQ=800, logDelta=40, bitsPerCoeff=820)
+
+GROUPS_TACO = {
+        "mul_taco": grid(dict(BASE_TACO, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "logQ_taco": grid(dict(BASE_TACO, logQ=45, logDelta=15), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "gap_add_taco": grid(dict(BASE_TACO, logSlots=3, pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "gap_mul_taco": grid(dict(BASE_TACO, logSlots=3, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_add_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_mul1_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_RNS_mul3_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul x3"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "Open_NTT_add_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul", withNTT=1, mult_depth=0), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
+        "boot_taco": grid(BOOT_TACO, pipeline=["mul x3", "mul x3; boot"],
+                 stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
+        }
+ALL_GROUPS = {**GROUPS, **GROUPS_TACO}
+assert len(ALL_GROUPS) == len(GROUPS) + len(GROUPS_TACO), "a group name is defined twice"
+
 if __name__ == "__main__":
-    main(GROUPS, __doc__)
+    main(ALL_GROUPS, __doc__)
+
