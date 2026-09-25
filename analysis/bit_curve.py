@@ -27,8 +27,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils.results import load_campaigns, load_data, select, require_single_config, parse_value  # noqa: E402
-from build_ml_dataset import MULTS, expand, injection_index  # noqa: E402
+from utils.results import (load_campaigns, load_data, load_reps, select,  
+                           require_single_config, parse_value)
+from build_ml_dataset import MULTS, expand, injection_index  
 SIZE_STEP = 20   # each earlier curve is this much bigger, so identical curves stay visible
 SCATER_SIZE = 24
 FONT = 24
@@ -101,7 +102,8 @@ def level_logq(cfg):
     n_mults = sum(o in MULTS for o in ops[:max(pos, 0)])
     return int(cfg["logQ"]) - int(cfg["logDelta"]) * n_mults
 
-def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean"):
+
+def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False):
     """Una fila por (curva, limb, coeff, bit): seeds ya promediadas. Agrega gap_aligned."""
     keys = [c for c in vary if c in camps.columns]          # 'limb' viene de los datos, no del registry
     groups = camps.groupby(keys) if keys else [((), camps)]
@@ -113,11 +115,13 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean"):
         d = load_data(g, results)
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
-        # One curve per repetition (campaign), collapsed to its min..max per bit: --rep_spread.
-        rep = (d.groupby(["campaign_id", "bit"])[metric].agg(STATS[stat])
-                .groupby("bit").agg(rep_lo="min", rep_hi="max").reset_index())
-        d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # promedio entre seeds
-        d = d.merge(rep, on="bit", how="left")
+        d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # mean over seeds
+        if rep_spread:
+            # One curve per repetition (mean over its coefficients), then min..max per bit.
+            # Precomputed by the collapse, so --drop_coeffs and --stat do not apply to it.
+            rep = (load_reps(g, results).groupby("bit")[metric]
+                   .agg(rep_lo="min", rep_hi="max").reset_index())
+            d = d.merge(rep, on="bit", how="left")
         for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
         d["gap"] = gap
@@ -295,7 +299,8 @@ def main():
     for pv in per_values:
         sub = camps if pv is None else camps[camps[args.per] == pv]
         try:
-            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric, args.stat)
+            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric,
+                                   args.stat, args.rep_spread)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"

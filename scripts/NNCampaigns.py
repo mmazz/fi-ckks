@@ -19,7 +19,8 @@ HEAAN = dict(binary="fi_heaan_nn", results_dir=RESULTS, isExhaustive=0, numSampl
              logN=12, logQ=220, logDelta=30, logSlots=10, bitsPerCoeff=250)
 OPENFHE = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=1)
-
+# mul and rot have key-switching registers mod q*Q: up to logq + logQ = 440 bits.
+HEAAN_KS = dict(HEAAN, bitsPerCoeff=2 * 220 + 4)
 # stage -> cantidad de op_step (ver la cabecera de workloads/nn/heaan_nn.cpp y openfhe_nn.cpp)
 HEAAN_INTERNAL = {"hidden_layer": 14, "cheby_tanh3": 10, "mul": 26, "rescale": 4, "add": 6, "rot": 12}
 OPENFHE_INTERNAL = {"hidden_layer": 14, "cheby_tanh3": 10}
@@ -39,6 +40,8 @@ def internal(base, stage, steps):
 GROUPS = {
     "heaan_client": client(HEAAN, HEAAN_CLIENT),
     **{f"heaan_{st}": internal(HEAAN, st, n) for st, n in HEAAN_INTERNAL.items()},
+    **{f"heaan_{st}": internal(HEAAN_KS if st in ("mul", "rot") else HEAAN, st, n)
+       for st, n in HEAAN_INTERNAL.items()},
     "openfhe_client": client(OPENFHE, OPENFHE_CLIENT),
     **{f"openfhe_{st}": internal(OPENFHE, st, n) for st, n in OPENFHE_INTERNAL.items()},
 }

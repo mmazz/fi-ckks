@@ -18,15 +18,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .results import add_derived, config_columns, is_collapsed, load_campaigns
-
+from .results import add_derived, config_columns, is_collapsed, load_campaigns, reps_file
 COLLAPSED_DIR = "collapsed"
 CELL = ["limb", "coeff", "bit"]
 # Averaged over the repetitions of each cell. The names are the raw ones, so --metric
 # means the same thing on a raw and on a collapsed dir.
 MEAN_COLS = ["l2_abs", "l2_rel", "linf_abs", "linf_rel", "err_bits", "err_saturated",
              "frac_bad", "frac_failed", "is_sdc", "is_masked", "detected", "misclassified",
-             "out_of_range", "sdc_undetected", "false_alarm"]
+             "out_of_range", "sdc_undetected", "false_alarm", "tolerable_sdc"]
 
 
 def collapse_cells(data):
@@ -41,6 +40,10 @@ def collapse_cells(data):
     out["linf_rel_max"] = g["linf_rel"].max()
     return out.reset_index()
 
+def collapse_reps(data):
+    """One row per (campaign_id, bit): each repetition's curve, averaged over its
+    coefficients. The cells file has no repetitions left; bit_curve --rep_spread reads this."""
+    return data.groupby(["campaign_id", "bit"], sort=True)[MEAN_COLS].mean().reset_index()
 
 def index_row(exp_id, camps, data, data_file):
     """The experiment's row in <out>/campaigns_start.csv."""
@@ -113,7 +116,7 @@ def collapse_dir(raw, out=None, force=False, verbose=True):
         data_file = f"data/experiment_{exp_id}.csv.gz"
         prev = old.get(exp_id)
         if (prev is not None and str(prev["campaign_ids"]) == campaign_ids(group)
-                and (out / data_file).exists()):
+                and (out / data_file).exists() and (out / reps_file(data_file)).exists()):
             rows.append(prev)
             continue
         data = add_derived(pd.concat([read_campaign(raw, c) for c in group["campaign_id"]],
@@ -125,6 +128,7 @@ def collapse_dir(raw, out=None, force=False, verbose=True):
         # Seed averages: 8 significant digits are far below the seed-to-seed spread and
         # halve the file (full-precision means barely compress).
         write_atomic(cells, out / data_file, float_format="%.8g")
+        write_atomic(collapse_reps(data), out / reps_file(data_file), float_format="%.8g")
         rows.append(index_row(exp_id, group, data, data_file))
         written += 1
 
@@ -136,7 +140,7 @@ def collapse_dir(raw, out=None, force=False, verbose=True):
     index = index[first + [c for c in index.columns if c not in first]]
     write_atomic(index.sort_values(["library", "stage", "experiment_id"]), index_path)
 
-    keep = set(index["data_file"])
+    keep = set(index["data_file"]) | {reps_file(f) for f in index["data_file"]}
     for p in (out / "data").glob("experiment_*.csv.gz"):
         if f"data/{p.name}" not in keep:
             p.unlink()

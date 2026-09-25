@@ -9,9 +9,12 @@
 #
 # Output: img/<title>.pdf and .png. Chapter 1 files start with c1_, chapter 2 with c2_,
 # evidence with ev_.
-
+# scripts/clientCampaigns.py: chapter 1 and the ev_ figures
+RES1     ?= ../results_client
+# scripts/serverCampaigns.py: chapter 2
+RES2     ?= ../results_server
+# scripts/TACO_campaings.py: ASPLOS panels (mul_panels, client_panels)
 RES      ?= ../results
-RES_BOOT ?= ../results_boot
 SHOW     ?=
 
 CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
@@ -20,8 +23,8 @@ HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
 REG    = python3 register_map.py --results $(RES) $(SHOW)
 YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
 
-# 3x3 repetitions: enc_seeds has 25x25 of the same config, the other figures use 3x3.
-R3     = seed in [1, 2, 3] and seed_input in [1, 2, 3]
+  # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
+  # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
 ENC    = stage in ["encrypt_c0", "encrypt_c1"]
 
 .PHONY: check ch1 ch2 ev all
@@ -29,7 +32,7 @@ all: ch1 ch2 ev
 
 check:
 	python3 check_results.py $(RES)
-	python3 check_results.py $(RES_BOOT)
+	python3 check_results.py $(RES1) / $(RES2)
 
 # ======================================================================================
 # Chapter 1: client side
@@ -46,7 +49,7 @@ CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c
       c1_fig09 c1_fig10 c1_fig11 c1_fig12 c1_fig13
 .PHONY: $(CH1)
 ch1: $(CH1)
-
+$(CH1): RES = $(RES1)
 # Seed variability: band = min..max over the 25x25 repetitions of the per-bit curve.
 c1_fig01:
 	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
@@ -55,7 +58,7 @@ c1_fig01:
 c1_fig02:
 	$(CURVE) --title c1_fig02_logN \
 	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
-	    --query '$(R3) and logSlots == logN - 1' \
+	    --query 'logSlots == logN - 1' \
 	    --vary logN --labels 'logN=6' 'logN=16' $(YL)
 
 c1_fig03:
@@ -65,7 +68,7 @@ c1_fig03:
 
 c1_fig04:
 	$(SHIFT) --title c1_fig04_encode_c0_c1 --where $(BASE) pipeline= \
-	    --query '$(R3) and ((stage == "encode" and bitsPerCoeff == 128) or ($(ENC) and bitsPerCoeff == 64))' \
+	    --query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC) and bitsPerCoeff == 64))' \
 	    --vary stage $(YL)
 
 c1_fig05:
@@ -87,7 +90,7 @@ c1_fig06:
 c1_fig07:
 	$(CURVE) --title c1_fig07_logSlots \
 	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
-	    --query '$(R3) and $(ENC) and logSlots in [3, 4, 5]' \
+	    --query '$(ENC) and logSlots in [3, 4, 5]' \
 	    --vary logSlots --split gap --per stage $(YL)
 
 c1_fig08:
@@ -106,7 +109,7 @@ c1_fig10:
 	    --vary pipeline --split gap --per stage $(YL)
 
 c1_fig11:
-	$(CURVE) --title c1_fig11_boot --results $(RES_BOOT) --where $(BOOTP) \
+	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
 	    --vary pipeline --per stage $(YL)
 
@@ -138,6 +141,7 @@ MIX_DEPTH ?= 0
 CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 .PHONY: $(CH2)
 ch2: $(CH2)
+$(CH2): RES = $(RES2)
 
 c2_fig01:
 	$(HEAT)  --title c2_fig01_add_heat --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
@@ -167,18 +171,18 @@ c2_fig04:
 
 # Mixed pipeline, fault in the 1st or the 2nd mul.
 c2_fig05:
-	$(CURVE) --title c2_fig05_mix --results $(RES_BOOT) --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	$(CURVE) --title c2_fig05_mix --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
 
 # Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
 c2_fig06:
-	$(CURVE) --title c2_fig06_mix_boot --results $(RES_BOOT) --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	$(CURVE) --title c2_fig06_mix_boot  --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
 
 c2_fig07:
-	$(HEAT) --title c2_fig07_boot_heat --results $(RES_BOOT) \
+	$(HEAT) --title c2_fig07_boot_heat \
 	    --where $(BOOTP) stage=boot "pipeline=mul x4; boot"
-	$(HEAT) --title c2_fig07_boot_eval_heat --results $(RES_BOOT) \
+	$(HEAT) --title c2_fig07_boot_eval_heat  \
 	    --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
 
 # ======================================================================================
@@ -187,11 +191,12 @@ c2_fig07:
 EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns
 .PHONY: $(EV)
 ev: $(EV)
+$(EV): RES = $(RES1)
 
 # Null pipeline: decrypt_cX lands on top of encrypt_cX.
 ev_decrypt:
 	$(CURVE) --title ev_decrypt --where $(BASE) bitsPerCoeff=64 pipeline= \
-	    --query '$(R3) and stage in ["encrypt_c0", "decrypt_c0", "encrypt_c1", "decrypt_c1"]' \
+	    --query 'stage in ["encrypt_c0", "decrypt_c0", "encrypt_c1", "decrypt_c1"]' \
 	    --vary stage $(YL)
 
 # Null pipeline: decode vs encode.

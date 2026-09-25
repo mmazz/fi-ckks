@@ -55,8 +55,6 @@ def parse_args():
                    help="one panel per stage, in this order (missing stages are skipped)")
     p.add_argument("--ncols", type=int, default=3)
     p.add_argument("--mode", choices=["rate", "stack"], default="rate")
-    p.add_argument("--masked_pct", type=float, default=rm.MASKED_PCT,
-                   help="stack mode: max logit change (linf_rel, %%) still counted as masked")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
@@ -102,17 +100,17 @@ def wilson(k, n, z=Z95):
     half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
     return center - half, center + half
 
+def per_bit(data):
+    """One row per bit: n, P(SDC), its interval, and the three-way split.
 
-def per_bit(data, masked_pct):
-    """One row per bit: n, P(SDC), its interval, and the three-way split."""
-    d = data.assign(
-        crit=data["misclassified"] > 0,
-        # A fault that leaves the class alone but visibly moves the logits: tolerable SDC.
-        # Non-finite logits with the same argmax still count as moved.
-        moved=~(data["linf_rel"].astype(float) * 100.0 <= masked_pct))
-    d["tol"] = ~d["crit"] & d["moved"]
-    g = d.groupby("bit")
-    out = pd.DataFrame({"n": g.size(), "k": g["crit"].sum(), "k_tol": g["tol"].sum()})
+    Each row of a collapsed dir is one (limb, coeff, bit) cell with n_seeds injections, and
+    misclassified / tolerable_sdc are the fraction of them that hit, so rate x n_seeds
+    gives back the exact counts.
+    """
+    w = data["n_seeds"] if "n_seeds" in data.columns else pd.Series(1.0, index=data.index)
+    d = pd.DataFrame({"bit": data["bit"], "n": w,
+                      "k": data["misclassified"] * w, "k_tol": data["tolerable_sdc"] * w})
+    out = d.groupby("bit")[["n", "k", "k_tol"]].sum()
     out["rate"] = out["k"] / out["n"]
     out["lo"], out["hi"] = wilson(out["k"].to_numpy(float), out["n"].to_numpy(float))
     out["tolerable"] = out["k_tol"] / out["n"]
@@ -168,7 +166,7 @@ def plot(stages, args):
                              sharex=True, sharey=True, squeeze=False)
     rates = {}
     for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):
-        curve = per_bit(data, args.masked_pct)
+        curve = per_bit(data)
         rates[stage] = (register_rate(curve,  register_width(cfg)), int(curve["n"].min()))
         (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
         mark_params(ax, cfg)

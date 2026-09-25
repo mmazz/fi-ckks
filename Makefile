@@ -1,8 +1,7 @@
 
 
-campaings:
-	python3 scripts/serverCampaigns.py
-	python3 scripts/serverCampaigns.py enc_seeds --jobs 8
-	python3 scripts/serverCampaigns.py logN_cmp --jobs 8
-
+.PHONY: campaigns
+campaigns:
+	python3 scripts/clientCampaigns.py all --jobs 8
+	python3 scripts/serverCampaigns.py all --jobs 8
 

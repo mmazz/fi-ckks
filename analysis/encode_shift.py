@@ -21,7 +21,8 @@ def main():
     args.no_refs = True
     camps = bc.select_campaigns(args)
     try:
-        data = bc.load_curve_data(camps, args.results, args.vary, args.drop_coeffs, args.metric, args.stat)
+        data = bc.load_curve_data(camps, args.results, args.vary, args.drop_coeffs, args.metric,
+                                  args.stat, args.rep_spread)
     except ValueError as e:
         sys.exit(f"ERROR: {e}\n  -> pin the column that differs with --where / --query")
 

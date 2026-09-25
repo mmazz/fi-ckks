@@ -20,7 +20,10 @@ INDEX_COLS = {"experiment_id", "data_file", "n_campaigns", "campaign_ids", "seed
 # Everything that does NOT define the experiment. The rest of campaigns_start is the config.
 NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id", "saveVectors"} | INDEX_COLS
 # Columns of campaigns_end.csv: RESULTS, never features nor part of the config.
-END_COLS = {"total_bitFlips", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
+END_COLS = {"total_bitFlips", "detected_count", "duration_minutes", "l2_P95", "l2_P99"}
+# Max logit change (linf_rel, in %) that still counts as masked. Same value as
+# register_map.MASKED_PCT.
+MOVED_PCT = 0.1
 ERR_FLOOR = 2.0 ** -60    # floor for log2 when the error is exactly 0
 # Ceiling: only so that one inf/NaN does not ruin a whole cell. It has to sit far above any
 # real error (with logQ=840 and logDelta=40 l2_rel reaches ~2^800), so nothing measurable
@@ -135,6 +138,10 @@ def add_derived(data):
     # Detector outcome vs ground truth, for coverage / false-alarm tables (OpenFHE).
     data["sdc_undetected"] = ((data["is_sdc"] > 0) & (data["detected"] == 0)).astype(float)
     data["false_alarm"] = ((data["is_sdc"] == 0) & (data["detected"] > 0)).astype(float)
+    # NN: the class did not change but the logits moved by more than MOVED_PCT (the
+    # "tolerable SDC" of nn_sdc_curve.py). Per injection, so it survives the collapse.
+    moved = ~(data["linf_rel"].astype(float) * 100.0 <= MOVED_PCT)    # NaN counts as moved
+    data["tolerable_sdc"] = (moved & (data["misclassified"] == 0)).astype(float)
     return data
 
 
@@ -162,6 +169,16 @@ def load_data(camps, results_dir):
     data = add_derived(pd.concat(dfs, ignore_index=True))
     return data.merge(camps[["campaign_id", "config_id", "seed", "seed_input"]], on="campaign_id")
 
+def load_reps(camps, results_dir):
+    """Per-repetition curves of collapsed experiments: one row per (campaign_id, bit), each
+    metric averaged over the coefficients of that single campaign (bit_curve --rep_spread)."""
+    return pd.concat([pd.read_csv(Path(results_dir) / reps_file(c["data_file"]))
+                      for _, c in camps.iterrows()], ignore_index=True)
+
+
+def reps_file(data_file):
+    """data/experiment_<id>.csv.gz -> data/experiment_<id>_reps.csv.gz"""
+    return str(data_file).replace(".csv.gz", "_reps.csv.gz")
 
 def n_repetitions(camps):
     """How many campaigns (seed x seed_input) are behind these rows, in either layout."""
