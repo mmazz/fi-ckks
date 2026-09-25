@@ -46,7 +46,7 @@ public:
     void close();
 
     uint64_t total() const { return total_; }
-    uint64_t sdc() const { return sdc_; }
+    uint64_t detected() const { return detected_; }   // injections where OpenFHE's SDC detector fired
     ~CampaignLogger();
 
 private:
@@ -56,7 +56,7 @@ private:
     std::mutex mtx_;
     size_t flush_threshold_;
     uint64_t total_ = 0;
-    uint64_t sdc_ = 0;
+    uint64_t detected_ = 0;
     bool closed_ = false;
 };
 class VectorLogger {

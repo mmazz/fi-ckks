@@ -6,8 +6,9 @@ import pandas as pd
 
 # Todo lo que NO define el experimento. El resto de las columnas del start CSV es la config.
 NOT_CONFIG = {"campaign_id", "seed", "seed_input", "config_id", "saveVectors"}
-# Columnas de campaigns_end.csv: son RESULTADOS, nunca features ni parte de la config.
-END_COLS = {"total_bitFlips", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
+# Columns of campaigns_end.csv: RESULTS, never features nor part of the config.
+# sdc_count is the old name of detected_count (results dirs created before the rename).
+END_COLS = {"total_bitFlips", "detected_count", "sdc_count", "duration_minutes", "l2_P95", "l2_P99"}
 ERR_FLOOR = 2.0 ** -60    # piso para log2 cuando el error es exactamente 0
 # Techo: solo para que un inf/NaN no arruine la celda entera. Tiene que quedar MUY por
 # encima de cualquier error real (con logQ=840 y logDelta=40 el l2_rel llega a ~2^800),

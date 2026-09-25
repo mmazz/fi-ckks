@@ -111,9 +111,8 @@ void CampaignRegistry::ensureCsvFilesExist()
     if (!fs::exists(end_csv_)) {
         std::ofstream f(end_csv_);
         if (!f)
-            throw std::runtime_error("CampaignRegistry: could not created " + end_csv_);
-
-        f << "campaign_id,total_bitFlips,sdc_count,"
+            throw std::runtime_error("CampaignRegistry: could not create " + end_csv_);
+        f << "campaign_id,total_bitFlips,detected_count,"
              "duration_minutes,l2_P95,l2_P99\n";
     }
 }

@@ -1,158 +1,140 @@
 #!/usr/bin/env python3
-"""Campanias de operaciones del servidor (fi_heaan).
+"""Results chapter 2: faults on the SERVER side, inside the operations (fi_heaan).
 
-    python3 scripts/serverCampaigns.py                        # lista los grupos
-    python3 scripts/serverCampaigns.py op_add --dry-run       # muestra los comandos
-    python3 scripts/serverCampaigns.py op_add op_mul --jobs 8
+    python3 scripts/serverCampaigns.py                        # list the groups
+    python3 scripts/serverCampaigns.py op_mul --dry-run       # print the commands
+    python3 scripts/serverCampaigns.py op_* --jobs 8
     python3 scripts/serverCampaigns.py all --jobs 16
 
-Equivalencias con la version vieja (doAdd/doMul/... -> --pipeline):
-    doAdd 2              -> "add x2"
-    doMul 3              -> "mul x3"
-    doRot 2              -> "rot 2"     (una rotacion de 2 slots)
-    doBoot 1             -> "boot"      (al final del pipeline)
-    exhaustiveSingleBitFlip -> isExhaustive=1
-    randomSingleBitFlip     -> isExhaustive=0
+--op_step picks the internal step of the operation (the first steps are the input
+ciphertexts, before the operation touches them). --op_depth picks WHICH occurrence of
+that operation is hit when the pipeline has several (0 = the first one).
+
+Fault model: the *_asplos stages do not restore the flipped register inside the
+operation (a corrupted register that is read again later in the same op). The plain
+"mul"/"rot" stages restore it right after the first read. All the groups here use the
+*_asplos variants.
+
+Old flags -> pipeline:  doAdd 2 -> "add x2", doMul 3 -> "mul x3", doRot 2 -> "rot 2",
+doBoot 1 -> "boot" (at the end), exhaustiveSingleBitFlip -> isExhaustive=1,
+randomSingleBitFlip -> isExhaustive=0.
 """
 from campaigns import ROOT, grid, main
 
 RESULTS = str(ROOT / "results")
-RESULTS_TACO = str(ROOT / "results_taco")
 RESULTS_BOOT = str(ROOT / "results_boot")
 
-SEEDS_ANALYSIS = range(25)
-SEEDS = [1, 2, 3]           # --seed
-INPUTS = [1, 2, 3]          # --seed_input
-SEEDS_MUL = [3, 4, 5]    # las campanias de mul usaban otra lista de seeds; se conserva
-SEEDS_BOOT = [1]         # boot es caro: una sola seed
+SEEDS = [1, 2, 3]          # --seed
+INPUTS = [1, 2, 3]         # --seed_input
+SEEDS_MUL = [3, 4, 5]      # kept from the old mul campaigns so their data can be reused
+SEEDS_BOOT = [1]           # boot is expensive: a single seed
 NUM_SAMPLES = 50
 
-# Cantidad de op_step de cada stage del fork (0 .. n-1)
+# Number of op_step of each stage in the HEAAN fork (0 .. n-1)
 ADD_STEPS = 6
 MUL_STEPS = 26
 RESCALE_STEPS = 4
 ROT_STEPS = 12
-BOOT_STEPS = 8           # boot (bootstrapAndEqualBitFlip)
-BOOT_EVAL_STEPS = 16     # boot_eval (evalExpAndEqualBitFlip)
+BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
+BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
+
+# One representative op_step per pattern of mul_asplos. FIRST GUESS from reading
+# multBitFlipAsplos; replace it with one step per band of the op_mul heatmap:
+#   0, 1   input ciphertext (ax, bx)
+#   4      (a1+b1): only the cross term d1
+#   8      b1 in b1*b2: goes straight to the output c0
+#   10     a1*a2 before the relinearisation key          (mod qQ)
+#   11     relinearisation key                            (mod qQ)
+#   14     key-switch product before the shift by logQ    (mod qQ)
+#   24, 25 output (ax, bx)
+MUL_REPR = [0, 1, 4, 8, 10, 11, 14, 24, 25]
+# Same list without the steps that live mod qQ (only for the boot configs, whose logQ=840
+# would need bitsPerCoeff ~1700 to cover them; the key-switch steps are covered by op_mul).
+MUL_REPR_Q = [s for s in MUL_REPR if s not in (10, 11, 14)]
 
 
-## RES 1
-BASE = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
+def keyswitch_bits(logQ):
+    """Register width of the key-switching steps: HEAAN computes them mod q*Q with
+    Q = 2^logQ, so they are up to 2*logQ bits wide. With bitsPerCoeff = logQ + 4 the
+    upper half is never flipped, and the lower half is exactly the part the shift by
+    logQ throws away: those steps would look harmless."""
+    return 2 * logQ + 4
 
-BASE_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=5, logQ=60, logDelta=40, bitsPerCoeff=64)
-# logN comparison: random on both sides so both have the same number of sampled coefficients
-LOGN_CMP = dict(binary="fi_heaan", results_dir=RESULTS,
-                logQ=60, logDelta=40, bitsPerCoeff=64, stage="encrypt_c0")
-# logQ sweep at a fixed ratio: logDelta = 3/4 logQ, bitsPerCoeff = 5/4 logQ
-LOGQ_SWEEP = [40, 60, 80, 100]
-SWEEP_Q = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-               logN=6, logSlots=5)
 
-LOGDELTA_SWEEP = [25,35,45,55]
-SWEEP_DELTA = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-               logN=6, logSlots=5, logQ=60, bitsPerCoeff=64)
-
-LOGSLOTS_SWEEP = [3,4,5]
-SWEEP_SLOTS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-               logN=6, logQ=60, logDelta=40, bitsPerCoeff=64)
-
-INPUT_SWEEP = [0,9,19,29]
-
-# RES 2
-# Operaciones del servidor, anillo chico
+# Server operations, exhaustive. logSlots=3 (gap = 4) as in chapter 1.
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64)
-SERVER_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64, withNTT=0)
+              logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
+# mul and rot have key-switching steps (mod qQ).
+SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
+# mul x3: 3*30 = 90 bits consumed, 70 left at decryption.
+SERVER_DEPTH = dict(SERVER, logQ=160, bitsPerCoeff=keyswitch_bits(160))
 
-# Bootstrapping: aleatorio, logQ grande
+# Bootstrapping: random, large logQ.
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 
-# ASPLOS: exhaustivo, parametros chicos
-ASPLOS = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=3, logQ=60, logDelta=25, bitsPerCoeff=64, pipeline="add; mul")
+# Mixed pipeline: ops before and after each mul. Run with and without the final boot on
+# the SAME config, so the only difference between the two groups is the boot.
+MIX_PIPELINE = "add; mul; rot 2; mul; add"
 
 
+def steps(base, op_steps, seeds=SEEDS, inputs=INPUTS, **sweep):
+    """Sweep of op_step (an int n means 0..n-1, or an explicit list) over seeds x inputs."""
+    op_steps = range(op_steps) if isinstance(op_steps, int) else op_steps
+    return grid(base, op_step=op_steps, seed=seeds, seed_input=inputs, **sweep)
 
-
-def steps(base, n, seeds=SEEDS, inputs=INPUTS, **sweep):
-    """Barrido de op_step 0..n-1 (y lo que se pase en sweep) sobre seeds x inputs."""
-    return grid(base, op_step=range(n), seed=seeds, seed_input=inputs, **sweep)
-
-def sweep_q(stage, seeds=SEEDS, inputs=INPUTS):
-    """One campaign per logQ in LOGQ_SWEEP (x seeds x inputs), with logDelta and
-    bitsPerCoeff scaled with logQ so every run sits at the same relative position."""
-    return [run for q in LOGQ_SWEEP
-            for run in grid(dict(SWEEP_Q, stage=stage, logQ=q,
-                                 logDelta=3 * q // 4, bitsPerCoeff=5 * q // 4),
-                            seed=seeds, seed_input=inputs)]
 
 GROUPS = {
-        # RES 1
-    "enc_seeds": grid(dict(BASE), stage=["encrypt_c0", "encrypt_c1"], seed= SEEDS_ANALYSIS, seed_input=SEEDS_ANALYSIS),
-    "logN_cmp": grid(dict(LOGN_CMP, logN=6, logSlots=5,  isExhaustive=1),  seed=SEEDS, seed_input=INPUTS)
-              + grid(dict(LOGN_CMP, logN=16, logSlots=15,  isExhaustive=0, numSamples=50 ), seed=SEEDS, seed_input=INPUTS),
-    "plain_cmp": grid(dict(BASE, stage="encode", bitsPerCoeff=128),  seed=SEEDS, seed_input=INPUTS) # Also to compare plain wint c0 and c1 all in heaan
-              + grid(dict(BASE_OPENFHE, stage="encode"),  seed=SEEDS, seed_input=INPUTS),
-    "sweep_q": sweep_q("encrypt_c0"),
-
-    "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"),
-                        logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
-    "sweep_slots": grid(dict(SWEEP_SLOTS), stage=["encrypt_c0", "encrypt_c1"], logSlots=LOGSLOTS_SWEEP,
-                         seed=SEEDS, seed_input=INPUTS),
-    # Input magnitude sweep: logMin = x, logMax = x + 1 (paired, not a cartesian product).
-    "sweep_input": [run for x in INPUT_SWEEP
-                    for run in grid(dict(BASE, logDelta=20, logMin=x, logMax=x + 1),
-                                    stage=["encrypt_c0", "encrypt_c1"],
-                                    seed=SEEDS, seed_input=INPUTS)],
-    "add_rot": grid(dict(SERVER, pipeline="add; rot 3"),
-                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 4, 5],
-                    seed=SEEDS, seed_input=INPUTS),
-    "mul": grid(dict(SERVER, logQ=120, bitsPerCoeff=150),
-                stage=["encrypt_c0", "encrypt_c1"], pipeline=["mul", "mul x2", "mul x3"],
-                seed=SEEDS, seed_input=INPUTS),
-
-    "boot": grid(BOOT, pipeline=["mul x4", "mul x4; boot"],
-                 stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
-    "add_rotRNS": grid(dict(SERVER_OPENFHE, pipeline="add; rot 3", mult_depth=3),
-                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
-                    seed=SEEDS, seed_input=INPUTS),
-    "mulRNS": grid(dict(SERVER_OPENFHE, pipeline="mul", mult_depth=3),
-                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
-                    seed=SEEDS, seed_input=INPUTS),
-    "addNTT": grid(dict(SERVER_OPENFHE, pipeline="add; rot 3", withNTT=1),
-                    stage=["encrypt_c0", "encrypt_c1"], logSlots=[3, 5],
-                    seed=SEEDS, seed_input=INPUTS),
-    # RES 2
-
+    # ---- Single operations: heatmap op_step x bit, then one curve per pattern ----------
+    # FIG 1 (add). Expected 2 patterns: steps {0, 1, 4} behave as c1, {2, 3, 5} as c0.
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
-    "op_mul": steps(dict(SERVER, stage="mul_asplos", pipeline="mul"), MUL_STEPS,
+    # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
+    "op_mul": steps(dict(SERVER_KS, stage="mul_asplos", pipeline="mul"), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
 
-    "op_mul_depth": steps(dict(SERVER, stage="mul_asplos", pipeline="mul x3", logQ=160, bitsPerCoeff=174),
-                          MUL_STEPS, seeds=SEEDS_MUL, inputs=SEEDS_MUL, op_depth=[0, 1, 2]),
+    # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
+    # and 1 seed x 3 inputs (chapter 1 shows the seed does not matter): 26 steps x 9
+    # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so
+    # the relative error should stay roughly constant with depth; what changes is the
+    # modulus (logQ - 30*op_depth), so plot with x = bit - logq.
+    "op_mul_depth": steps(dict(SERVER_DEPTH, stage="mul_asplos", pipeline="mul x3"), MUL_REPR,
+                          seeds=SEEDS_MUL[:1], inputs=SEEDS_MUL, op_depth=[0, 1, 2]),
 
+    # FIG 3 (rescale). Steps 0/1 = ax/bx before the shift, 2/3 = after. Expected: the
+    # "before" curves are the "after" ones shifted by logDelta (the flip is divided by Delta).
     "op_rescale_depth": steps(dict(SERVER, stage="rescale", pipeline="mul x2"), RESCALE_STEPS,
                               op_depth=[0, 1]),
 
-    "op_rot": steps(dict(SERVER, stage="rot_asplos", pipeline="rot 2"), ROT_STEPS),
+    # FIG 4 (rot). 0, 9 = c0 path; 1, 2, 4 = c1 path before key switching; 3, 5 = key;
+    # 6, 7 = before the shift by logQ (mod qQ); 8, 10, 11 = output.
+    "op_rot": steps(dict(SERVER_KS, stage="rot_asplos", pipeline="rot 2"), ROT_STEPS),
 
+    # ---- Mixed pipeline, hitting mul --------------------------------------------------
+    # FIG 5 (mixed pipeline, fault in the 1st or 2nd mul). 1 seed x 3 inputs: every
+    # injection of the boot variant runs a full bootstrapping.
+    "mix_mul": steps(dict(BOOT, stage="mul_asplos", pipeline=MIX_PIPELINE), MUL_REPR_Q,
+                     seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
+
+    # FIG 6 (same + boot). Expected: small errors go through the boot, large ones break
+    # the sine approximation and the whole output.
+    "mix_mul_boot": steps(dict(BOOT, stage="mul_asplos", pipeline=MIX_PIPELINE + "; boot"),
+                          MUL_REPR_Q, seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
+
+    # ---- Inside the bootstrapping -----------------------------------------------------
+    # FIG 7a (boot, the 8 checkpoints between its sub-steps).
     "boot_outside": steps(dict(BOOT, stage="boot", pipeline="mul x4; boot"), BOOT_STEPS,
                           seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
-    # boot_eval necesita slots < N/2: con logSlots = logN-1 el fork no inyecta (imprime "Error en boot").
-    "boot_eval": steps(dict(BOOT, stage="boot_eval", pipeline="mul x4; boot", logSlots=2), BOOT_EVAL_STEPS,
-                       seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
+    # FIG 7b (inside evalExp). Needs slots < N/2: with logSlots = logN-1 the fork does not
+    # inject (it prints "Error en boot").
+    "boot_eval": steps(dict(BOOT, stage="boot_eval", pipeline="mul x4; boot", logSlots=2),
+                       BOOT_EVAL_STEPS, seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
-    # Fault en el cliente, pipeline con bootstrapping al final.
-    # Las variantes viejas con op_depth 1/2 eran la misma campania (op_depth no aplica al
-    # cliente, y ahora el probe las rechaza), asi que quedan solo las pipelines distintas.
-    # logQ=660 no alcanza para el boot con logDelta=34 (HEAAN hace segfault): se usa 840.
-    "boot_ops": grid(dict(BOOT, logN=6, logSlots=4, logDelta=34),
+    # ---- Not plotted in this chapter --------------------------------------------------
+    # ML dataset: client fault, several pipelines ending in boot.
+    # logQ=660 is not enough for the boot with logDelta=34 (HEAAN segfaults): 840.
+    "boot_ops": grid(dict(BOOT, logSlots=4, logDelta=34),
                      pipeline=["add; mul x3; rot 1; boot", "add; mul x3; rot 2; boot",
                                "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
                      stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
@@ -162,35 +144,7 @@ GROUPS = {
                                      "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
                            stage=["encrypt_c0", "encrypt_c1"], logSlots=[1, 2, 3],
                            seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
-
-    "asplos_mul": steps(dict(ASPLOS, stage="mul"), MUL_STEPS, seeds=[1], inputs=[1]),
-    "asplos_add": steps(dict(ASPLOS, stage="add"), ADD_STEPS, seeds=[1], inputs=[1]),
 }
 
-BASE_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=1,
-              logN=6, logSlots=5, logQ=60, logDelta=25, bitsPerCoeff=64)
-
-BASE_OpenFHE_TACO = dict(binary="fi_openfhe", results_dir=RESULTS_TACO, isExhaustive=1,
-              logN=4, logSlots=2, logQ=60, logDelta=50, bitsPerCoeff=64, withNTT=0, mult_depth=3)
-
-BOOT_TACO = dict(binary="fi_heaan", results_dir=RESULTS_TACO, isExhaustive=0, numSamples=NUM_SAMPLES,
-            logN=6, logSlots=4, logQ=840, logDelta=40, bitsPerCoeff=860)
-
-GROUPS_TACO = {
-        "mul_taco":           grid(dict(BASE_TACO, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "logQ_taco":          grid(dict(BASE_TACO, logQ=45, logDelta=15), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "gap_add_taco":       grid(dict(BASE_TACO, logSlots=3, pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "gap_mul_taco":       grid(dict(BASE_TACO, logSlots=3, pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_add_taco":  grid(dict(BASE_OpenFHE_TACO,  pipeline="add"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_mul1_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_RNS_mul3_taco": grid(dict(BASE_OpenFHE_TACO,  pipeline="mul x3"), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
-        "Open_NTT_add_taco":  grid(dict(BASE_OpenFHE_TACO,  pipeline="add", withNTT=1, mult_depth=0), stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],  seed=SEEDS, seed_input=INPUTS),
-        "boot_taco":          grid(dict(BOOT_TACO), pipeline=["mul x3", "mul x3; boot", "pmul x3; boot", "mul x5; boot", "mul; boot", "boot"],stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"], seed=SEEDS, seed_input=INPUTS),
-        "mul_multiBit_taco":           grid(dict(BASE_TACO, pipeline="mul"), amountBits=[3,6], stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"],  seed=SEEDS, seed_input=INPUTS),
-        }
-ALL_GROUPS = {**GROUPS, **GROUPS_TACO}
-assert len(ALL_GROUPS) == len(GROUPS) + len(GROUPS_TACO), "a group name is defined twice"
-
 if __name__ == "__main__":
-    main(ALL_GROUPS, __doc__)
-
+    main(GROUPS, __doc__)

@@ -14,7 +14,7 @@ struct CampaignStartRecord {
 struct CampaignEndRecord {
     uint32_t campaign_id;
     uint64_t total_bitFlips;
-    uint64_t sdc_count;
+    uint64_t detected_count;   // injections where OpenFHE's SDC detector fired (always 0 in HEAAN)
     uint64_t duration_minutes;
     double l2_P95;
     double l2_P99;

@@ -47,7 +47,7 @@ CASES=(
   "heaannn_hidden      | fi_heaan_nn   | --stage hidden_layer --op_step 4 $NN_H"
   "heaannn_mul         | fi_heaan_nn   | --stage mul --op_step 25 $NN_H"
   "openfhenn_cheby     | fi_openfhe_nn | --stage cheby_tanh3 --op_step 9 $NN_O"
-    "openfhe_add_inside  | fi_openfhe | --isExhaustive 1 --stage add --op_step 1 --pipeline 'add' $OFHE_S"
+  "openfhe_add_inside  | fi_openfhe | --isExhaustive 1 --stage add --op_step 1 --pipeline 'add' $OFHE_S"
   "openfhe_mul_inside  | fi_openfhe | --isExhaustive 1 --stage mul --op_step 6 --pipeline 'mul' $OFHE_S"
 )
 if [[ "$SLOW" == "--slow" ]]; then
@@ -70,8 +70,9 @@ MUST_FAIL=(
   "heaannn_mal_clasif  | fi_heaan_nn   | --stage encode $NN_H --seed_input 3            | The plain network misclassifies the image"
   "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H          | --pipeline must be left empty"
   "openfhenn_mul       | fi_openfhe_nn | --stage mul $NN_O                              | never reach"
-  "heaan_sin_niveles   | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x3' $HEAAN_S | needs more than logQ"
+  "heaan_no_levels   | fi_heaan   | --isExhaustive 1 --stage encode --pipeline 'mul x3' $HEAAN_S | needs more than logQ"
   "openfhe_step_fuera  | fi_openfhe | --isExhaustive 1 --stage mul --op_step 11 --pipeline 'mul' $OFHE_S      | op_step 0..10"
+  "heaan_boot_short    | fi_heaan   | --isExhaustive 0 --numSamples 1 --stage encrypt_c0 --pipeline 'mul; boot' --logN 4 --logQ 600 --logDelta 30 --logSlots 3 --bitsPerCoeff 610 --seed 1 --seed_input 1 | needs logQ >"
 )
 
 

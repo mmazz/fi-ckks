@@ -52,8 +52,7 @@ void CampaignLogger::log(const BitflipResult& r) {
     std::lock_guard<std::mutex> g(mtx_);
     buffer_.push_back(r.row());
     total_++;
-    if (r.detected) sdc_++;
-
+    if (r.detected) detected_++;
     if (buffer_.size() >= flush_threshold_)
         flush();
 }

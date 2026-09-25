@@ -71,10 +71,18 @@ void backend_prepare_args(CampaignArgs& args)
     args.withNTT   = false;        // OpenFHE only
     args.scaleTech = "none";       // OpenFHE only
     args.dnum      = 0;            // OpenFHE only
-    // Each level-consuming op costs logDelta bits of logq, and bootstrapping needs the
-    // ciphertext to still be above logDelta+10 (the logq we hand to bootstrapAndEqual).
-    // Without this check HEAAN indexes qpows[] with a negative exponent.
+    // Replay the pipeline on logq and fail here, with a message, instead of letting
+    // HEAAN index qpows[] with a negative logq (segfault).
+    //  - pmul / mul / scalar: one rescale by logDelta.
+    //  - boot: modDown to logq_boot, raise to logQ, then bootstrapAndEqual spends
+    //    logNh + (6 + logI + logT) * p + logT + logI + 1 bits of that logQ, with
+    //    p = logq_boot + 4 (the logp given to addBootKey) and logT = logI = 4
+    //    (Scheme.cpp: divByPo2 by logNh, 1 rescale in coeffToSlot, 12 rescales +
+    //    logT+1 + logI in evalExp, 1 rescale in slotToCoeff).
+    constexpr long kLogT = 4, kLogI = 4;
     const long logq_boot = long(args.logDelta) + 10;
+    const long boot_p    = logq_boot + 4;
+    const long boot_cost = long(args.logN) - 1 + (6 + kLogI + kLogT) * boot_p + kLogT + kLogI + 1;
     long logq = long(args.logQ);
     for (const Op& op : args.ops) {
         if (op.type == OpType::Boot) {
@@ -82,7 +90,12 @@ void backend_prepare_args(CampaignArgs& args)
                 throw std::invalid_argument(
                     "heaan: not enough modulus left for 'boot' (logq=" + std::to_string(logq) +
                     " < logDelta+10=" + std::to_string(logq_boot) + ")");
-            logq = long(args.logQ);          // bootstrapping restores the chain
+            logq = long(args.logQ) - boot_cost;
+            if (logq <= 0)
+                throw std::invalid_argument(
+                    "heaan: 'boot' needs logQ > " + std::to_string(boot_cost) +
+                    " with logN=" + std::to_string(args.logN) +
+                    " and logDelta=" + std::to_string(args.logDelta));
             continue;
         }
         if (is_mult(op.type)) logq -= long(args.logDelta);
@@ -92,6 +105,7 @@ void backend_prepare_args(CampaignArgs& args)
                 " with logDelta=" + std::to_string(args.logDelta));
     }
 }
+
 
 BackendContext* setup_campaign(const CampaignArgs& args)
 {

@@ -219,8 +219,6 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
     ax.grid(True, ls="--", alpha=0.3)
     if subset_label:
         ax.set_title(subset_label, fontsize=FONT, pad=26)
-    if vary or args.labels or args.band == "std" or args.minmax:
-        ax.legend(fontsize=FONT - 6, frameon=False)
     if legend and (vary or args.labels or args.band == "std" or args.minmax):
         ax.legend(fontsize=FONT - 6, frameon=False)
 
