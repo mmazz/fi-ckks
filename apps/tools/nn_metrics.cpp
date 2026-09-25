@@ -146,7 +146,7 @@ int main(int argc, char** argv)
         std::cout << "plain vs ckks agreement: " << agree << "/" << labels.size()
                   << std::scientific << std::setprecision(2)
                   << ", logit relative error: mean " << sum_rel / double(labels.size())
-                  << ", worst" << worst_rel << "\n";
+                  << ",worst" << worst_rel << "\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << '\n';

@@ -136,6 +136,6 @@ TEST(probe_measures_limbs_and_bits)
 
 int main()
 {
-    std::cout << "== OpenFHE a nivel ciphertext ==\n";
+    std::cout << "== OpenFHE at the ciphertext level ==\n";
     return check::run_all();
 }

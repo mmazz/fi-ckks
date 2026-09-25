@@ -58,7 +58,7 @@ def parse_args():
                    help="how to combine the coefficients of each bit")
     p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q","minus_level"], default="none",
                    help="x axis: bit | bit - logDelta | bit / logQ | bit - logq of the injection level")
-    p.add_argument("--drop_coeffs", nargs="*", default=[], help="coeficientes a excluir: 0 N/2 ...")
+    p.add_argument("--drop_coeffs", nargs="*", default=[], help="coefficients to be excluded: 0 N/2 ...")
     p.add_argument("--band", nargs="?", const="p10_90", default=None, choices=["p10_90", "std"],
                    help="shaded band across coefficients: p10_90 (default if no value) or std (mean +- 1 std)")
     p.add_argument("--minmax", action="store_true",

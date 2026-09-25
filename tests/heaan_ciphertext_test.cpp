@@ -121,6 +121,6 @@ TEST(client_flip_changes_one_coeff_and_restores)
 
 int main()
 {
-    std::cout << "== HEAAN a nivel ciphertext ==\n";
+    std::cout << "== HEAAN at the ciphertext level ==\n";
     return check::run_all();
 }

@@ -85,7 +85,7 @@ def main(groups, description):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("groups", nargs="*", help="groups to run")
     ap.add_argument("--jobs", type=int, default=1, help="parallel processes")
-    ap.add_argument("--dry-run", action="store_true", help="only prints the comands")
+    ap.add_argument("--dry-run", action="store_true", help="only prints the commands")
     args = ap.parse_args()
 
     if not args.groups:

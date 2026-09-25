@@ -115,7 +115,6 @@ TEST(probe_reaches_every_stage)
 TEST(probe_rejects_unreachable_point)
 {
     CtxPtr ctx = make_ctx(g_args);
-    const bool heaan = g_args.library == "heaan";
     Injector probe = Injector::probe(Stage::Mul, 0, 999);
     run_iteration(ctx.get(), g_args, probe);
     CHECK_THROWS(probe.finish());

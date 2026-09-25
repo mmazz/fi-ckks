@@ -76,7 +76,7 @@ def sweep_q(stage, seeds=SEEDS, inputs=INPUTS):
 
 GROUPS = {
     # ---- Null pipeline -------------------------------------------------------------
-    # FIG 1 (seed variability). 25x25 repetitions; the figure compares the 3x3 average
+    # FIG 1 (seed variability). 25x25 repetitions; the figure compares the 2x4 average
     # (what every other group uses) against the 25x25 one. c1 is the non-trivial case:
     # its error is 2^b X^i * s, so it depends on the key (--seed). c0 does not.
     "enc_seeds": grid(dict(BASE), stage=ENC, seed=SEEDS_ANALYSIS, seed_input=SEEDS_ANALYSIS),

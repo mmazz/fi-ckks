@@ -198,7 +198,7 @@ def main():
 
     camps = select(load_campaigns(args.results), **filters)
     if camps.empty:
-        sys.exit(f"No hay campanias terminadas que cumplan {filters}")
+        sys.exit(f"There are no completed campaigns that meet the requirements {filters}")
 
     steps = parse_op_steps(args.op_step, camps["op_step"].unique())
     camps = camps[camps["op_step"].isin(steps)]
@@ -223,7 +223,7 @@ def main():
         out = IMG_DIR / f"{args.title}_op_step_{step}"
         fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
         fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=120)
-        print(f"op_step={step}: {len(cells)} celdas, {n_seeds} seeds -> {out}.png")
+        print(f"op_step={step}: {len(cells)} cells, {n_seeds} seeds -> {out}.png")
         if args.show:
             plt.show()
         plt.close(fig)

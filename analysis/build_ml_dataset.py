@@ -1,6 +1,6 @@
 """Tabla de features para ML: una fila por (config_id, limb, coeff, bit), target = err_bits_mean.
 
-    python3 build_ml_dataset.py ../results  -> ../results/agg/ml_dataset.parquet
+    python3 build_ml_dataset.py ../results  -> ../results/ml_dataset.parquet
 """
 import sys
 from pathlib import Path
