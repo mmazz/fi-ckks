@@ -164,13 +164,13 @@ def plot(stages, args):
     nrows = -(-n // ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows),
                              sharex=True, sharey=True, squeeze=False)
-    rates = {}
+    n_min = {}      # fewest injections behind any bit of each panel
     for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):
         curve = per_bit(data)
-        rates[stage] = (register_rate(curve,  register_width(cfg)), int(curve["n"].min()))
+        n_min[stage] = int(curve["n"].min())
         (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
         mark_params(ax, cfg)
-        ax.set_title(f"{stage}   P(SDC)={rates[stage][0]:.2f}", fontsize=FONT - 3, pad=20)
+        ax.set_title(stage, fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
         ax.tick_params(labelsize=FONT - 5)
     for ax in axes.flat[n:]:
@@ -189,17 +189,17 @@ def plot(stages, args):
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
                fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.05))
     fig.tight_layout()
-    return fig, rates
+    return fig, n_min
 
 
 def main():
     args = parse_args()
     stages = load_stages(args)
-    fig, rates = plot(stages, args)
+    fig, n_min = plot(stages, args)
 
-    print(f"  {'stage':12s} {'P(SDC)':>7s} {'min n/bit':>10s}")
-    for stage, (rate, n_min) in rates.items():
-        print(f"  {stage:12s} {rate:7.3f} {n_min:10d}")
+    print(f"  {'stage':12s} {'min n/bit':>10s}")
+    for stage, n in n_min.items():
+        print(f"  {stage:12s} {n:10d}")
 
     rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
     out = rm.IMG_DIR / args.title

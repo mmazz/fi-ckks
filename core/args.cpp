@@ -78,7 +78,7 @@ void validateArgs(const CampaignArgs& args)
         throw std::invalid_argument("amountBits > bitsPerCoeff: the sweep would be empty");
 }
 
-std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
+std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args, uint32_t reg_bits)
 {
     std::vector<uint32_t> res;
     res.reserve(45);
@@ -88,9 +88,9 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
     const uint32_t maxBits  = args.bitsPerCoeff;
     if (maxBits == 0) return res;
     const uint32_t M = maxBits - 1;
-
-    // [start, end] inclusivo, recortado a [0, M]. Un rango valido nunca se descarta.
-    auto addRange = [&](uint32_t start, uint32_t end)
+    // [start, end] inclusive, clipped to [0, M]. A valid range is never dropped.
+    // max_count caps how many points it gets.
+    auto addRange = [&](uint32_t start, uint32_t end, uint32_t max_count = 15)
     {
         if (start > M) return;
         end = std::min(end, M);
@@ -102,6 +102,7 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
         else if (diff < 5)   count = diff - 1;
         else if (diff < 30)  count = 5;
         else                 count = 15;
+        count = std::min(count, max_count);
 
         for (uint32_t i = 0; i < count; i++) {
             const uint32_t v = (count == 1)
@@ -110,24 +111,43 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
             if (res.empty() || res.back() != v) res.push_back(v);
         }
     };
-    // HEAAN encodes at scale 2^(logDelta + logQ) and encryptMsg() shifts right by logQ, so
-    // the encode register sits logQ bits above a ciphertext: every bit below logQ is
-    // rounded away. Keep a few of those as a control and sample every bit above.
+    // HEAAN adds the encoded plaintext to the encryption mod qQ = 2^(logq + logQ) and then
+    // shifts right by logQ: a flip at bit b < logQ is rounded away, bit logQ + k acts
+    // exactly as bit k of a fresh ciphertext, and bit >= 2*logQ wraps modulo qQ. So sample
+    // the ciphertext pattern shifted up by logQ, plus a few control points below.
     const bool heaan_encode = args.library.rfind("heaan", 0) == 0 && args.stage == Stage::Encode;
-    if (heaan_encode) {
-        addRange(0, logQ - 1);
-        for (uint32_t b = logQ; b <= M; ++b) res.push_back(b);
+    if (heaan_encode && maxBits > logQ) {
+        addRange(0, logQ - 1, 5);
+        CampaignArgs cipher = args;
+        cipher.stage = Stage::EncryptC0;
+        cipher.bitsPerCoeff = maxBits - logQ;
+        for (uint32_t b : bitsToFlipGenerator(cipher)) res.push_back(b + logQ);
         return res;
     }
     uint32_t gapDelta = 1;
     if      (logDelta >= 50) gapDelta = 5;
     else if (logDelta >= 30) gapDelta = 3;
 
-    if (logDelta >= gapDelta) addRange(0, logDelta - gapDelta);
-    addRange(logDelta, logQ);
+    // Top of the register at the injection point. In HEAAN it is logq of that level, which
+    // the probe measures (reg_bits): 70 bits for a logit after the 5 levels of the network
+    // with logQ=220, ~2*logQ for the key-switching steps. Spreading the points up to logQ
+    // there would leave 2 or 3 of them inside the register. OpenFHE keeps logQ: the probe
+    // returns the narrowest limb, which is not the top of limb 0.
+    const bool heaan = args.library.rfind("heaan", 0) == 0;
+    const uint32_t top = std::min(M, (heaan && reg_bits > logDelta) ? reg_bits : logQ);
 
-    const uint32_t gapQ = (maxBits - logQ > 10) ? 3 : 1;
-    addRange(logQ + gapQ, M);
+    if (logDelta >= gapDelta) addRange(0, logDelta - gapDelta);
+    // [logDelta, top] is where the error goes from masked to SDC: up to kMidPoints evenly
+    // spaced points (every bit if the range is that short).
+    constexpr uint32_t kMidPoints = 30;
+    if (logDelta <= top) {
+        const uint32_t stride = std::max<uint32_t>(1, (top - logDelta + kMidPoints) / kMidPoints);
+        for (uint32_t b = logDelta; b <= top; b += stride) res.push_back(b);
+        if (res.back() != top) res.push_back(top);
+    }
+    // Above the register the flip wraps modulo q and is masked: a few control points only.
+    const uint32_t gapQ = (maxBits - top > 10) ? 3 : 1;
+    addRange(top + gapQ, M, 5);
     // HEAAN + boot: a fault in bit b is masked by the boot iff b minus the bits consumed
     // before the boot is >= logq_boot = logDelta + 10 (same constant as backends/heaan.cpp).
     // The coarse points above are ~(logQ - logDelta)/14 bits apart, far too sparse to locate

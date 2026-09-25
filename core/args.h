@@ -77,8 +77,8 @@ void printBaselineComparison(
 // -----------------------------
 
 std::vector<uint32_t> extraBitsBetweenDeltaAndQ(const CampaignArgs& args);
-std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args);
-
+// reg_bits: register width measured by the probe (0 = unknown, use logQ).
+std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args, uint32_t reg_bits = 0);
 void validateArgs(const CampaignArgs& args);
 std::vector<double> uniform_dist(uint32_t batchSize, int64_t  logMin, int64_t logMax, uint64_t seed, bool verbose=false);
 

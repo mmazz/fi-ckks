@@ -28,7 +28,7 @@ def main():
 
     # HEAAN encode: keep only the bits above logQ and shift them so the first one lands at 1.
     shifted = (data["library"] == "heaan") & (data["stage"] == "encode")
-    data = data[~shifted | (data["bit"] > data["logQ"])].copy()
+    data = data[~shifted | (data["bit"] >= data["logQ"])].copy()
     shifted = (data["library"] == "heaan") & (data["stage"] == "encode")
     data.loc[shifted, "bit"] -= data.loc[shifted, "logQ"]
 

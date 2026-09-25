@@ -18,6 +18,7 @@ struct Sink {
     bool     classifier   = false;
     size_t   golden_class = 0;          // argmax del golden CKKS (solo si classifier)
     uint64_t iters        = 0;
+    uint32_t reg_bits     = 0;          // register width measured by the probe
 };
 
 static size_t argmax(const std::vector<double>& v)
@@ -115,12 +116,18 @@ static void run_one(BackendContext* ctx, CampaignArgs& args,
     if (std::isfinite(m.l2_rel_error)) s.norms.push_back(m.l2_rel_error);
 }
 
+
 static void run_exhaustive(BackendContext* ctx, CampaignArgs& args, const std::vector<double>& ckks_golden, Sink& s)
 {
     const uint32_t N = (1U << args.logN);
+    // HEAAN encode: encryptMsg adds the plaintext mod qQ and shifts right by logQ, so every
+    // bit below logQ is rounded away (masked). Start at logQ: bit logQ + k then lines up
+    // with bit k of encrypt_c0 (encode_shift.py subtracts logQ).
+    const bool heaan_encode = args.library.rfind("heaan", 0) == 0 && args.stage == Stage::Encode;
+    const uint32_t first_bit = heaan_encode ? std::min(args.logQ, args.bitsPerCoeff) : 0;
     for (uint32_t limb = 0; limb < s.num_limbs; limb++)
         for (uint32_t coeff = 0; coeff < N; coeff++)
-            for (uint32_t bit = 0; bit + args.amountBits <= args.bitsPerCoeff; bit++)
+            for (uint32_t bit = first_bit; bit + args.amountBits <= args.bitsPerCoeff; bit++)
                 run_one(ctx, args, ckks_golden, make_fault(args, limb, coeff, bit), s);
 }
 
@@ -130,7 +137,7 @@ static void run_random(BackendContext* ctx, CampaignArgs& args, const std::vecto
 
     // Con amountBits > 1 las posiciones mas altas no entran: se descartan.
     std::vector<uint32_t> bits_to_flip;
-    for (uint32_t bit : bitsToFlipGenerator(args))
+    for (uint32_t bit : bitsToFlipGenerator(args, s.reg_bits))
         if (bit + args.amountBits <= args.bitsPerCoeff) bits_to_flip.push_back(bit);
     std::set<std::pair<uint32_t, uint32_t>> seen;
     for (uint32_t sample = 0; sample < args.numSamples; sample++) {
@@ -213,6 +220,7 @@ int main(int argc, char** argv)
                                                      ckks_golden.size());
         Sink s{logger, vlogger.get()};
         s.num_limbs    = probe.probed_limbs();
+        s.reg_bits     = real_bits;
         s.classifier   = ctx->classifier;
         s.golden_class = argmax(ckks_golden);
 
