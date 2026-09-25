@@ -15,6 +15,7 @@ RES1     ?= ../results_client
 RES2     ?= ../results_server
 # scripts/TACO_campaings.py: ASPLOS panels (mul_panels, client_panels)
 RES      ?= ../results
+RES_NN      ?= ../results_NN
 SHOW     ?=
 
 CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
@@ -144,47 +145,75 @@ ch2: $(CH2)
 $(CH2): RES = $(RES2)
 
 c2_fig01:
-	$(HEAT)  --title c2_fig01_add_heat --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
+	$(HEAT)  --title c2_fig01_add_heat         --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --tol 3
+	$(HEAT)  --title c2_fig01_add_heat_aligned --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig01_add_heat_other   --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap other --tol 3
 	$(CURVE) --title c2_fig01_add      --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" \
 	    --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
 c2_fig02:
-	$(HEAT)  --title c2_fig02_mul_heat --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul
+	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --gap other --tol 3
 	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
+	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul \
+	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 
 # Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
 c2_fig02b:
-	$(HEAT)  --title c2_fig02b_mul_depth_heat --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth
+	$(HEAT)  --title c2_fig02b_mul_depth_heat         --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig02b_mul_depth_heat_aligned --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02b_mul_depth_heat_other   --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --gap other --tol 3
 	$(CURVE) --title c2_fig02b_mul_depth      --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
+	$(CURVE) --title c2_fig02b_mul_depth_gap  --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" \
+	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 c2_fig03:
-	$(HEAT)  --title c2_fig03_rescale_heat --where $(RESC)  stage=rescale "pipeline=mul x2" --per op_depth
-	$(CURVE) --title c2_fig03_rescale      --where $(RESC)  stage=rescale "pipeline=mul x2" \
+	$(HEAT)  --title c2_fig03_rescale_heat         --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig03_rescale_heat_aligned --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig03_rescale_heat_other   --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig03_rescale      --where $(RESC) stage=rescale "pipeline=mul x2" \
 	    --vary op_step --per op_depth $(YL)
+	$(CURVE) --title c2_fig03_rescale_gap  --where $(RESC) stage=rescale "pipeline=mul x2" \
+	    --vary op_step --per op_depth --split gap $(YL)
 
 c2_fig04:
-	$(HEAT)  --title c2_fig04_rot_heat --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2"
+	$(HEAT)  --title c2_fig04_rot_heat         --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --tol 3
+	$(HEAT)  --title c2_fig04_rot_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig04_rot_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --gap other --tol 3
 	$(CURVE) --title c2_fig04_rot      --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" \
 	    --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
 
+
 # Mixed pipeline, fault in the 1st or the 2nd mul.
 c2_fig05:
-	$(CURVE) --title c2_fig05_mix --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	$(HEAT)  --title c2_fig05_mix_heat         --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_aligned --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_other   --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig05_mix      --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
+	$(CURVE) --title c2_fig05_mix_gap  --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 # Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
 c2_fig06:
-	$(CURVE) --title c2_fig06_mix_boot  --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	$(HEAT)  --title c2_fig06_mix_boot_heat         --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_aligned --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_other   --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig06_mix_boot      --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
+	$(CURVE) --title c2_fig06_mix_boot_gap  --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
 
 c2_fig07:
-	$(HEAT) --title c2_fig07_boot_heat \
-	    --where $(BOOTP) stage=boot "pipeline=mul x4; boot"
-	$(HEAT) --title c2_fig07_boot_eval_heat  \
-	    --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
-
+	$(HEAT) --title c2_fig07_boot_heat         --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --tol 3
+	$(HEAT) --title c2_fig07_boot_heat_aligned --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --gap aligned --tol 3
+	$(HEAT) --title c2_fig07_boot_heat_other   --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --gap other --tol 3
+	$(HEAT) --title c2_fig07_boot_eval_heat         --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --tol 3
+	$(HEAT) --title c2_fig07_boot_eval_heat_aligned --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap aligned --tol 3
+	$(HEAT) --title c2_fig07_boot_eval_heat_other   --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap other --tol 3
 # ======================================================================================
 # Evidence: claims made in the text, not plotted in the thesis
 # ======================================================================================
@@ -219,7 +248,7 @@ ev_mul_rns:
 # ======================================================================================
 # Not thesis: other papers and workloads
 # ======================================================================================
-NN = python3 nn_sdc_curve.py --results ../results_NN $(SHOW)
+NN = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
 nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
 nn_client_ofhe:  ; $(NN) --title nn_client_openfhe     --where library=openfheNN

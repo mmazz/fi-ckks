@@ -18,20 +18,20 @@ so an overflow (inf) counts as a very large error instead of disappearing.
 import argparse
 import sys
 from pathlib import Path
-
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils.results import (ERR_CEIL, load_campaigns, load_data, parse_value,  # noqa: E402
+from utils.results import (ERR_CEIL, ERR_FLOOR, load_campaigns, load_data, parse_value,  # noqa: E402
                            require_single_config, select)
 
 FONT = 20
 TICK_FONT = 14
 IMG_DIR = Path(__file__).resolve().parent / "img"
 ERR_CEIL_BITS = np.log2(ERR_CEIL)   # err_bits of an overflowed flip (see utils/results.py)
-
+ERR_FLOOR_BITS = np.log2(ERR_FLOOR) # err_bits of a fully masked flip (error exactly 0)
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -98,17 +98,23 @@ def plot(curves, groups, cfg, name, args):
     # bits) does not leave empty stripes.
     bits = curves.columns.to_numpy()
     fig, ax = plt.subplots(figsize=(14, 0.35 * len(curves) + 2.5))
-    cmap = plt.get_cmap("Blues").copy()     # sequential: one hue, light = small error
+
+    # Sequential, light = small error. It starts at 15% of Blues so the smallest real error
+    # is still visibly blue and never looks like the white of a fully masked bit.
+    cmap = mcolors.ListedColormap(plt.get_cmap("Blues")(np.linspace(0.15, 1.0, 256)))
     cmap.set_bad("#dddddd")                 # bit not flipped at this step
     cmap.set_over("black")                  # saturated: the flip overflowed (inf l2_rel)
+    cmap.set_under("white")                 # error exactly 0 in every coefficient: masked
     values = curves.to_numpy(dtype=float)
-    # The scale comes from the non-saturated cells: an overflow is clipped to
-    # log2 = ERR_CEIL_BITS and would squash every real difference into one color.
-    real = values[np.isfinite(values) & (values < ERR_CEIL_BITS - 1)]
+    # The scale comes from the cells with a real error: an overflow is clipped to
+    # ERR_CEIL_BITS and a masked flip sits at ERR_FLOOR_BITS, and either one would squash
+    # every real difference into one color.
+    masked = values <= ERR_FLOOR_BITS + 1e-9
+    real = values[np.isfinite(values) & ~masked & (values < ERR_CEIL_BITS - 1)]
     vmin, vmax = (float(real.min()), float(real.max())) if real.size else (None, None)
     im = ax.imshow(np.ma.masked_invalid(values), aspect="auto", cmap=cmap,
                    interpolation="nearest", vmin=vmin, vmax=vmax)
-    cb = fig.colorbar(im, ax=ax, pad=0.01, extend="max")
+    cb = fig.colorbar(im, ax=ax, pad=0.01, extend="both")
     cb.set_label(r"mean $\log_2 L_2^{rel}$", fontsize=FONT - 4)
     cb.ax.tick_params(labelsize=TICK_FONT)
 
