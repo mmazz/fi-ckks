@@ -1,192 +1,234 @@
-# 	python3 bit_curve.py --title logN \
-    --where library=heaan stage=<stage> pipeline=<...> logQ=<...> logDelta=<...> \
-    --vary logN \
-    --labels 'logN=6 – Mean $L_2$' 'logN=16 – Mean $L_2$' \
-    --ylabel 'L$_2$ norm (symlog)'
+# Figures of the thesis results chapters. One target per figure; the parameters of each
+# block are the ones of scripts/clientCampaigns.py and scripts/serverCampaigns.py.
+#
+#   make check          # health check of the results dirs, BEFORE plotting
+#   make ch1            # every figure of chapter 1 (client side)
+#   make ch2            # every figure of chapter 2 (server side)
+#   make ev             # the EVIDENCE figures (claims backed up but not shown)
+#   make c1_fig07 SHOW=--show
+#
+# Output: img/<title>.pdf and .png. Chapter 1 files start with c1_, chapter 2 with c2_,
+# evidence with ev_.
 
-RES   ?= ../results
-LIB   ?= heaan
-CURVE  = python3 bit_curve.py    --results $(RES)
-REG    = python3 register_map.py --results $(RES)
-P      = library=$(LIB) logN=6 logSlots=4 logQ=60 logDelta=25 bitsPerCoeff=64
-P2      = library=$(LIB) logN=4 logQ=1200 logDelta=35 bitsPerCoeff=1210 logSlots=3 stage=encrypt_c0 pipeline="mul x6; boot"
-FLAT   = python3 flat_curve.py   --results $(RES)
-CMP    = python3 register_map_compare.py --results $(RES)
-PA     = library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64
+RES      ?= ../results
+RES_BOOT ?= ../results_boot
+SHOW     ?=
 
-# datapath figure: panels chosen by their number in utils/sites.py
-mul_panels:    ; $(CMP) --title mul_panels    --diagram mul    --panels 1 3 4 7 8 9 --no-legend --where $(PA) "pipeline=add; mul"
-client_panels: ; $(CMP) --title client_panels --diagram client --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
+CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
+SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
+HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
+REG    = python3 register_map.py --results $(RES) $(SHOW)
+YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
 
-seeds:
-	python3 bit_curve.py --title enc_seeds --where library=heaan\
-		stage=encrypt_c0 logN=6 logQ=60 logDelta=40 logSlots=5 \
-		isExhaustive=1 --drop_coeffs N/2 --band std \
-		--minmax --linthresh 1 --show
+# 3x3 repetitions: enc_seeds has 25x25 of the same config, the other figures use 3x3.
+R3     = seed in [1, 2, 3] and seed_input in [1, 2, 3]
+ENC    = stage in ["encrypt_c0", "encrypt_c1"]
 
+.PHONY: check ch1 ch2 ev all
+all: ch1 ch2 ev
 
-LogDelta:
-	python3 bit_curve.py --title logDelta \
-	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 \
-	    --query 'logDelta in [25, 35, 45, 55]' \
-	    --vary logDelta \
-	    --labels 'logDelta=25 Mean $$L_2$$' 'logDelta=35 Mean $$L_2$$' \
-	             'logDelta=45 Mean $$L_2$$' 'logDelta=55 Mean $$L_2$$' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+check:
+	python3 check_results.py $(RES)
+	python3 check_results.py $(RES_BOOT)
 
-LogQ:
-	python3 bit_curve.py --title logQ \
-	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
-	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
-	    --vary logQ --xnorm over_q \
-	    --labels 'logQ=40 Mean $$L_2$$' 'logQ=60 Mean $$L_2$$' \
-	             'logQ=80 Mean $$L_2$$' 'logQ=100 Mean $$L_2$$' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+# ======================================================================================
+# Chapter 1: client side
+# ======================================================================================
+BASE       = library=heaan logN=6 logSlots=5 logQ=60 logDelta=40
+CLIENT     = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30 bitsPerCoeff=64
+CLIENT_MUL = library=heaan logN=6 logSlots=3 logQ=150 logDelta=30 bitsPerCoeff=170
+OFHE       = library=openfhe logN=6 logQ=60 logDelta=30 bitsPerCoeff=64
+BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860
+# logSlots of the OpenFHE figures (3 or 5)
+SL        ?= 3
 
-PlainVsCipher:
-	python3 encode_shift.py --title plain_vs_cipher \
-	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=40 \
-	    --query '(stage == "encode" and bitsPerCoeff == 128) or (stage in ["encrypt_c0", "encrypt_c1"] and bitsPerCoeff == 64)' \
-	    --vary stage \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
+      c1_fig09 c1_fig10 c1_fig11 c1_fig12 c1_fig13
+.PHONY: $(CH1)
+ch1: $(CH1)
 
-LibCompare:
-	python3 encode_shift.py --title plain_heaan_vs_openfhe \
-	    --where stage=encode pipeline= logN=6 logSlots=5 logQ=60 logDelta=40 \
+# Seed variability: band = min..max over the 25x25 repetitions of the per-bit curve.
+c1_fig01:
+	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
+	    --query '$(ENC)' --per stage --rep_spread $(YL)
+
+c1_fig02:
+	$(CURVE) --title c1_fig02_logN \
+	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
+	    --query '$(R3) and logSlots == logN - 1' \
+	    --vary logN --labels 'logN=6' 'logN=16' $(YL)
+
+c1_fig03:
+	$(SHIFT) --title c1_fig03_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
 	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
-	    --vary library \
-	    --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
 
-LogSlotsC0:
-	python3 bit_curve.py --title logSlots \
-	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logQ=60 logDelta=40 \
-	    --query 'logSlots in [3, 4, 5]' \
-	    --vary logSlots --split gap \
-	    --labels 'logSlots=3 Mean $$L_2$$' 'logSlots=4 Mean $$L_2$$' 'logSlots=5 Mean $$L_2$$' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+c1_fig04:
+	$(SHIFT) --title c1_fig04_encode_c0_c1 --where $(BASE) pipeline= \
+	    --query '$(R3) and ((stage == "encode" and bitsPerCoeff == 128) or ($(ENC) and bitsPerCoeff == 64))' \
+	    --vary stage $(YL)
 
-LogSlotsC1:
-	python3 bit_curve.py --title logSlots \
-	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logQ=60 logDelta=40 \
-	    --query 'logSlots in [3, 4, 5]' \
-	    --vary logSlots --split gap \
-	    --labels 'logSlots=3 Mean $$L_2$$' 'logSlots=4 Mean $$L_2$$' 'logSlots=5 Mean $$L_2$$' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+c1_fig05:
+	$(CURVE) --title c1_fig05_logDelta \
+	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta $(YL)
 
-LogInput:
-	python3 bit_curve.py --title logInput \
+# Same data, x = bit - logDelta: the curves should collapse into one.
+c1_fig05b:
+	$(CURVE) --title c1_fig05b_logDelta_shift \
+	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
+
+c1_fig06:
+	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
+	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
+	    --vary logQ --xnorm over_q $(YL)
+
+c1_fig07:
+	$(CURVE) --title c1_fig07_logSlots \
+	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
+	    --query '$(R3) and $(ENC) and logSlots in [3, 4, 5]' \
+	    --vary logSlots --split gap --per stage $(YL)
+
+c1_fig08:
+	$(CURVE) --title c1_fig08_input \
 	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=20 bitsPerCoeff=64 \
-	    --query 'logMax == logMin + 1 and stage in ["encrypt_c0", "encrypt_c1"]' \
-	    --vary logMin --per stage \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+	    --query 'logMax == logMin + 1 and $(ENC)' --vary logMin --per stage $(YL)
 
-addRot:
-	python3 bit_curve.py --title addRot \
-	    --where library=heaan pipeline="add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
-	    --query 'logSlots in [3, 4, 5]' \
-	    --vary logSlots --split gap --per stage \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+c1_fig09:
+	$(CURVE) --title c1_fig09_add_rot \
+	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
+	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
-mul:
-	python3 bit_curve.py --title mul \
-	    --where library=heaan logN=6 logSlots=4 logQ=120 logDelta=30 bitsPerCoeff=150 \
-	    --query 'pipeline in ["mul", "mul x2", "mul x3"]' \
-	    --vary pipeline --split gap --per stage \
-	    --labels 'mul' 'mul x2' 'mul x3' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+c1_fig10:
+	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
+	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
+	    --vary pipeline --split gap --per stage $(YL)
 
-boot:
-	python3 bit_curve.py --title boot --results ../results_boot \
-	    --where library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860 \
-	    --query 'pipeline in ["mul x4", "mul x4; boot"]' \
-	    --vary pipeline --per stage \
-	    --labels 'mul x4' 'mul x4; boot' \
-	    --ylabel 'L$$_2$$ norm (symlog)' --linthresh 1 --show
+c1_fig11:
+	$(CURVE) --title c1_fig11_boot --results $(RES_BOOT) --where $(BOOTP) \
+	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
+	    --vary pipeline --per stage $(YL)
 
-# --- taco ---
-boot_tacoC00:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c0" pipeline="boot"\
-	    --show
-boot_tacoC01:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c0" pipeline="mul; boot"\
-	    --show
-boot_tacoC03:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c0" pipeline="mul x3; boot"\
-	    --show
-boot_tacoC05:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c0" pipeline="mul x5; boot"\
-	    --show
-boot_tacoC1:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c1" pipeline="mul x3; boot"\
-	    --show
+c1_fig12:
+	$(CURVE) --title c1_fig12_rns_add_rot \
+	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
+	    --vary limb --per stage $(YL)
 
-boot_tacoDecC0:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="decrypt_c0" pipeline="mul x3; boot"\
-	    --show
+c1_fig13:
+	$(CURVE) --title c1_fig13_ntt \
+	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) \
+	    --per stage $(YL)
 
-boot_tacoDecC1:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="decrypt_c1" pipeline="mul x3; boot"\
-	    --show
+# ======================================================================================
+# Chapter 2: server side. Base figure of each op = heatmap op_step x bit (it also prints
+# the patterns and one representative per pattern), then the curves of a few steps.
+# ======================================================================================
+SERVER = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30
+DEPTH  = library=heaan logN=6 logSlots=3 logQ=160 logDelta=30 bitsPerCoeff=324
+MIX    = add; mul; rot 2; mul; add
 
+# Steps shown as curves: one per pattern, taken from what step_heatmap.py prints.
+ADD_SHOW  ?= 0, 2
+MUL_SHOW  ?= 0, 1, 4, 11, 14, 24
+ROT_SHOW  ?= 0, 1, 3, 6, 10
+MIX_DEPTH ?= 0
 
-boot_tacopmulC0:
-	python3 register_map.py --title boot --results ../results_taco \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-		stage="encrypt_c0" pipeline="pmul x3; boot"\
-	    --show
+CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
+.PHONY: $(CH2)
+ch2: $(CH2)
 
-NN     = python3 nn_sdc_curve.py --results ../results_NN
+c2_fig01:
+	$(HEAT)  --title c2_fig01_add_heat --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
+	$(CURVE) --title c2_fig01_add      --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" \
+	    --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
+c2_fig02:
+	$(HEAT)  --title c2_fig02_mul_heat --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul
+	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul \
+	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
+
+# Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
+c2_fig02b:
+	$(HEAT)  --title c2_fig02b_mul_depth_heat --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth
+	$(CURVE) --title c2_fig02b_mul_depth      --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" \
+	    --vary op_depth --per op_step --xnorm minus_level $(YL)
+
+c2_fig03:
+	$(HEAT)  --title c2_fig03_rescale_heat --where $(SERVER) bitsPerCoeff=64 stage=rescale "pipeline=mul x2" --per op_depth
+	$(CURVE) --title c2_fig03_rescale      --where $(SERVER) bitsPerCoeff=64 stage=rescale "pipeline=mul x2" \
+	    --vary op_step --per op_depth $(YL)
+
+c2_fig04:
+	$(HEAT)  --title c2_fig04_rot_heat --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2"
+	$(CURVE) --title c2_fig04_rot      --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" \
+	    --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
+
+# Mixed pipeline, fault in the 1st or the 2nd mul.
+c2_fig05:
+	$(CURVE) --title c2_fig05_mix --results $(RES_BOOT) --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	    --vary op_depth --per op_step --xnorm minus_level $(YL)
+
+# Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
+c2_fig06:
+	$(CURVE) --title c2_fig06_mix_boot --results $(RES_BOOT) --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
+
+c2_fig07:
+	$(HEAT) --title c2_fig07_boot_heat --results $(RES_BOOT) \
+	    --where $(BOOTP) stage=boot "pipeline=mul x4; boot"
+	$(HEAT) --title c2_fig07_boot_eval_heat --results $(RES_BOOT) \
+	    --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
+
+# ======================================================================================
+# Evidence: claims made in the text, not plotted in the thesis
+# ======================================================================================
+EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns
+.PHONY: $(EV)
+ev: $(EV)
+
+# Null pipeline: decrypt_cX lands on top of encrypt_cX.
+ev_decrypt:
+	$(CURVE) --title ev_decrypt --where $(BASE) bitsPerCoeff=64 pipeline= \
+	    --query '$(R3) and stage in ["encrypt_c0", "decrypt_c0", "encrypt_c1", "decrypt_c1"]' \
+	    --vary stage $(YL)
+
+# Null pipeline: decode vs encode.
+ev_decode:
+	$(CURVE) --title ev_decode --where $(BASE) bitsPerCoeff=128 pipeline= \
+	    --query 'stage in ["encode", "decode"]' --vary stage $(YL)
+
+# A fault at decryption only sees the level the pipeline ends at, not the pipeline:
+# after "mul x3" (logQ=150) the level is 60 = the null pipeline at logQ=60.
+ev_dec_mul:
+	$(CURVE) --title ev_dec_mul --where library=heaan logN=6 logSlots=3 logDelta=30 \
+	    --query 'stage in ["decrypt_c0", "decrypt_c1"] and ((pipeline == "mul x3" and logQ == 150) or (pipeline == "" and logQ == 60))' \
+	    --vary pipeline --per stage $(YL)
+
+# RNS + mul: probability of SDC per bit (the "it breaks everything" claim).
+ev_mul_rns:
+	$(CURVE) --title ev_mul_rns --where $(OFHE) pipeline=mul mult_depth=3 withNTT=0 logSlots=$(SL) \
+	    --metric is_sdc --per stage
+
+# ======================================================================================
+# Not thesis: other papers and workloads
+# ======================================================================================
+NN = python3 nn_sdc_curve.py --results ../results_NN $(SHOW)
 nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
 nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
 nn_client_ofhe:  ; $(NN) --title nn_client_openfhe     --where library=openfheNN
 
+# ASPLOS: datapath figure, panels chosen by their number in utils/sites.py
+CMP = python3 register_map_compare.py --results $(RES) $(SHOW)
+PA  = library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64
+mul_panels:    ; $(CMP) --title mul_panels    --diagram mul    --panels 1 3 4 7 8 9 --no-legend --where $(PA) "pipeline=add; mul"
+client_panels: ; $(CMP) --title client_panels --diagram client --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
 
-# --- cliente ---
-encrypt_c0:      ; $(CURVE) --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=
-encrypt_c0_reg:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline= --show
-encrypt_c0_reg_mul:  ; $(REG)   --title encrypt_c0 --where $(P) stage=encrypt_c0 pipeline=mul --show
-encrypt_c1:      ; $(CURVE) --title encrypt_c1 --where $(P) stage=encrypt_c1 pipeline=
-encrypt_c1_reg:  ; $(REG)   --title encrypt_c1 --where $(P) stage=encrypt_c1 pipeline= --show
-encrypt_c1_reg_mul:  ; $(REG)   --title encrypt_c1 --where $(P) stage=encrypt_c1 pipeline=mul --show
-gap:          ; $(CURVE) --title gap        --where $(P) stage=encrypt_c0 pipeline= --split gap
-#seeds:        ; $(CURVE) --title seeds      --where $(P) stage=encrypt_c-1 pipeline= --vary seed
-stages:       ; $(CURVE) --title stages     --where $(P) pipeline= --vary stage
-logQ:         ; $(CURVE) --title logQ       --where library=$(LIB) logN=6 stage=encrypt_c0 pipeline= --vary logQ --xnorm over_q
-libs:         ; $(CURVE) --title libs       --where logN=6 logQ=60 stage=encrypt_c0 pipeline= --vary library
-
-# same thing but as two curves on one axes, which is easier to compare than two panels
-gap_vary:     ; $(CURVE) --title gap_vary   --where $(P) stage=encrypt_c0 pipeline= --vary gap_aligned
-# --- naive scan: no averaging, one point per (coeff, bit) ---
-flat:         ; $(FLAT)  --title flat       --where $(P) stage=encrypt_c0 pipeline= --color gap
-flat_bit:     ; $(FLAT)  --title flat_bit   --where $(P) stage=encrypt_c0 pipeline= --color gap --order bit
-# --- rate curves: how OFTEN a flip is visible, next to how big it is ---
-sdc:          ; $(CURVE) --title sdc        --where $(P) stage=encrypt_c0 pipeline= --metric is_sdc --vary gap_aligned
-bad:          ; $(CURVE) --title bad        --where $(P) stage=encrypt_c0 pipeline= --metric frac_bad --vary gap_aligned
-detector:     ; $(CURVE) --title detector   --where library=openfhe stage=encrypt_c0 pipeline= --metric detected
-# --- servidor: una figura por op_step ---
-PS = library=$(LIB) logN=6 logSlots=4 logQ=120 logDelta=40 bitsPerCoeff=144
-add_inside:   ; $(CURVE) --title add_inside --where $(PS) stage=add "pipeline=add x2" --per op_step --split gap
-mul_inside:   ; $(CURVE) --title mul_inside --where $(PS) stage=mul pipeline=mul      --per op_step --split gap
-mul_reg:      ; $(REG)   --title mul_inside --where $(PS) stage=mul pipeline=mul      --op_step all
-
-
-test: ; python3 register_map.py --where library=heaan logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c0 pipeline="add x2; rot 2" --results "../results" --show
-test1: ; python3 register_map.py --where library=heaan logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c1 pipeline="add x2; rot 2" --results "../results" --show
-test2: ; python3 register_map.py --where library=openfhe logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c0 pipeline="add x2; rot 2" --results "../results" --show
-test3: ; python3 register_map.py --where library=openfhe logN=4 logSlots=2 logQ=60 logDelta=40  bitsPerCoeff=64 stage=encrypt_c1 pipeline="add x2; rot 2" --results "../results" --show
+# TACO: register map of one (stage, pipeline), e.g.
+#   make taco TS=decrypt_c1 "TP=mul x3; boot"
+TS ?= encrypt_c0
+TP ?= mul x3; boot
+taco:
+	python3 register_map.py --results ../results_taco $(SHOW) --title taco_$(TS) \
+	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+	    stage=$(TS) "pipeline=$(TP)"
