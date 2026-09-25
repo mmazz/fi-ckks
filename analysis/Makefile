@@ -214,6 +214,58 @@ c2_fig07:
 	$(HEAT) --title c2_fig07_boot_eval_heat         --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --tol 3
 	$(HEAT) --title c2_fig07_boot_eval_heat_aligned --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap aligned --tol 3
 	$(HEAT) --title c2_fig07_boot_eval_heat_other   --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap other --tol 3
+
+# ======================================================================================
+# Exploration: every op_step of one operation, to draw conclusions before choosing
+# the representative steps. Output: img/ex_<OP>_*.
+#   make explore OP=mul                    heatmaps + one curve and one map per op_step
+#   make explore_cmp OP=mul STEPS=4,24,25  those steps together in one figure
+#   make explore_all
+# OP: add mul rot rescale mul_depth mix mix_boot boot boot_eval
+# ======================================================================================
+EXP_add       = $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
+EXP_mul       = $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul
+EXP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2"
+EXP_rescale   = $(RESC) stage=rescale "pipeline=mul x2"
+EXP_mul_depth = $(DEPTH) stage=mul_asplos "pipeline=mul x3" seed=3 seed_input=3
+EXP_mix       = $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" numSamples=10
+EXP_mix_boot  = $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" numSamples=10
+EXP_boot      = $(BOOTP) stage=boot "pipeline=mul x4; boot"
+EXP_boot_eval = $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
+
+# Operations whose campaigns sweep op_depth too: one heatmap per depth, one curve per depth.
+DEPTH_OPS = rescale mul_depth mix mix_boot
+IS_DEPTH  = $(filter $(OP),$(DEPTH_OPS))
+# register_map needs one config per figure: pick the depth with OPD (default 0).
+OPD      ?= 0
+OP       ?= mul
+STEPS    ?=
+
+EXP_WHERE = $(EXP_$(OP))
+EXP_HEAT  = $(HEAT) --where $(EXP_WHERE) --tol 3 $(if $(IS_DEPTH),--per op_depth)
+EXP_STEPS = $(if $(STEPS),--query 'op_step in [$(STEPS)]')
+
+.PHONY: explore explore_cmp explore_all
+explore explore_cmp explore_all: RES = $(RES2)
+
+explore:
+	$(EXP_HEAT) --title ex_$(OP)_heat
+	$(EXP_HEAT) --title ex_$(OP)_heat_aligned --gap aligned
+	$(EXP_HEAT) --title ex_$(OP)_heat_other   --gap other
+	$(CURVE) --title ex_$(OP) --where $(EXP_WHERE) $(EXP_STEPS) \
+	    --per op_step $(if $(IS_DEPTH),--vary op_depth) --split gap $(YL)
+	$(REG) --title ex_$(OP)_map --where $(EXP_WHERE) $(if $(IS_DEPTH),op_depth=$(OPD)) \
+	    $(if $(STEPS),--op_step $(STEPS))
+
+explore_cmp:
+	$(CURVE) --title ex_$(OP)_cmp_$(subst $(comma),_,$(STEPS)) --where $(EXP_WHERE) $(EXP_STEPS) \
+	    $(if $(IS_DEPTH),op_depth=$(OPD)) --vary op_step --split gap $(YL)
+
+explore_all:
+	for op in add mul rot rescale mul_depth mix mix_boot boot boot_eval; do \
+	    $(MAKE) explore OP=$$op || exit 1; done
+
+comma := ,
 # ======================================================================================
 # Evidence: claims made in the text, not plotted in the thesis
 # ======================================================================================

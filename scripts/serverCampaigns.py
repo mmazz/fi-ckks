@@ -77,7 +77,10 @@ BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=N
 # Mixed pipeline: ops before and after each mul. Run with and without the final boot on
 # the SAME config, so the only difference between the two groups is the boot.
 MIX_PIPELINE = "add; mul; rot 2; mul; add"
-
+# mul steps that live mod q*Q (key switching). Their registers are ~2*logQ bits wide,
+# so with the boot configs (logQ=840, bitsPerCoeff=860) they would only be half swept.
+MUL_KS_STEPS = range(10, 16)
+MUL_STEPS_Q = [s for s in range(MUL_STEPS) if s not in MUL_KS_STEPS]
 
 def steps(base, op_steps, seeds=SEEDS, inputs=INPUTS, **sweep):
     """Sweep of op_step (an int n means 0..n-1, or an explicit list) over seeds x inputs."""
@@ -145,6 +148,17 @@ GROUPS = {
                                      "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
                            stage=["encrypt_c0", "encrypt_c1"], logSlots=[1, 2, 3],
                            seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
+    # ---- Exploration: every op_step, one repetition --------------------------------------
+    # To look at every step before choosing MUL_REPR. The seeds are a subset of the full
+    # groups, so the campaigns shared with them are not run twice.
+    "explore_mul_depth": steps(dict(SERVER_DEPTH, stage="mul", pipeline="mul x3"),
+                               MUL_STEPS, seeds=SEEDS_MUL[:1], inputs=SEEDS_MUL[:1],
+                               op_depth=[0, 1, 2]),
+    "explore_mix_mul": steps(dict(BOOT, stage="mul", pipeline=MIX_PIPELINE, numSamples=10),
+                             MUL_STEPS_Q, seeds=SEEDS_BOOT, inputs=INPUTS[:1], op_depth=[0, 1]),
+    "explore_mix_mul_boot": steps(dict(BOOT, stage="mul", pipeline=MIX_PIPELINE + "; boot",
+                                       numSamples=10),
+                                  MUL_STEPS_Q, seeds=SEEDS_BOOT, inputs=INPUTS[:1], op_depth=[0, 1]),
 }
 
 if __name__ == "__main__":
