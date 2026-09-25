@@ -1,10 +1,10 @@
 #include "args.h"
 #include "pipeline.h"
+#include "stage.h"
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
 #include <algorithm>
-
 void printVector(const std::vector<double>& v,
                  const std::string& name,
                  size_t max_elems)
@@ -110,7 +110,15 @@ std::vector<uint32_t> bitsToFlipGenerator(const CampaignArgs& args)
             if (res.empty() || res.back() != v) res.push_back(v);
         }
     };
-
+    // HEAAN encodes at scale 2^(logDelta + logQ) and encryptMsg() shifts right by logQ, so
+    // the encode register sits logQ bits above a ciphertext: every bit below logQ is
+    // rounded away. Keep a few of those as a control and sample every bit above.
+    const bool heaan_encode = args.library.rfind("heaan", 0) == 0 && args.stage == Stage::Encode;
+    if (heaan_encode) {
+        addRange(0, logQ - 1);
+        for (uint32_t b = logQ; b <= M; ++b) res.push_back(b);
+        return res;
+    }
     uint32_t gapDelta = 1;
     if      (logDelta >= 50) gapDelta = 5;
     else if (logDelta >= 30) gapDelta = 3;

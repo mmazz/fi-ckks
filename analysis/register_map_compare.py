@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Register maps side by side, one panel per numbered injection site.
+"""Register maps side by side, with one common color scale (built on register_map.py).
 
-The panels come from an enum in utils/sites.py: each member is
-(panel number, stage, op_step). --diagram picks the enum and --panels picks which
-numbers to draw, in that order. Everything else must be the same config (only seed and
-seed_input may vary, and they are combined with --stat).
+One panel per value of --vary (typically stage or op_step); every other config column
+must be the same across panels. Works on a raw results dir (the collapsed cache is
+refreshed first) or on a collapsed one; each panel combines the seeds with --stat.
 
-Examples:
-  python3 register_map_compare.py --title mul --diagram mul --panels 1 3 4 7 8 9 \\
-      --where library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64 "pipeline=add; mul"
+Example:
+  python3 register_map_compare.py --results ../results \\
+      --where library=heaan logN=6 "pipeline=add; mul" \\
+      --vary stage --values encrypt_c1 add mul rescale --op_step 0 \\
+      --title stages
 
-  python3 register_map_compare.py --title client --diagram client \\
-      --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
-
---where must not contain stage or op_step: the enum sets them.
-One color scale is shared by all panels.
+--values picks the panels and their order; --numbers sets the label drawn under each
+panel (default 1..n). The --vary column must not be in --where.
+One figure per op_step, all with the same color scale. With --vary op_step, a single
+figure compares those steps. --no-legend hides the top legend; panel numbers stay.
 """
 import argparse
 import sys
@@ -29,7 +29,7 @@ from matplotlib.ticker import MaxNLocator
 sys.path.append(str(Path(__file__).resolve().parent))
 import register_map as rm                                              # noqa: E402
 from utils.results import (load_campaigns, load_data, select, require_single_config,  # noqa: E402
-                           assign_config_id, finite_max, parse_value)
+                           assign_config_id, finite_max, parse_value, assign_config_id)
 from utils.sites import DIAGRAMS, select_sites                         # noqa: E402
 
 EMPTY = (1.0, 1.0, 1.0, 1.0)     # (coeff, bit) that was never injected: white

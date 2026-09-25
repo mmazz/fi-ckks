@@ -4,11 +4,10 @@
 // campaign only failed later, at probe time. Now it does not compile.
 //
 // Adding a stage: one entry in the enum and one row in kStageNames. If the old
-// (string) name is different, add it to kStageAliases so existing configs keep working.
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-
+#include <initializer_list>
 enum class Stage : uint8_t {
     None = 0,
     // client side
@@ -55,4 +54,19 @@ inline Stage parse_stage(const std::string& s) {
     for (const auto& e : kStageNames)
         if (s == e.name) return e.stage;
     throw std::invalid_argument("invalid stage: '" + s + "'");
+}
+inline bool is_client_stage(Stage s) {
+    return s == Stage::Encode || s == Stage::EncryptC0 || s == Stage::EncryptC1 ||
+           s == Stage::DecryptC0 || s == Stage::DecryptC1 || s == Stage::Decode;
+}
+
+// Backends call this from backend_prepare_args: an unsupported stage fails before
+// setup + baseline instead of at probe time. None is left to main().
+inline void require_stage(Stage s, std::initializer_list<Stage> supported, const std::string& backend) {
+    if (s == Stage::None) return;
+    for (Stage x : supported) if (x == s) return;
+    std::string list;
+    for (Stage x : supported) list += std::string(list.empty() ? "" : ", ") + to_string(x);
+    throw std::invalid_argument(backend + ": stage '" + to_string(s) +
+                                "' is not implemented (available: " + list + ")");
 }

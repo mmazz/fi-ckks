@@ -64,6 +64,10 @@ void inject(DCRTPoly& p, bool withNTT, Injector& inj)
         if (b >= t.GetModulus().ConvertToInt()) inj.record_out_of_range();
         t[f.coeff] = NativeInteger(b);
         const uint64_t got = t[f.coeff].ConvertToInt();
+        // The store must be a pure XOR with the mask: if OpenFHE ever reduced on
+        // assignment the fault would stop being "flip these bits".
+        if ((a ^ got) != inj.mask64())
+            throw std::logic_error("stored value is not a ^ mask (the limb modulus reduced it?)");
         inj.record_flip(__builtin_popcountll(a ^ got), count_diff(before, p));
     }
     p.SetFormat(orig);

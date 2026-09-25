@@ -6,8 +6,6 @@
 //   decrypt_c0, decrypt_c1               logit de la clase correcta
 //   hidden_layer  0..13   mismos registros que en HEAAN (step par = c0, impar = c1)
 //   cheby_tanh3   0..9    mismos registros que en HEAAN
-// Todavia no hay decode ni stages dentro de las operaciones (mul, rescale, add, rot):
-// con esos stages el probe falla con "never reach".
 // Scaling FLEXIBLEAUTO: los rescale los hace OpenFHE.
 #include "backend_interface.h"
 #include "mnist.h"
@@ -169,6 +167,14 @@ void backend_prepare_args(CampaignArgs& args)
     args.scaleTech = "FLEXIBLEAUTO";   // la red no hace rescales a mano
     args.isComplex = 0;
     args.logMin = args.logMax = 0;
+    require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
+                               Stage::DecryptC0, Stage::DecryptC1,
+                               Stage::HiddenLayer, Stage::ChebyTanh3}, "openfheNN");
+    if (args.op_depth != 0)
+        throw std::invalid_argument("openfheNN: op_depth must be 0 (each neuron runs once)");
+    if ((args.stage == Stage::HiddenLayer && args.op_step >= 14) ||
+        (args.stage == Stage::ChebyTanh3 && args.op_step >= 10))
+        throw std::invalid_argument("openfheNN: op_step out of range (hidden_layer 0..13, cheby_tanh3 0..9)");
     if (args.bitsPerCoeff > 64)
         throw std::invalid_argument("openfhe: bitsPerCoeff <= 64 ");
     if (!args.ops.empty())

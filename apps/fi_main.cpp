@@ -157,6 +157,10 @@ int main(int argc, char** argv)
         if (args.stage == Stage::None)
             throw std::invalid_argument("must choose a --stage (see --help); "
                                         "'none' injects nowhere");
+        // Client stages have no internal steps and run once: a non-zero op_step/op_depth
+        // would run the same campaign under a different key and split the seed average.
+        if (is_client_stage(args.stage) && (args.op_step != 0 || args.op_depth != 0))
+            throw std::invalid_argument("client stages take no --op_step/--op_depth");
         if (args.isExhaustive)
             args.numSamples = 0;
         // Skip before paying for setup + baseline + probe (a full network run each).

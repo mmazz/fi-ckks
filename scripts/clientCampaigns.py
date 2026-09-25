@@ -14,12 +14,11 @@ campaigns that already finished.
 """
 from campaigns import ROOT, grid, main
 
-RESULTS = str(ROOT / "results")
-RESULTS_BOOT = str(ROOT / "results_boot")
+RESULTS = str(ROOT / "results_client")
 
 SEEDS_ANALYSIS = range(25)  # only for the seed-variability figure
-SEEDS = [1, 2, 3]           # --seed       (keys and encryption noise)
-INPUTS = [1, 2, 3]          # --seed_input (input vector)
+SEEDS = [1, 2]           # --seed       (keys and encryption noise)
+INPUTS = [1, 2, 3, 4]          # --seed_input (input vector)
 NUM_SAMPLES = 50
 
 # ---------------------------------------------------------------------------
@@ -59,7 +58,7 @@ CLIENT_MUL = dict(CLIENT, logQ=150, bitsPerCoeff=170)
 CLIENT_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
                       logN=6, logSlots=4, logQ=60, logDelta=30, bitsPerCoeff=64, withNTT=0)
 
-BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
+BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 
 ENC = ["encrypt_c0", "encrypt_c1"]

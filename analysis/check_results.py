@@ -136,7 +136,7 @@ def main():
     results_dir = Path(args.results)
 
     problems = check_unfinished(results_dir)
-    camps = load_campaigns(results_dir)
+    camps = load_campaigns(results_dir, raw=True)
     if camps.empty:
         print("\nno finished campaigns")
         sys.exit(1)

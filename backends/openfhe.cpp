@@ -30,6 +30,9 @@ void backend_prepare_args(CampaignArgs& args){
     args.isComplex = 0;            // HEAAN only: CKKS here is real-packed
     if (args.bitsPerCoeff > 64)
         throw std::invalid_argument("openfhe: bitsPerCoeff <= 64");
+    require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
+                               Stage::DecryptC0, Stage::DecryptC1, Stage::Add, Stage::Mul},
+                  "openfhe");
         // In-operation sites of the fork (fault-hook.h). Out-of-range steps would only
     // fail later with "never reached"; better to say why right away.
     if (args.stage == Stage::Add && args.op_step >= fi::ADD_NUM_STEPS)

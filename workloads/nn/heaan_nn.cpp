@@ -193,10 +193,31 @@ void backend_prepare_args(CampaignArgs& args)
     args.dnum      = 0;
     args.isComplex = 0;
     args.logMin = args.logMax = 0; // the input is an MNIST image, not a random vector
+    require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
+                               Stage::DecryptC0, Stage::DecryptC1, Stage::Decode,
+                               Stage::HiddenLayer, Stage::ChebyTanh3, Stage::Mul,
+                               Stage::Rescale, Stage::Add, Stage::Rot}, "heaanNN");
+    if (args.op_depth != 0)
+        throw std::invalid_argument("heaanNN: op_depth must be 0 (each neuron runs once)");
+    // op_step ranges of the internal stages (see the header of this file)
+    const std::pair<Stage, uint32_t> n_steps[] = {{Stage::HiddenLayer, 14}, {Stage::ChebyTanh3, 10},
+                                                   {Stage::Mul, 26}, {Stage::Rescale, 4},
+                                                   {Stage::Add, 6}, {Stage::Rot, 12}};
+    for (const auto& [st, n] : n_steps)
+        if (args.stage == st && args.op_step >= n)
+            throw std::invalid_argument("heaanNN: " + std::string(to_string(st)) +
+                                        " has op_step 0.." + std::to_string(n - 1));
     if (!args.ops.empty())
         throw std::invalid_argument("heaanNN: the workload is the network; --pipeline must be left empty");
     if ((size_t(1) << args.logSlots) < NN_INPUT)
         throw std::invalid_argument("heaanNN: 2^logSlots it has to be >= " + std::to_string(NN_INPUT));
+    // The network spends 5 levels (W1, x^2, x^3, -0.23*x^3, W2). Below 5*logDelta HEAAN
+    // indexes qpows[] with a negative logq and segfaults; in practice it needs
+    // ~5*logDelta + 70 (logQ=220 with logDelta=30), the baseline check catches the rest.
+    if (args.logQ <= 5 * args.logDelta)
+        throw std::invalid_argument("heaanNN: the network needs logQ > 5*logDelta (logQ=" +
+                                    std::to_string(args.logQ) + ", logDelta=" +
+                                    std::to_string(args.logDelta) + ")");
 }
 
 BackendContext* setup_campaign(const CampaignArgs& args)

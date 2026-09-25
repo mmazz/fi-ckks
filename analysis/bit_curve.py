@@ -28,6 +28,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent))
 from utils.results import load_campaigns, load_data, select, require_single_config, parse_value  # noqa: E402
+from build_ml_dataset import MULTS, expand, injection_index  # noqa: E402
 SIZE_STEP = 20   # each earlier curve is this much bigger, so identical curves stay visible
 SCATER_SIZE = 24
 FONT = 24
@@ -48,14 +49,14 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--results", default="../results")
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
-    p.add_argument("--vary", nargs="*", default=[], help="columnas: una curva por combinacion de valores")
-    p.add_argument("--per", default=None, help="columna: una figura por valor (ej: op_step)")
+    p.add_argument("--vary", nargs="*", default=[], help="columns: one curve per combination of values")
+    p.add_argument("--per", default=None, help="Column: a figure representing value (ej: op_step)")
     p.add_argument("--split", choices=["none", "gap"], default="none")
-    p.add_argument("--metric", default="l2_rel", help="columna de los datos a graficar")
+    p.add_argument("--metric", default="l2_rel", help="column of data to be plotted")
     p.add_argument("--stat", choices=list(STATS), default="mean",
-                   help="como combinar los coeficientes de cada bit")
-    p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q"], default="none",
-                   help="eje x: bit | bit - logDelta | bit / logQ")
+                   help="how to combine the coefficients of each bit")
+    p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q","minus_level"], default="none",
+                   help="x axis: bit | bit - logDelta | bit / logQ | bit - logq of the injection level")
     p.add_argument("--drop_coeffs", nargs="*", default=[], help="coeficientes a excluir: 0 N/2 ...")
     p.add_argument("--band", nargs="?", const="p10_90", default=None, choices=["p10_90", "std"],
                    help="shaded band across coefficients: p10_90 (default if no value) or std (mean +- 1 std)")
@@ -80,6 +81,9 @@ def parse_args():
                    help="do not draw the logDelta / logQ reference lines")
     p.add_argument("--suptitle", default="",
                    help="text above the figure (default: none). --title is only the file name")
+    p.add_argument("--rep_spread", action="store_true",
+                   help="shaded band = min..max over the repetitions (seed x seed_input) of the "
+                        "per-bit curve, i.e. how much a single repetition can deviate")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -87,7 +91,17 @@ def parse_args():
 # ------------------------------------------------------------------ #
 # Datos
 # ------------------------------------------------------------------ #
-def load_curve_data(camps, results, vary, drop_coeffs, metric):
+def level_logq(cfg):
+    """logq of the ciphertext at the injection point: logQ minus logDelta per mult that
+    ran before it (HEAAN). Stages that cannot be placed in the pipeline keep logQ."""
+    ops = expand(cfg["pipeline"])
+    pos = injection_index(ops, cfg["stage"], int(cfg["op_depth"]))
+    if pos is None:
+        return int(cfg["logQ"])
+    n_mults = sum(o in MULTS for o in ops[:max(pos, 0)])
+    return int(cfg["logQ"]) - int(cfg["logDelta"]) * n_mults
+
+def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean"):
     """Una fila por (curva, limb, coeff, bit): seeds ya promediadas. Agrega gap_aligned."""
     keys = [c for c in vary if c in camps.columns]          # 'limb' viene de los datos, no del registry
     groups = camps.groupby(keys) if keys else [((), camps)]
@@ -99,10 +113,15 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric):
         d = load_data(g, results)
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
+        # One curve per repetition (campaign), collapsed to its min..max per bit: --rep_spread.
+        rep = (d.groupby(["campaign_id", "bit"])[metric].agg(STATS[stat])
+                .groupby("bit").agg(rep_lo="min", rep_hi="max").reset_index())
         d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # promedio entre seeds
+        d = d.merge(rep, on="bit", how="left")
         for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
         d["gap"] = gap
+        d["level"] = level_logq(cfg)
         d["gap_aligned"] = (d["coeff"] % gap == 0)
         parts.append(d)
     return pd.concat(parts, ignore_index=True)
@@ -113,6 +132,8 @@ def x_values(bits, df, xnorm):
         return bits - df["logDelta"].iloc[0]
     if xnorm == "over_q":
         return bits / df["logQ"].iloc[0]
+    if xnorm == "minus_level":
+        return bits - df["level"].iloc[0]
     return bits
 
 
@@ -172,7 +193,10 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
                     alpha=0.8, label=None if i else "min over coeffs")
             ax.plot(x, per_bit.max().to_numpy(), ls="none", marker="+", ms=8, color="green",
                     alpha=0.8, label=None if i else "max over coeffs")
-
+        if args.rep_spread:
+            band = d.groupby("bit")[["rep_lo", "rep_hi"]].first().reindex(y.index)
+            ax.fill_between(x, band["rep_lo"], band["rep_hi"], color=color, alpha=0.2, lw=0,
+                            label=None if i else "min-max over repetitions")
         # A reference line is drawn when it falls at the same x for every curve, in the plotted
     # units: with --xnorm over_q and logDelta = 0.75 logQ, logDelta sits at 0.75 and logQ at 1.
     for col, name in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
@@ -182,6 +206,8 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             refs = data[col] / data["logQ"]
         elif args.xnorm == "minus_delta":
             refs = data[col] - data["logDelta"]
+        elif args.xnorm == "minus_level":
+            refs = data[col] - data["level"]
         else:
             refs = data[col]
         if refs.nunique() == 1:
@@ -212,14 +238,14 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
         if top > 0:            # all zeros: leave matplotlib's default instead of an empty range
             ax.set_ylim(0, top * 3.0 if np.isfinite(top * 3.0) else top)
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
-              "over_q": r"Bit index relative to $\log Q$"}[args.xnorm]
+              "over_q": r"Bit index relative to $\log Q$","minus_level": r"Bit index $-\ \log q_\ell$"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
     ax.tick_params(labelsize=TICK_FONT)
     ax.set_ylabel(args.ylabel or f"{args.stat} {args.metric} ({scale})", fontsize=FONT)
     ax.grid(True, ls="--", alpha=0.3)
     if subset_label:
         ax.set_title(subset_label, fontsize=FONT, pad=26)
-    if legend and (vary or args.labels or args.band == "std" or args.minmax):
+    if legend and (vary or args.labels or args.band == "std" or args.minmax or args.rep_spread):
         ax.legend(fontsize=FONT - 6, frameon=False)
 
 def _linthresh(values):
@@ -269,7 +295,7 @@ def main():
     for pv in per_values:
         sub = camps if pv is None else camps[camps[args.per] == pv]
         try:
-            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric)
+            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric, args.stat)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"

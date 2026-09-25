@@ -234,7 +234,7 @@ void CampaignRegistry::register_end(const CampaignEndRecord& r)
     std::ofstream f(end_csv_, std::ios::app);
     if (!f)
         throw std::runtime_error("CampaignRegistry: could not be opened " + end_csv_ + " for writing");
-    f << joinCsvFields(r.campaign_id, r.total_bitFlips, r.sdc_count,
+    f << joinCsvFields(r.campaign_id, r.total_bitFlips, r.detected_count,
                         r.duration_minutes, r.l2_P95, r.l2_P99)
       << "\n";
     if (!f)

@@ -24,7 +24,8 @@ import matplotlib.colors as mcolors
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils.results import load_campaigns, load_data, select, require_single_config, finite_max  # noqa: E402
+from utils.results import (load_campaigns, load_data, select, require_single_config,  # noqa: E402
+                           finite_max, n_repetitions)
 # ------------------------------------------------------------------ #
 # Categorias de MREP (en %). Ajusta los umbrales aca.
 # ------------------------------------------------------------------ #
@@ -83,11 +84,17 @@ def parse_args():
 # ------------------------------------------------------------------ #
 # Datos
 # ------------------------------------------------------------------ #
-def mrep_per_cell(data, stat):
-    """Una fila por (limb, coeff, bit) con el MREP combinado entre seeds."""
-    data = data.assign(mrep=data["linf_rel"].astype(float) * 100.0)
-    return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
 
+def mrep_per_cell(data, stat):
+    """One row per (limb, coeff, bit) with the MREP combined over the seeds.
+
+    On a collapsed dir the seeds are already combined: linf_rel is their mean and
+    linf_rel_median / linf_rel_max the other two stats, so the column is picked by name
+    and the groupby below just passes the single row of each cell through.
+    """
+    col = f"linf_rel_{stat}" if f"linf_rel_{stat}" in data.columns else "linf_rel"
+    data = data.assign(mrep=data[col].astype(float) * 100.0)
+    return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
 
 def mrep_colors(mrep, vmax):
     """RGBA por punto: color por categoria; los severos en gradiente log entre 100 % y vmax."""
@@ -202,7 +209,7 @@ def main():
     for step, group in camps.groupby("op_step"):
         cfg = require_single_config(group).iloc[0]      # solo pueden variar las seeds
         cells = mrep_per_cell(load_data(group, args.results), args.stat)
-        per_step[step] = (cfg, cells, group["seed"].nunique())
+        per_step[step] = (cfg, cells, n_repetitions(group))
     # Ignora inf/NaN: los puntos igual se dibujan (inf satura en el extremo negro,
     # NaN queda gris), pero la escala de color se calcula solo con valores finitos.
     vmax = finite_max([cells["mrep"] for _, cells, _ in per_step.values()], MODERATE_PCT)

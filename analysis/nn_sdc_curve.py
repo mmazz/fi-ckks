@@ -119,6 +119,11 @@ def per_bit(data, masked_pct):
     out["masked"] = 1.0 - out["rate"] - out["tolerable"]
     return out.reset_index()
 
+def register_width(cfg):
+    """Bits the fault can land in. HEAAN's encode register is logDelta bits wider than a
+    ciphertext: it is scaled by 2^(logDelta + logQ) before encryptMsg shifts it by logQ."""
+    heaan_encode = str(cfg["library"]).startswith("heaan") and cfg["stage"] == "encode"
+    return int(cfg["logQ"]) + (int(cfg["logDelta"]) if heaan_encode else 0)
 
 def register_rate(curve, log_q):
     """P(SDC) for a bit drawn uniformly from [0, logQ): interpolate the sampled bits."""
@@ -164,7 +169,7 @@ def plot(stages, args):
     rates = {}
     for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):
         curve = per_bit(data, args.masked_pct)
-        rates[stage] = (register_rate(curve, cfg["logQ"]), int(curve["n"].min()))
+        rates[stage] = (register_rate(curve,  register_width(cfg)), int(curve["n"].min()))
         (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
         mark_params(ax, cfg)
         ax.set_title(f"{stage}   P(SDC)={rates[stage][0]:.2f}", fontsize=FONT - 3, pad=20)

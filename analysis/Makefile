@@ -126,6 +126,7 @@ c1_fig13:
 # ======================================================================================
 SERVER = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30
 DEPTH  = library=heaan logN=6 logSlots=3 logQ=160 logDelta=30 bitsPerCoeff=324
+RESC   = library=heaan logN=6 logSlots=3 logQ=100 logDelta=30 bitsPerCoeff=110
 MIX    = add; mul; rot 2; mul; add
 
 # Steps shown as curves: one per pattern, taken from what step_heatmap.py prints.
@@ -155,8 +156,8 @@ c2_fig02b:
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
 
 c2_fig03:
-	$(HEAT)  --title c2_fig03_rescale_heat --where $(SERVER) bitsPerCoeff=64 stage=rescale "pipeline=mul x2" --per op_depth
-	$(CURVE) --title c2_fig03_rescale      --where $(SERVER) bitsPerCoeff=64 stage=rescale "pipeline=mul x2" \
+	$(HEAT)  --title c2_fig03_rescale_heat --where $(RESC)  stage=rescale "pipeline=mul x2" --per op_depth
+	$(CURVE) --title c2_fig03_rescale      --where $(RESC)  stage=rescale "pipeline=mul x2" \
 	    --vary op_step --per op_depth $(YL)
 
 c2_fig04:

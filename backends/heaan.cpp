@@ -84,6 +84,11 @@ void backend_prepare_args(CampaignArgs& args)
     const long boot_p    = logq_boot + 4;
     const long boot_cost = long(args.logN) - 1 + (6 + kLogI + kLogT) * boot_p + kLogT + kLogI + 1;
     long logq = long(args.logQ);
+    require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
+                               Stage::DecryptC0, Stage::DecryptC1, Stage::Decode,
+                               Stage::Add, Stage::Mul, Stage::MulAsplos, Stage::Rescale,
+                               Stage::Rot, Stage::RotAsplos, Stage::Boot, Stage::BootCoeff,
+                               Stage::BootEval, Stage::BootSlot}, "heaan");
     for (const Op& op : args.ops) {
         if (op.type == OpType::Boot) {
             if (logq < logq_boot)
@@ -91,7 +96,7 @@ void backend_prepare_args(CampaignArgs& args)
                     "heaan: not enough modulus left for 'boot' (logq=" + std::to_string(logq) +
                     " < logDelta+10=" + std::to_string(logq_boot) + ")");
             logq = long(args.logQ) - boot_cost;
-            if (logq <= 0)
+            if (logq < long(args.logDelta))
                 throw std::invalid_argument(
                     "heaan: 'boot' needs logQ > " + std::to_string(boot_cost) +
                     " with logN=" + std::to_string(args.logN) +
@@ -99,7 +104,7 @@ void backend_prepare_args(CampaignArgs& args)
             continue;
         }
         if (is_mult(op.type)) logq -= long(args.logDelta);
-        if (logq <= 0)
+         if (logq < long(args.logDelta))
             throw std::invalid_argument(
                 "heaan: the pipeline needs more than logQ=" + std::to_string(args.logQ) +
                 " with logDelta=" + std::to_string(args.logDelta));

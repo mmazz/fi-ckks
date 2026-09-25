@@ -21,11 +21,10 @@ randomSingleBitFlip -> isExhaustive=0.
 """
 from campaigns import ROOT, grid, main
 
-RESULTS = str(ROOT / "results")
-RESULTS_BOOT = str(ROOT / "results_boot")
+RESULTS = str(ROOT / "results_server")
 
-SEEDS = [1, 2, 3]          # --seed
-INPUTS = [1, 2, 3]         # --seed_input
+SEEDS = [1, 2]          # --seed
+INPUTS = [1, 2, 3, 4]         # --seed_input
 SEEDS_MUL = [3, 4, 5]      # kept from the old mul campaigns so their data can be reused
 SEEDS_BOOT = [1]           # boot is expensive: a single seed
 NUM_SAMPLES = 50
@@ -68,9 +67,11 @@ SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
 SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
 # mul x3: 3*30 = 90 bits consumed, 70 left at decryption.
 SERVER_DEPTH = dict(SERVER, logQ=160, bitsPerCoeff=keyswitch_bits(160))
+# mul x2: 2*30 = 60 bits consumed; logQ=100 leaves 40 >= logDelta at decryption.
+SERVER_RESCALE = dict(SERVER, logQ=100, bitsPerCoeff=110)
 
 # Bootstrapping: random, large logQ.
-BOOT = dict(binary="fi_heaan", results_dir=RESULTS_BOOT, isExhaustive=0, numSamples=NUM_SAMPLES,
+BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 
 # Mixed pipeline: ops before and after each mul. Run with and without the final boot on
@@ -103,7 +104,7 @@ GROUPS = {
 
     # FIG 3 (rescale). Steps 0/1 = ax/bx before the shift, 2/3 = after. Expected: the
     # "before" curves are the "after" ones shifted by logDelta (the flip is divided by Delta).
-    "op_rescale_depth": steps(dict(SERVER, stage="rescale", pipeline="mul x2"), RESCALE_STEPS,
+    "op_rescale_depth": steps(dict(SERVER_RESCALE, stage="rescale", pipeline="mul x2"), RESCALE_STEPS,
                               op_depth=[0, 1]),
 
     # FIG 4 (rot). 0, 9 = c0 path; 1, 2, 4 = c1 path before key switching; 3, 5 = key;

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from utils.results import load_campaigns, load_data, config_columns, is_collapsed
 
 OPS = ["add", "pmul", "mul", "scalar", "rot", "boot"]
 MULTS = {"pmul", "mul", "scalar"}
@@ -58,12 +59,15 @@ def pipeline_features(row):
     return pd.Series(f)
 
 
-
-
 def main(results_dir):
-    agg = pd.read_parquet(Path(results_dir) / "agg" / "per_coeff_bit.parquet")
-    cfg = agg.drop_duplicates("config_id").set_index("config_id")
-    df = agg.merge(cfg.apply(pipeline_features, axis=1), left_on="config_id", right_index=True)
+    results_dir = Path(results_dir)
+    camps = load_campaigns(results_dir)
+    if not is_collapsed(camps):
+        sys.exit(f"{results_dir} is a raw dir: run collapse.py first and pass its output")
+    data = load_data(camps, results_dir)          # one row per (experiment, limb, coeff, bit)
+    cfg = camps.set_index("config_id")[config_columns(camps)]
+    df = (data.merge(cfg, left_on="config_id", right_index=True)
+              .merge(cfg.apply(pipeline_features, axis=1), left_on="config_id", right_index=True))
 
     # Posicion del bit relativa a los parametros
     df["bit_minus_delta"] = df["bit"] - df["logDelta"]
@@ -75,8 +79,8 @@ def main(results_dir):
 
     df = pd.get_dummies(df, columns=["library", "stage", "scaleTech"], dtype=int)
     df = df.drop(columns=["pipeline"])
-    df.to_parquet(Path(results_dir) / "agg" / "ml_dataset.parquet", index=False)
-    print(df.shape, "->", Path(results_dir) / "agg" / "ml_dataset.parquet")
+    df.to_parquet(Path(results_dir) /  "ml_dataset.parquet", index=False)
+    print(df.shape, "->", Path(results_dir) /  "ml_dataset.parquet")
 
 
 if __name__ == "__main__":
