@@ -152,22 +152,22 @@ c2_fig01:
 	    --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
 c2_fig02:
-	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --gap aligned --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul --gap other --tol 3
-	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul \
+	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap other --tol 3
+	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
-	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul \
+	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 
 # Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
 c2_fig02b:
-	$(HEAT)  --title c2_fig02b_mul_depth_heat         --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --tol 3
-	$(HEAT)  --title c2_fig02b_mul_depth_heat_aligned --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --gap aligned --tol 3
-	$(HEAT)  --title c2_fig02b_mul_depth_heat_other   --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" --per op_depth --gap other --tol 3
-	$(CURVE) --title c2_fig02b_mul_depth      --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" \
+	$(HEAT)  --title c2_fig02b_mul_depth_heat         --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig02b_mul_depth_heat_aligned --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02b_mul_depth_heat_other   --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig02b_mul_depth      --where $(DEPTH) stage=mul "pipeline=mul x3" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
-	$(CURVE) --title c2_fig02b_mul_depth_gap  --where $(DEPTH) stage=mul_asplos "pipeline=mul x3" \
+	$(CURVE) --title c2_fig02b_mul_depth_gap  --where $(DEPTH) stage=mul "pipeline=mul x3" \
 	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 c2_fig03:
@@ -180,31 +180,31 @@ c2_fig03:
 	    --vary op_step --per op_depth --split gap $(YL)
 
 c2_fig04:
-	$(HEAT)  --title c2_fig04_rot_heat         --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --tol 3
-	$(HEAT)  --title c2_fig04_rot_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --gap aligned --tol 3
-	$(HEAT)  --title c2_fig04_rot_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" --gap other --tol 3
-	$(CURVE) --title c2_fig04_rot      --where $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2" \
+	$(HEAT)  --title c2_fig04_rot_heat         --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --tol 3
+	$(HEAT)  --title c2_fig04_rot_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig04_rot_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --gap other --tol 3
+	$(CURVE) --title c2_fig04_rot      --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" \
 	    --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
 
 
 # Mixed pipeline, fault in the 1st or the 2nd mul.
 c2_fig05:
-	$(HEAT)  --title c2_fig05_mix_heat         --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --tol 3
-	$(HEAT)  --title c2_fig05_mix_heat_aligned --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --gap aligned --tol 3
-	$(HEAT)  --title c2_fig05_mix_heat_other   --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" --per op_depth --gap other --tol 3
-	$(CURVE) --title c2_fig05_mix      --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	$(HEAT)  --title c2_fig05_mix_heat         --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_aligned --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_other   --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig05_mix      --where $(BOOTP) stage=mul "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
-	$(CURVE) --title c2_fig05_mix_gap  --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" \
+	$(CURVE) --title c2_fig05_mix_gap  --where $(BOOTP) stage=mul "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 # Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
 c2_fig06:
-	$(HEAT)  --title c2_fig06_mix_boot_heat         --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --tol 3
-	$(HEAT)  --title c2_fig06_mix_boot_heat_aligned --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --gap aligned --tol 3
-	$(HEAT)  --title c2_fig06_mix_boot_heat_other   --where $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" --per op_depth --gap other --tol 3
-	$(CURVE) --title c2_fig06_mix_boot      --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	$(HEAT)  --title c2_fig06_mix_boot_heat         --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_aligned --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_other   --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig06_mix_boot      --where $(BOOTP) stage=mul op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
-	$(CURVE) --title c2_fig06_mix_boot_gap  --where $(BOOTP) stage=mul_asplos op_depth=$(MIX_DEPTH) \
+	$(CURVE) --title c2_fig06_mix_boot_gap  --where $(BOOTP) stage=mul op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
 
 c2_fig07:
@@ -224,12 +224,12 @@ c2_fig07:
 # OP: add mul rot rescale mul_depth mix mix_boot boot boot_eval
 # ======================================================================================
 EXP_add       = $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
-EXP_mul       = $(SERVER) bitsPerCoeff=124 stage=mul_asplos pipeline=mul
-EXP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot_asplos "pipeline=rot 2"
+EXP_mul       = $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul
+EXP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
 EXP_rescale   = $(RESC) stage=rescale "pipeline=mul x2"
-EXP_mul_depth = $(DEPTH) stage=mul_asplos "pipeline=mul x3" seed=3 seed_input=3
-EXP_mix       = $(BOOTP) stage=mul_asplos "pipeline=$(MIX)" numSamples=10
-EXP_mix_boot  = $(BOOTP) stage=mul_asplos "pipeline=$(MIX); boot" numSamples=10
+EXP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3" seed=3 seed_input=3
+EXP_mix       = $(BOOTP) stage=mul "pipeline=$(MIX)" numSamples=10
+EXP_mix_boot  = $(BOOTP) stage=mul "pipeline=$(MIX); boot" numSamples=10
 EXP_boot      = $(BOOTP) stage=boot "pipeline=mul x4; boot"
 EXP_boot_eval = $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
 

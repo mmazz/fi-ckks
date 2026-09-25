@@ -21,7 +21,7 @@ Combining the coefficients mixes the ones the decode reads with the rest: use
 --gap aligned / --gap other when logSlots < logN - 1.
 
   python3 step_heatmap.py --title op_mul \\
-      --where library=heaan stage=mul_asplos pipeline=mul logN=6 logSlots=3 logQ=60 \\
+      --where library=heaan stage=mul pipeline=mul logN=6 logSlots=3 logQ=60 \\
               logDelta=30 bitsPerCoeff=124 --gap aligned
   python3 step_heatmap.py --title op_rescale --per op_depth --where ... stage=rescale
 """

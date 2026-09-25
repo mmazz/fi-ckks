@@ -10,10 +10,10 @@
 ciphertexts, before the operation touches them). --op_depth picks WHICH occurrence of
 that operation is hit when the pipeline has several (0 = the first one).
 
-Fault model: the *_asplos stages do not restore the flipped register inside the
+Fault model: the * stages do not restore the flipped register inside the
 operation (a corrupted register that is read again later in the same op). The plain
 "mul"/"rot" stages restore it right after the first read. All the groups here use the
-*_asplos variants.
+* variants.
 
 Old flags -> pipeline:  doAdd 2 -> "add x2", doMul 3 -> "mul x3", doRot 2 -> "rot 2",
 doBoot 1 -> "boot" (at the end), exhaustiveSingleBitFlip -> isExhaustive=1,
@@ -37,7 +37,7 @@ ROT_STEPS = 12
 BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
 
-# One representative op_step per pattern of mul_asplos. FIRST GUESS from reading
+# One representative op_step per pattern of mul. FIRST GUESS from reading
 # multBitFlipAsplos; replace it with one step per band of the op_mul heatmap:
 #   0, 1   input ciphertext (ax, bx)
 #   4      (a1+b1): only the cross term d1
@@ -94,7 +94,7 @@ GROUPS = {
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
 
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
-    "op_mul": steps(dict(SERVER_KS, stage="mul_asplos", pipeline="mul"), MUL_STEPS,
+    "op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul"), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
 
     # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
@@ -102,7 +102,7 @@ GROUPS = {
     # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so
     # the relative error should stay roughly constant with depth; what changes is the
     # modulus (logQ - 30*op_depth), so plot with x = bit - logq.
-    "op_mul_depth": steps(dict(SERVER_DEPTH, stage="mul_asplos", pipeline="mul x3"), MUL_REPR,
+    "op_mul_depth": steps(dict(SERVER_DEPTH, stage="mul", pipeline="mul x3"), MUL_REPR,
                           seeds=SEEDS_MUL[:1], inputs=SEEDS_MUL, op_depth=[0, 1, 2]),
 
     # FIG 3 (rescale). Steps 0/1 = ax/bx before the shift, 2/3 = after. Expected: the
@@ -112,17 +112,17 @@ GROUPS = {
 
     # FIG 4 (rot). 0, 9 = c0 path; 1, 2, 4 = c1 path before key switching; 3, 5 = key;
     # 6, 7 = before the shift by logQ (mod qQ); 8, 10, 11 = output.
-    "op_rot": steps(dict(SERVER_KS, stage="rot_asplos", pipeline="rot 2"), ROT_STEPS),
+    "op_rot": steps(dict(SERVER_KS, stage="rot", pipeline="rot 2"), ROT_STEPS),
 
     # ---- Mixed pipeline, hitting mul --------------------------------------------------
     # FIG 5 (mixed pipeline, fault in the 1st or 2nd mul). 1 seed x 3 inputs: every
     # injection of the boot variant runs a full bootstrapping.
-    "mix_mul": steps(dict(BOOT, stage="mul_asplos", pipeline=MIX_PIPELINE), MUL_REPR_Q,
+    "mix_mul": steps(dict(BOOT, stage="mul", pipeline=MIX_PIPELINE), MUL_REPR_Q,
                      seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
 
     # FIG 6 (same + boot). Expected: small errors go through the boot, large ones break
     # the sine approximation and the whole output.
-    "mix_mul_boot": steps(dict(BOOT, stage="mul_asplos", pipeline=MIX_PIPELINE + "; boot"),
+    "mix_mul_boot": steps(dict(BOOT, stage="mul", pipeline=MIX_PIPELINE + "; boot"),
                           MUL_REPR_Q, seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
 
     # ---- Inside the bootstrapping -----------------------------------------------------
