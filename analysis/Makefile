@@ -319,6 +319,7 @@ PA  = library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64
 mul_panels:    ; $(CMP) --title mul_panels    --diagram mul    --panels 1 3 4 7 8 9 --no-legend --where $(PA) "pipeline=add; mul"
 client_panels: ; $(CMP) --title client_panels --diagram client --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
 
+
 # TACO: register map of one (stage, pipeline), e.g.
 #   make taco TS=decrypt_c1 "TP=mul x3; boot"
 TS ?= encrypt_c0
@@ -326,7 +327,8 @@ TP ?= mul x3; boot
 taco:
 	python3 register_map.py --results ../results_taco $(SHOW) --title taco_$(TS) \
 	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
-	
+	    stage=$(TS) "pipeline=$(TP)"
+
 # ======================================================================================
 # Thesis repo only: download the pinned data release before plotting. The stamp file
 # carries DATA_TAG, so moving the pin downloads again; otherwise it is fetched once.
@@ -342,4 +344,4 @@ $(DATA_STAMP):
 	touch $@
 $(CH1) $(CH2) $(EV) explore explore_cmp nn_client nn_client_stack nn_client_ofhe: $(DATA_STAMP)
 endif
-	    stage=$(TS) "pipeline=$(TP)"
+
