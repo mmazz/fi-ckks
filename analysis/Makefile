@@ -27,6 +27,10 @@ SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
 HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
 REG    = python3 register_map.py --results $(RES) $(SHOW)
 YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
+# What a thesis figure reads: the plotting scripts, this Makefile and the data. A figure
+# is replotted only when one of them is newer than its stamp (see "Incremental build").
+FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
+           $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv)
 
 # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
 # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
@@ -54,77 +58,77 @@ CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c
       c1_fig09 c1_fig10 c1_fig11 c1_fig12 c1_fig13
 .PHONY: $(CH1)
 ch1: $(CH1)
-$(CH1): RES = $(RES1)
+$(addprefix _,$(CH1)): RES = $(RES1)
 	
 # Seed variability: band = min..max per bit over every coefficient and repetition.
-c1_fig01:
+_c1_fig01:
 	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
 	    --query '$(ENC)' --per stage --raw_spread $(YL)
 
-c1_fig02:
+_c1_fig02:
 	$(CURVE) --title c1_fig02_logN \
 	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
 	    --query 'logSlots == logN - 1' \
 	    --vary logN --labels 'logN=6' 'logN=16' $(YL)
 
-c1_fig03:
+_c1_fig03:
 	$(SHIFT) --title c1_fig03_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
 	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
 	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
 
-c1_fig04:
+_c1_fig04:
 	$(SHIFT) --title c1_fig04_encode_c0_c1 --where $(BASE) pipeline= \
 	    --query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC) and bitsPerCoeff == 64))' \
 	    --vary stage $(YL)
 
-c1_fig05:
+_c1_fig05:
 	$(CURVE) --title c1_fig05_logDelta \
 	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta $(YL)
 
 # Same data, x = bit - logDelta: the curves should collapse into one.
-c1_fig05b:
+_c1_fig05b:
 	$(CURVE) --title c1_fig05b_logDelta_shift \
 	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
-c1_fig06:
+_c1_fig06:
 	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
 	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
 	    --vary logQ --xnorm over_q $(YL)
 
-c1_fig07:
+_c1_fig07:
 	$(CURVE) --title c1_fig07_logSlots \
 	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
 	    --query '$(ENC) and logSlots in [3, 4, 5]' \
 	    --vary logSlots --split gap --per stage $(YL)
 
-c1_fig08:
+_c1_fig08:
 	$(CURVE) --title c1_fig08_input \
 	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=20 bitsPerCoeff=64 \
 	    --query 'logMax == logMin + 1 and $(ENC)' --vary logMin --per stage $(YL)
 
-c1_fig09:
+_c1_fig09:
 	$(CURVE) --title c1_fig09_add_rot \
 	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
-c1_fig10:
+_c1_fig10:
 	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
 	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
 	    --vary pipeline --split gap --per stage $(YL)
 
-c1_fig11:
+_c1_fig11:
 	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
 	    --vary pipeline --per stage $(YL)
 
-c1_fig12:
+_c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
 	    --vary limb --per stage $(YL)
 
-c1_fig13:
+_c1_fig13:
 	$(CURVE) --title c1_fig13_ntt \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) \
 	    --per stage $(YL)
@@ -137,6 +141,9 @@ SERVER = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30
 DEPTH  = library=heaan logN=6 logSlots=3 logQ=160 logDelta=30 bitsPerCoeff=324
 RESC   = library=heaan logN=6 logSlots=3 logQ=100 logDelta=30 bitsPerCoeff=110
 MIX    = add; mul; rot 2; mul; add
+# numSamples pins the thesis campaigns (mix_mul*, 50 samples): the explore_mix_* groups
+# share the rest of the config with 10 samples and are a separate experiment.
+MIXP   = $(BOOTP) numSamples=50
 
 # Steps shown as curves: one per pattern, taken from what step_heatmap.py prints.
 ADD_SHOW  ?= 0, 2
@@ -147,16 +154,16 @@ MIX_DEPTH ?= 0
 CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 .PHONY: $(CH2)
 ch2: $(CH2)
-$(CH2): RES = $(RES2)
+$(addprefix _,$(CH2)): RES = $(RES2)
 
-c2_fig01:
+_c2_fig01:
 	$(HEAT)  --title c2_fig01_add_heat         --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --tol 3
 	$(HEAT)  --title c2_fig01_add_heat_aligned --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap aligned --tol 3
 	$(HEAT)  --title c2_fig01_add_heat_other   --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap other --tol 3
 	$(CURVE) --title c2_fig01_add      --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" \
 	    --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
-c2_fig02:
+_c2_fig02:
 	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --tol 3
 	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap aligned --tol 3
 	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap other --tol 3
@@ -166,7 +173,7 @@ c2_fig02:
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 
 # Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
-c2_fig02b:
+_c2_fig02b:
 	$(HEAT)  --title c2_fig02b_mul_depth_heat         --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --tol 3
 	$(HEAT)  --title c2_fig02b_mul_depth_heat_aligned --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --gap aligned --tol 3
 	$(HEAT)  --title c2_fig02b_mul_depth_heat_other   --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --gap other --tol 3
@@ -175,7 +182,7 @@ c2_fig02b:
 	$(CURVE) --title c2_fig02b_mul_depth_gap  --where $(DEPTH) stage=mul "pipeline=mul x3" \
 	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
-c2_fig03:
+_c2_fig03:
 	$(HEAT)  --title c2_fig03_rescale_heat         --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --tol 3
 	$(HEAT)  --title c2_fig03_rescale_heat_aligned --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --gap aligned --tol 3
 	$(HEAT)  --title c2_fig03_rescale_heat_other   --where $(RESC) stage=rescale "pipeline=mul x2" --per op_depth --gap other --tol 3
@@ -184,7 +191,7 @@ c2_fig03:
 	$(CURVE) --title c2_fig03_rescale_gap  --where $(RESC) stage=rescale "pipeline=mul x2" \
 	    --vary op_step --per op_depth --split gap $(YL)
 
-c2_fig04:
+_c2_fig04:
 	$(HEAT)  --title c2_fig04_rot_heat         --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --tol 3
 	$(HEAT)  --title c2_fig04_rot_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --gap aligned --tol 3
 	$(HEAT)  --title c2_fig04_rot_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2" --gap other --tol 3
@@ -193,26 +200,26 @@ c2_fig04:
 
 
 # Mixed pipeline, fault in the 1st or the 2nd mul.
-c2_fig05:
-	$(HEAT)  --title c2_fig05_mix_heat         --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --tol 3
-	$(HEAT)  --title c2_fig05_mix_heat_aligned --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --gap aligned --tol 3
-	$(HEAT)  --title c2_fig05_mix_heat_other   --where $(BOOTP) stage=mul "pipeline=$(MIX)" --per op_depth --gap other --tol 3
-	$(CURVE) --title c2_fig05_mix      --where $(BOOTP) stage=mul "pipeline=$(MIX)" \
+_c2_fig05:
+	$(HEAT)  --title c2_fig05_mix_heat         --where $(MIXP) stage=mul "pipeline=$(MIX)" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_aligned --where $(MIXP) stage=mul "pipeline=$(MIX)" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig05_mix_heat_other   --where $(MIXP) stage=mul "pipeline=$(MIX)" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig05_mix      --where $(MIXP) stage=mul "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level $(YL)
-	$(CURVE) --title c2_fig05_mix_gap  --where $(BOOTP) stage=mul "pipeline=$(MIX)" \
+	$(CURVE) --title c2_fig05_mix_gap  --where $(MIXP) stage=mul "pipeline=$(MIX)" \
 	    --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 # Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
-c2_fig06:
-	$(HEAT)  --title c2_fig06_mix_boot_heat         --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --tol 3
-	$(HEAT)  --title c2_fig06_mix_boot_heat_aligned --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap aligned --tol 3
-	$(HEAT)  --title c2_fig06_mix_boot_heat_other   --where $(BOOTP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap other --tol 3
-	$(CURVE) --title c2_fig06_mix_boot      --where $(BOOTP) stage=mul op_depth=$(MIX_DEPTH) \
+_c2_fig06:
+	$(HEAT)  --title c2_fig06_mix_boot_heat         --where $(MIXP) stage=mul "pipeline=$(MIX); boot" --per op_depth --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_aligned --where $(MIXP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap aligned --tol 3
+	$(HEAT)  --title c2_fig06_mix_boot_heat_other   --where $(MIXP) stage=mul "pipeline=$(MIX); boot" --per op_depth --gap other --tol 3
+	$(CURVE) --title c2_fig06_mix_boot      --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
-	$(CURVE) --title c2_fig06_mix_boot_gap  --where $(BOOTP) stage=mul op_depth=$(MIX_DEPTH) \
+	$(CURVE) --title c2_fig06_mix_boot_gap  --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
 
-c2_fig07:
+_c2_fig07:
 	$(HEAT) --title c2_fig07_boot_heat         --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --tol 3
 	$(HEAT) --title c2_fig07_boot_heat_aligned --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --gap aligned --tol 3
 	$(HEAT) --title c2_fig07_boot_heat_other   --where $(BOOTP) stage=boot "pipeline=mul x4; boot" --gap other --tol 3
@@ -277,30 +284,41 @@ comma := ,
 EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns
 .PHONY: $(EV)
 ev: $(EV)
-$(EV): RES = $(RES1)
+$(addprefix _,$(EV)): RES = $(RES1)
 
 # Null pipeline: decrypt_cX lands on top of encrypt_cX.
-ev_decrypt:
+_ev_decrypt:
 	$(CURVE) --title ev_decrypt --where $(BASE) bitsPerCoeff=64 pipeline= \
 	    --query 'stage in ["encrypt_c0", "decrypt_c0", "encrypt_c1", "decrypt_c1"]' \
 	    --vary stage $(YL)
 
 # Null pipeline: decode vs encode.
-ev_decode:
+_ev_decode:
 	$(CURVE) --title ev_decode --where $(BASE) bitsPerCoeff=128 pipeline= \
 	    --query 'stage in ["encode", "decode"]' --vary stage $(YL)
 
 # A fault at decryption only sees the level the pipeline ends at, not the pipeline:
 # after "mul x3" (logQ=150) the level is 60 = the null pipeline at logQ=60.
-ev_dec_mul:
+_ev_dec_mul:
 	$(CURVE) --title ev_dec_mul --where library=heaan logN=6 logSlots=3 logDelta=30 \
 	    --query 'stage in ["decrypt_c0", "decrypt_c1"] and ((pipeline == "mul x3" and logQ == 150) or (pipeline == "" and logQ == 60))' \
 	    --vary pipeline --per stage $(YL)
 
 # RNS + mul: probability of SDC per bit (the "it breaks everything" claim).
-ev_mul_rns:
+_ev_mul_rns:
 	$(CURVE) --title ev_mul_rns --where $(OFHE) pipeline=mul mult_depth=3 withNTT=0 logSlots=$(SL) \
 	    --metric is_sdc --per stage
+
+# ======================================================================================
+# Incremental build of the thesis figures: `make c1_fig01` runs the recipe _c1_fig01 only
+# when img/.c1_fig01.done is older than FIG_DEPS. Delete img/ (or one stamp) to force it.
+# ======================================================================================
+FIGS = $(CH1) $(CH2) $(EV)
+.PHONY: $(addprefix _,$(FIGS))
+$(FIGS): %: img/.%.done
+img/.%.done: $(FIG_DEPS)
+	$(MAKE) --no-print-directory _$*
+	@mkdir -p img && touch $@
 
 # ======================================================================================
 # Not thesis: other papers and workloads
@@ -337,11 +355,14 @@ ifdef DATA_URL
 DATA_STAMP = ../data/.tag_$(DATA_TAG)
 .PHONY: data
 data: $(DATA_STAMP)
+# tar -m: the files get the extraction time, not the one stored in the release. If the
+# release was made on a machine whose clock is ahead, the stored times are in the future
+# and every figure would look out of date on every run.
 $(DATA_STAMP):
 	rm -rf ../data.tmp && mkdir -p ../data.tmp
-	curl -fsSL "$(DATA_URL)" | tar -xz -C ../data.tmp
+	curl -fsSL "$(DATA_URL)" | tar -xzm -C ../data.tmp
 	rm -rf ../data && mv ../data.tmp ../data
 	touch $@
-$(CH1) $(CH2) $(EV) explore explore_cmp nn_client nn_client_stack nn_client_ofhe: $(DATA_STAMP)
+$(patsubst %,img/.%.done,$(FIGS)) explore explore_cmp nn_client nn_client_stack nn_client_ofhe: $(DATA_STAMP)
 endif
 
