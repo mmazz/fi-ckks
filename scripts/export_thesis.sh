@@ -6,8 +6,8 @@
 #   scripts/export_thesis.sh <thesis dir> <tag>    also collapse the results, publish them
 #                                                  as release <tag> and pin the thesis to it
 #
-#   <thesis>/figures/          mirror of analysis/: anything added there by hand is deleted
-#                              on the next export (except img/ and data.mk)
+#   <thesis>/figures/          the part of analysis/ the thesis figures use: anything added
+#                              there by hand is deleted on the next export (except img/ and data.mk)
 #   <thesis>/figures/data.mk   pinned data release + where the Makefile finds it
 #   <thesis>/data/             downloaded by make on first use, never committed
 set -euo pipefail
@@ -28,32 +28,41 @@ for f in "${KEEP[@]}"; do filters+=(--include="/$f"); done
 rsync -a --delete-excluded "${filters[@]}" --exclude='*' "$ROOT/analysis/" "$DEST/figures/"
 
 if [ -n "$TAG" ]; then
-    # The release tag points at HEAD: uncommitted code would not be reproducible from it.
-    git -C "$ROOT" diff --quiet HEAD || { echo "commit fi-ckks first" >&2; exit 1; }
-    STAGE="$ROOT/export"                               # gitignored in fi-ckks
+    if (cd "$ROOT" && gh release view "$TAG" >/dev/null 2>&1); then
+        # Already published (e.g. the thesis dir was recreated): only pin it again. A release
+        # is never overwritten; new data needs a new tag.
+        echo "release $TAG already exists: pinning it, nothing is collapsed or published"
+    else
+        # The release tag points at HEAD: uncommitted code would not be reproducible from it.
+        git -C "$ROOT" diff --quiet HEAD || { echo "commit fi-ckks first" >&2; exit 1; }
+        git -C "$ROOT" fetch -q
+        [ -n "$(git -C "$ROOT" branch -r --contains HEAD)" ] \
+            || { echo "push fi-ckks first: the release tag points at HEAD" >&2; exit 1; }
+        STAGE="$ROOT/export"                               # gitignored in fi-ckks
 
-    # The collapse only rewrites an experiment when its SET of campaigns changes, not when
-    # the code that computes its columns changes. Rebuild everything if that code changed.
-    CODE_HASH="$(cat "$ROOT/analysis/utils/collapse.py" "$ROOT/analysis/utils/results.py" \
-                 | sha1sum | cut -d' ' -f1)"
-    for pair in client:results_client server:results_server nn:results_NN; do
-        name="${pair%%:*}"; raw="$ROOT/${pair#*:}"; out="$STAGE/data/$name"
-        [ -d "$raw" ] || { echo "skip $raw (missing)"; continue; }
-        # Only a header line: nothing finished yet (e.g. the NN campaigns are still running).
-        [ "$(wc -l < "$raw/campaigns_end.csv" 2>/dev/null || echo 0)" -gt 1 ] \
-            || { echo "skip $raw (no finished campaigns)"; continue; }
-        force=""
-        [ "$(cat "$out/COLLAPSE_CODE" 2>/dev/null || true)" = "$CODE_HASH" ] || force="--force"
-        python3 "$ROOT/analysis/collapse.py" "$raw" --out "$out" $force
-        echo "$CODE_HASH" > "$out/COLLAPSE_CODE"
-    done
-    git -C "$ROOT" rev-parse HEAD > "$STAGE/data/VERSION"
+        # The collapse only rewrites an experiment when its SET of campaigns changes, not when
+        # the code that computes its columns changes. Rebuild everything if that code changed.
+        CODE_HASH="$(cat "$ROOT/analysis/utils/collapse.py" "$ROOT/analysis/utils/results.py" \
+                     | sha1sum | cut -d' ' -f1)"
+        for pair in client:results_client server:results_server nn:results_NN; do
+            name="${pair%%:*}"; raw="$ROOT/${pair#*:}"; out="$STAGE/data/$name"
+            [ -d "$raw" ] || { echo "skip $raw (missing)"; continue; }
+            # Only a header line: nothing finished yet (e.g. the NN campaigns are still running).
+            [ "$(wc -l < "$raw/campaigns_end.csv" 2>/dev/null || echo 0)" -gt 1 ] \
+                || { echo "skip $raw (no finished campaigns)"; continue; }
+            force=""
+            [ "$(cat "$out/COLLAPSE_CODE" 2>/dev/null || true)" = "$CODE_HASH" ] || force="--force"
+            python3 "$ROOT/analysis/collapse.py" "$raw" --out "$out" $force
+            echo "$CODE_HASH" > "$out/COLLAPSE_CODE"
+        done
+        git -C "$ROOT" rev-parse HEAD > "$STAGE/data/VERSION"
 
-    TARBALL="$STAGE/thesis-data.tar.gz"
-    rm -f "$TARBALL"
-    tar -czf "$TARBALL" --exclude=COLLAPSE_CODE -C "$STAGE/data" .
-    (cd "$ROOT" && gh release create "$TAG" "$TARBALL" --target "$(git rev-parse HEAD)" \
-        --title "Thesis data $TAG" --notes "Collapsed results for the thesis figures.")
+        TARBALL="$STAGE/thesis-data.tar.gz"
+        rm -f "$TARBALL"
+        tar -czf "$TARBALL" --exclude=COLLAPSE_CODE -C "$STAGE/data" .
+        (cd "$ROOT" && gh release create "$TAG" "$TARBALL" --target "$(git rev-parse HEAD)" \
+            --title "Thesis data $TAG" --notes "Collapsed results for the thesis figures.")
+    fi
     REPO="$(cd "$ROOT" && gh repo view --json nameWithOwner -q .nameWithOwner)"
 
     cat > "$DEST/figures/data.mk" <<MK
