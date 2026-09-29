@@ -24,7 +24,7 @@ Mejoras respecto de la versión original:
 
 import copy
 from pathlib import Path
-
+import os
 import numpy as np
 import torch
 import torch.nn as nn
@@ -43,7 +43,8 @@ Z_SAFE        = 1.5       # |z| objetivo; el polinomio se da vuelta en 2.0645
 LAMBDA_RANGE  = 1e-2      # peso de la penalización de rango (0 = desactivada)
 N_CLASSES     = 10
 
-DATA_DIR = Path("data")
+# Same lookup as nn_data_dir() on the C++ side: $FI_NN_DATA, else data/ next to this file.
+DATA_DIR = Path(os.environ.get("FI_NN_DATA", Path(__file__).resolve().parent / "data"))
 OUT_DIR  = DATA_DIR / "weights"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

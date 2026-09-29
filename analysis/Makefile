@@ -301,6 +301,9 @@ ev_mul_rns:
 # Not thesis: other papers and workloads
 # ======================================================================================
 NN = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
+
+nn: nn_client nn_client_stack nnclient_ofhe
+
 nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
 nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
 nn_client_ofhe:  ; $(NN) --title nn_client_openfhe     --where library=openfheNN
