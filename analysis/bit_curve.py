@@ -85,6 +85,9 @@ def parse_args():
     p.add_argument("--rep_spread", action="store_true",
                    help="shaded band = min..max over the repetitions (seed x seed_input) of the "
                         "per-bit curve, i.e. how much a single repetition can deviate")
+    p.add_argument("--raw_spread",action="store_true",
+                    help="shaded band = min..max per bit over all raw "
+                         "(seed, seed_input, limb, coeff) values" )
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -103,11 +106,21 @@ def level_logq(cfg):
     return int(cfg["logQ"]) - int(cfg["logDelta"]) * n_mults
 
 
-def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False):
+def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False):
     """Una fila por (curva, limb, coeff, bit): seeds ya promediadas. Agrega gap_aligned."""
     keys = [c for c in vary if c in camps.columns]          # 'limb' viene de los datos, no del registry
     groups = camps.groupby(keys) if keys else [((), camps)]
     parts = []
+    if raw_spread:
+        raw_camps = load_campaigns(results, raw=True)
+
+        if "data_file" in raw_camps.columns:
+            raise ValueError(
+                "--raw_spread requires the original raw results directory"
+            )
+    else:
+        raw_camps = None
+
     for _, g in groups:
         cfg = require_single_config(g).iloc[0]              # dentro de una curva solo varian seeds
         N = 1 << int(cfg["logN"])
@@ -122,6 +135,27 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
             rep = (load_reps(g, results).groupby("bit")[metric]
                    .agg(rep_lo="min", rep_hi="max").reset_index())
             d = d.merge(rep, on="bit", how="left")
+        if raw_spread:
+            # Mismo experimento/configuración, pero recuperando TODAS
+            # las campañas seed × seed_input originales.
+            rg = raw_camps[raw_camps["config_id"] == cfg["config_id"]]
+
+            raw = load_data(rg, results)
+
+            raw = raw[~raw["coeff"].isin(drop)]
+
+            # Los extremos se calculan directamente sobre las inyecciones
+            # raw: ninguna media sobre seeds ni coefficients antes.
+            finite = np.isfinite(raw[metric].to_numpy(dtype=float))
+
+            spread = (
+                raw.loc[finite]
+                   .groupby("bit")[metric]
+                   .agg(raw_lo="min", raw_hi="max")
+                   .reset_index()
+            )
+            d = d.merge(spread, on="bit", how="left")
+
         for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
         d["gap"] = gap
@@ -201,6 +235,17 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             band = d.groupby("bit")[["rep_lo", "rep_hi"]].first().reindex(y.index)
             ax.fill_between(x, band["rep_lo"], band["rep_hi"], color=color, alpha=0.2, lw=0,
                             label=None if i else "min-max over repetitions")
+        if args.raw_spread:
+            band = d.groupby("bit")[["raw_lo", "raw_hi"]].first().reindex(y.index)
+            ax.fill_between(
+                x,
+                band["raw_lo"],
+                band["raw_hi"],
+                color=color,
+                alpha=0.2,
+                lw=0,
+                label=None if i else "min-max over all coeffs and repetitions"
+            )
         # A reference line is drawn when it falls at the same x for every curve, in the plotted
     # units: with --xnorm over_q and logDelta = 0.75 logQ, logDelta sits at 0.75 and logQ at 1.
     for col, name in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
@@ -249,7 +294,7 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
     ax.grid(True, ls="--", alpha=0.3)
     if subset_label:
         ax.set_title(subset_label, fontsize=FONT, pad=26)
-    if legend and (vary or args.labels or args.band == "std" or args.minmax or args.rep_spread):
+    if legend and (vary or args.labels or args.band == "std" or args.minmax or args.rep_spread or args.raw_spread):
         ax.legend(fontsize=FONT - 6, frameon=False)
 
 def _linthresh(values):
@@ -299,8 +344,8 @@ def main():
     for pv in per_values:
         sub = camps if pv is None else camps[camps[args.per] == pv]
         try:
-            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs, args.metric,
-                                   args.stat, args.rep_spread)
+            data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs,
+                args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"

@@ -54,7 +54,7 @@ $(CH1): RES = $(RES1)
 # Seed variability: band = min..max over the 25x25 repetitions of the per-bit curve.
 c1_fig01:
 	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
-	    --query '$(ENC)' --per stage --rep_spread $(YL)
+	    --query '$(ENC)' --per stage --raw_spread $(YL)
 
 c1_fig02:
 	$(CURVE) --title c1_fig02_logN \
