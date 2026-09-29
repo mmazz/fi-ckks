@@ -78,6 +78,9 @@ def load_campaigns(results_dir, raw=False):
         return camps
     end = pd.read_csv(results_dir / "campaigns_end.csv")
     camps = start.merge(end, on="campaign_id", how="inner")   # unfinished ones are dropped
+    if camps.empty:
+        raise ValueError(f"{results_dir}: no finished campaigns ({len(start)} started, none of "
+                         f"them is in campaigns_end.csv)")
     return assign_config_id(camps)
 
 

@@ -26,7 +26,11 @@ CELL = ["limb", "coeff", "bit"]
 MEAN_COLS = ["l2_abs", "l2_rel", "linf_abs", "linf_rel", "err_bits", "err_saturated",
              "frac_bad", "frac_failed", "is_sdc", "is_masked", "detected", "misclassified",
              "out_of_range", "sdc_undetected", "false_alarm", "tolerable_sdc"]
-
+# Min / max over the repetitions of each cell, finite values only, saved as <col>_lo /
+# <col>_hi. bit_curve --raw_spread takes the min of _lo and the max of _hi over the
+# coefficients it plots: that is min / max over (seed, seed_input, coeff) per bit,
+# without reading the raw data.
+SPREAD_COLS = ["l2_rel", "err_bits"]
 
 def collapse_cells(data):
     """One row per (limb, coeff, bit). A single inf repetition makes the mean inf, the same
@@ -38,6 +42,10 @@ def collapse_cells(data):
     out["l2_rel_median"] = g["l2_rel"].median()      # register_map.py --stat median / max
     out["linf_rel_median"] = g["linf_rel"].median()
     out["linf_rel_max"] = g["linf_rel"].max()
+    fin = data[CELL + SPREAD_COLS].replace([np.inf, -np.inf], np.nan).groupby(CELL, sort=True)
+    for col in SPREAD_COLS:
+        out[f"{col}_lo"] = fin[col].min()
+        out[f"{col}_hi"] = fin[col].max()
     return out.reset_index()
 
 def collapse_reps(data):

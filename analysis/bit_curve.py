@@ -51,7 +51,7 @@ def parse_args():
     p.add_argument("--results", default="../results")
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
     p.add_argument("--vary", nargs="*", default=[], help="columns: one curve per combination of values")
-    p.add_argument("--per", default=None, help="Column: a figure representing value (ej: op_step)")
+    p.add_argument("--per", default=None, help="one figure per value of this column (e.g. op_step)")
     p.add_argument("--split", choices=["none", "gap"], default="none")
     p.add_argument("--metric", default="l2_rel", help="column of data to be plotted")
     p.add_argument("--stat", choices=list(STATS), default="mean",
@@ -93,7 +93,7 @@ def parse_args():
 
 
 # ------------------------------------------------------------------ #
-# Datos
+# Data
 # ------------------------------------------------------------------ #
 def level_logq(cfg):
     """logq of the ciphertext at the injection point: logQ minus logDelta per mult that
@@ -107,54 +107,33 @@ def level_logq(cfg):
 
 
 def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False):
-    """Una fila por (curva, limb, coeff, bit): seeds ya promediadas. Agrega gap_aligned."""
-    keys = [c for c in vary if c in camps.columns]          # 'limb' viene de los datos, no del registry
+    """One row per (curve, limb, coeff, bit), seeds already averaged. Adds gap_aligned."""
+    keys = [c for c in vary if c in camps.columns] # 'limb' comes from the data, not from the registry     
     groups = camps.groupby(keys) if keys else [((), camps)]
     parts = []
-    if raw_spread:
-        raw_camps = load_campaigns(results, raw=True)
 
-        if "data_file" in raw_camps.columns:
-            raise ValueError(
-                "--raw_spread requires the original raw results directory"
-            )
-    else:
-        raw_camps = None
 
     for _, g in groups:
-        cfg = require_single_config(g).iloc[0]              # dentro de una curva solo varian seeds
+        cfg = require_single_config(g).iloc[0]           # within one curve only the seeds vary  
         N = 1 << int(cfg["logN"])
         gap = (N // 2) // (1 << int(cfg["logSlots"]))
         d = load_data(g, results)
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
-        d = (d.groupby(["limb", "coeff", "bit"], as_index=False)[metric].mean())  # mean over seeds
+        agg = {metric: "mean"}                              # mean over seeds
+        if raw_spread:
+            lo, hi = f"{metric}_lo", f"{metric}_hi"
+            if lo not in d.columns:
+                sys.exit(f"--raw_spread needs {lo} / {hi} in the collapsed data: available for "
+                         f"l2_rel and err_bits, after 'python3 collapse.py <dir> --force'")
+            agg.update({lo: "min", hi: "max"})
+        d = d.groupby(["limb", "coeff", "bit"], as_index=False).agg(agg)       
         if rep_spread:
             # One curve per repetition (mean over its coefficients), then min..max per bit.
             # Precomputed by the collapse, so --drop_coeffs and --stat do not apply to it.
             rep = (load_reps(g, results).groupby("bit")[metric]
                    .agg(rep_lo="min", rep_hi="max").reset_index())
             d = d.merge(rep, on="bit", how="left")
-        if raw_spread:
-            # Mismo experimento/configuración, pero recuperando TODAS
-            # las campañas seed × seed_input originales.
-            rg = raw_camps[raw_camps["config_id"] == cfg["config_id"]]
-
-            raw = load_data(rg, results)
-
-            raw = raw[~raw["coeff"].isin(drop)]
-
-            # Los extremos se calculan directamente sobre las inyecciones
-            # raw: ninguna media sobre seeds ni coefficients antes.
-            finite = np.isfinite(raw[metric].to_numpy(dtype=float))
-
-            spread = (
-                raw.loc[finite]
-                   .groupby("bit")[metric]
-                   .agg(raw_lo="min", raw_hi="max")
-                   .reset_index()
-            )
-            d = d.merge(spread, on="bit", how="left")
 
         for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
@@ -236,16 +215,12 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             ax.fill_between(x, band["rep_lo"], band["rep_hi"], color=color, alpha=0.2, lw=0,
                             label=None if i else "min-max over repetitions")
         if args.raw_spread:
-            band = d.groupby("bit")[["raw_lo", "raw_hi"]].first().reindex(y.index)
-            ax.fill_between(
-                x,
-                band["raw_lo"],
-                band["raw_hi"],
-                color=color,
-                alpha=0.2,
-                lw=0,
-                label=None if i else "min-max over all coeffs and repetitions"
-            )
+            # min / max per bit over the coefficients of THIS curve and panel, and over
+            # every repetition: each cell already carries its own min / max over seeds.
+            band = (d.groupby("bit").agg(lo=(f"{args.metric}_lo", "min"),
+                                         hi=(f"{args.metric}_hi", "max")).reindex(y.index))
+            ax.fill_between(x, band["lo"], band["hi"], color=color, alpha=0.2, lw=0,
+                            label=None if i else "min-max over coeffs and repetitions")
         # A reference line is drawn when it falls at the same x for every curve, in the plotted
     # units: with --xnorm over_q and logDelta = 0.75 logQ, logDelta sits at 0.75 and logQ at 1.
     for col, name in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
@@ -298,7 +273,7 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
         ax.legend(fontsize=FONT - 6, frameon=False)
 
 def _linthresh(values):
-    """symlog lineal solo cerca de 0: por debajo del menor error no nulo."""
+    """symlog is linear only near 0: below the smallest non-zero error."""
     pos = values[values > 0]
     return float(10 ** np.floor(np.log10(pos.min()))) if len(pos) else 1e-12
 

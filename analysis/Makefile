@@ -9,6 +9,10 @@
 #
 # Output: img/<title>.pdf and .png. Chapter 1 files start with c1_, chapter 2 with c2_,
 # evidence with ev_.
+#
+# Thesis repo only: data.mk (written by scripts/export_thesis.sh) pins the data release
+# and points RES1 / RES2 / RES_NN at the downloaded copy. In fi-ckks it does not exist.
+-include data.mk
 # scripts/clientCampaigns.py: chapter 1 and the ev_ figures
 RES1     ?= ../results_client
 # scripts/serverCampaigns.py: chapter 2
@@ -24,17 +28,17 @@ HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
 REG    = python3 register_map.py --results $(RES) $(SHOW)
 YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
 
-  # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
-  # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
+# Every figure averages ALL the repetitions of its config: the collapsed data has no seed
+# columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
 ENC    = stage in ["encrypt_c0", "encrypt_c1"]
 
 .PHONY: check ch1 ch2 ev all
 all: ch1 ch2 ev
 
-check:
-	python3 check_results.py $(RES)
-	python3 check_results.py $(RES1) / $(RES2)
 
+check:
+	python3 check_results.py $(RES1)
+	python3 check_results.py $(RES2)
 # ======================================================================================
 # Chapter 1: client side
 # ======================================================================================
@@ -51,7 +55,8 @@ CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(CH1): RES = $(RES1)
-# Seed variability: band = min..max over the 25x25 repetitions of the per-bit curve.
+	
+# Seed variability: band = min..max per bit over every coefficient and repetition.
 c1_fig01:
 	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
 	    --query '$(ENC)' --per stage --raw_spread $(YL)
@@ -227,7 +232,7 @@ EXP_add       = $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2"
 EXP_mul       = $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul
 EXP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
 EXP_rescale   = $(RESC) stage=rescale "pipeline=mul x2"
-EXP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3" seed=3 seed_input=3
+EXP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3"
 EXP_mix       = $(BOOTP) stage=mul "pipeline=$(MIX)" numSamples=10
 EXP_mix_boot  = $(BOOTP) stage=mul "pipeline=$(MIX); boot" numSamples=10
 EXP_boot      = $(BOOTP) stage=boot "pipeline=mul x4; boot"
@@ -302,7 +307,7 @@ ev_mul_rns:
 # ======================================================================================
 NN = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 
-nn: nn_client nn_client_stack nnclient_ofhe
+nn: nn_client nn_client_stack nn_client_ofhe
 
 nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
 nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
@@ -321,4 +326,20 @@ TP ?= mul x3; boot
 taco:
 	python3 register_map.py --results ../results_taco $(SHOW) --title taco_$(TS) \
 	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+	
+# ======================================================================================
+# Thesis repo only: download the pinned data release before plotting. The stamp file
+# carries DATA_TAG, so moving the pin downloads again; otherwise it is fetched once.
+# ======================================================================================
+ifdef DATA_URL
+DATA_STAMP = ../data/.tag_$(DATA_TAG)
+.PHONY: data
+data: $(DATA_STAMP)
+$(DATA_STAMP):
+	rm -rf ../data.tmp && mkdir -p ../data.tmp
+	curl -fsSL "$(DATA_URL)" | tar -xz -C ../data.tmp
+	rm -rf ../data && mv ../data.tmp ../data
+	touch $@
+$(CH1) $(CH2) $(EV) explore explore_cmp nn_client nn_client_stack nn_client_ofhe: $(DATA_STAMP)
+endif
 	    stage=$(TS) "pipeline=$(TP)"
