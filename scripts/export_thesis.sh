@@ -17,12 +17,12 @@ mkdir -p "$1"
 DEST="$(cd "$1" && pwd)"
 TAG="${2:-}"
 
-# Only what the thesis targets (ch1, ch2, ev, explore) run or import. The rest of analysis/
-# (collapse, check_results, flat_curve, nn_sdc_curve, register_map_compare, utils/collapse,
+# Only what the thesis targets (ch1, ch2, ev, nn, explore) run or import. The rest of
+# analysis/ (collapse, check_results, flat_curve, register_map_compare, utils/collapse,
 # utils/config, utils/sites) only runs in fi-ckks. --delete-excluded removes files an older
 # export left behind; P protects the figures and the data pin.
 KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py
-      build_ml_dataset.py utils/__init__.py utils/results.py)
+      nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py)
 filters=(--filter='P /img/' --filter='P /data.mk' --include='/utils/')
 for f in "${KEEP[@]}"; do filters+=(--include="/$f"); done
 rsync -a --delete-excluded "${filters[@]}" --exclude='*' "$ROOT/analysis/" "$DEST/figures/"

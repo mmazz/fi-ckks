@@ -30,15 +30,14 @@ YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
 # What a thesis figure reads: the plotting scripts, this Makefile and the data. A figure
 # is replotted only when one of them is newer than its stamp (see "Incremental build").
 FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
-           $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv)
-
+           $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv $(RES_NN)/campaigns_*.csv)
 # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
 # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
 ENC    = stage in ["encrypt_c0", "encrypt_c1"]
 
-.PHONY: check ch1 ch2 ev all
-all: ch1 ch2 ev
 
+.PHONY: check ch1 ch2 ev nn all
+all: ch1 ch2 ev nn
 
 check:
 	python3 check_results.py $(RES1)
@@ -313,23 +312,29 @@ _ev_mul_rns:
 # Incremental build of the thesis figures: `make c1_fig01` runs the recipe _c1_fig01 only
 # when img/.c1_fig01.done is older than FIG_DEPS. Delete img/ (or one stamp) to force it.
 # ======================================================================================
-FIGS = $(CH1) $(CH2) $(EV)
+FIGS = $(CH1) $(CH2) $(EV) $(NNF)
 .PHONY: $(addprefix _,$(FIGS))
 $(FIGS): %: img/.%.done
 img/.%.done: $(FIG_DEPS)
 	$(MAKE) --no-print-directory _$*
 	@mkdir -p img && touch $@
+# ======================================================================================
+# Neural network: P(SDC) per bit of the client registers (scripts/NNCampaigns.py)
+# ======================================================================================
+NN  = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
+NNF = nn_client nn_client_stack nn_client_ofhe nn_client_ofhe_stack
+.PHONY: $(NNF)
+nn: $(NNF)
 
+_nn_client:            ; $(NN) --title nn_client_heaan         --where library=heaanNN
+_nn_client_stack:      ; $(NN) --title nn_client_heaan_stack   --where library=heaanNN --mode stack
+_nn_client_ofhe:       ; $(NN) --title nn_client_openfhe       --where library=openfheNN
+_nn_client_ofhe_stack: ; $(NN) --title nn_client_openfhe_stack --where library=openfheNN --mode stack
+	
 # ======================================================================================
 # Not thesis: other papers and workloads
 # ======================================================================================
-NN = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 
-nn: nn_client nn_client_stack nn_client_ofhe
-
-nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
-nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
-nn_client_ofhe:  ; $(NN) --title nn_client_openfhe     --where library=openfheNN
 
 # ASPLOS: datapath figure, panels chosen by their number in utils/sites.py
 CMP = python3 register_map_compare.py --results $(RES) $(SHOW)
@@ -337,14 +342,16 @@ PA  = library=heaan logN=6 logSlots=3 logQ=60 logDelta=25 bitsPerCoeff=64
 mul_panels:    ; $(CMP) --title mul_panels    --diagram mul    --panels 1 3 4 7 8 9 --no-legend --where $(PA) "pipeline=add; mul"
 client_panels: ; $(CMP) --title client_panels --diagram client --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=25 bitsPerCoeff=64 pipeline=mul
 
-
-# TACO: register map of one (stage, pipeline), e.g.
-#   make taco TS=decrypt_c1 "TP=mul x3; boot"
+# TACO: register map of one (stage, pipeline), group boot_client_taco, e.g.
+#   make taco TS=decrypt_c1 "TP=mul x4; boot"
 TS ?= encrypt_c0
 TP ?= mul x4; boot
+# encode is swept from logQ up to logQ + 860 (see TACO_campaings.py)
+TB  = $(if $(filter encode,$(TS)),1700,860)
 taco:
-	python3 register_map.py --results ../results_client $(SHOW) --title taco_$(TS) \
-	    --where $(BOOTP) \
+	python3 register_map.py --results ../results_taco $(SHOW) \
+	    --title taco_$(TS)$(if $(findstring boot,$(TP)),_boot) \
+	    --where library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=$(TB) \
 	    stage=$(TS) "pipeline=$(TP)"
 
 # ======================================================================================
@@ -363,6 +370,6 @@ $(DATA_STAMP):
 	curl -fsSL "$(DATA_URL)" | tar -xzm -C ../data.tmp
 	rm -rf ../data && mv ../data.tmp ../data
 	touch $@
-$(patsubst %,img/.%.done,$(FIGS)) explore explore_cmp nn_client nn_client_stack nn_client_ofhe: $(DATA_STAMP)
+$(patsubst %,img/.%.done,$(FIGS)) explore explore_cmp: $(DATA_STAMP)
 endif
 

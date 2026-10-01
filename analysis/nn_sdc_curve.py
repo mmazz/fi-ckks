@@ -165,12 +165,16 @@ def plot(stages, args):
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows),
                              sharex=True, sharey=True, squeeze=False)
     n_min = {}      # fewest injections behind any bit of each panel
+    p_reg = {}      # P(SDC | uniformly random bit of the register), per panel
     for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):
         curve = per_bit(data)
         n_min[stage] = int(curve["n"].min())
         (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
         mark_params(ax, cfg)
-        ax.set_title(stage, fontsize=FONT - 3, pad=20)
+        # Interpolated over every bit of the register: the sampled bits are not uniform
+        # (dense near logDelta and logQ), so the plain mean of the samples would be biased.
+        p_reg[stage] = register_rate(curve, register_width(cfg))
+        ax.set_title(f"{stage}  (P = {p_reg[stage]:.2f})", fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
         ax.tick_params(labelsize=FONT - 5)
     for ax in axes.flat[n:]:
@@ -189,17 +193,18 @@ def plot(stages, args):
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
                fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.05))
     fig.tight_layout()
-    return fig, n_min
+    return fig, n_min, p_reg
 
 
 def main():
     args = parse_args()
     stages = load_stages(args)
-    fig, n_min = plot(stages, args)
+    fig, n_min, p_reg = plot(stages, args)
 
-    print(f"  {'stage':12s} {'min n/bit':>10s}")
+    print(f"  {'stage':12s} {'min n/bit':>10s} {'P(SDC|reg)':>11s}")
     for stage, n in n_min.items():
-        print(f"  {stage:12s} {n:10d}")
+        print(f"  {stage:12s} {n:10d} {p_reg[stage]:11.3f}")
+
 
     rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
     out = rm.IMG_DIR / args.title
