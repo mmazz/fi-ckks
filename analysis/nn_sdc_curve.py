@@ -72,10 +72,12 @@ def load_stages(args):
     camps = camps[camps["stage"].isin(args.stages)]
     if camps.empty:
         sys.exit(f"ERROR: no finished campaigns for stages {args.stages} and {filters}")
-
-    # Every panel must be the same config except for the stage.
+    # Every panel must be the same config except for the stage and bitsPerCoeff: HEAAN's
+    # encode register is wider than a ciphertext, so its campaigns sweep more bits.
     together = camps.copy()
     together["stage"] = "*"
+    together["bitsPerCoeff"] = 0
+    # Every panel must be the s 
     try:
         require_single_config(assign_config_id(together))
     except ValueError as exc:
@@ -88,6 +90,10 @@ def load_stages(args):
     for stage in [s for s in args.stages if s not in missing]:
         group = camps[camps["stage"] == stage]
         out[stage] = (group.iloc[0], load_data(group, args.results))
+        try:
+            require_single_config(group)
+        except ValueError as exc:
+            sys.exit(f"ERROR: stage {stage}: {exc}. Add them to --where.")
     return out
 
 
@@ -117,11 +123,18 @@ def per_bit(data):
     out["masked"] = 1.0 - out["rate"] - out["tolerable"]
     return out.reset_index()
 
-def register_width(cfg):
-    """Bits the fault can land in. HEAAN's encode register is logDelta bits wider than a
-    ciphertext: it is scaled by 2^(logDelta + logQ) before encryptMsg shifts it by logQ."""
+
+def encode_shift(cfg):
+    """HEAAN adds the encoded plaintext to the encryption mod qQ and then shifts right by
+    logQ, so bit logQ + k of the encode register acts as bit k of a ciphertext. 0 elsewhere."""
     heaan_encode = str(cfg["library"]).startswith("heaan") and cfg["stage"] == "encode"
-    return int(cfg["logQ"]) + (int(cfg["logDelta"]) if heaan_encode else 0)
+    return int(cfg["logQ"]) if heaan_encode else 0
+
+
+def register_width(cfg):
+    """Bits the fault can land in: logQ for a ciphertext, 2*logQ (mod qQ) for HEAAN encode,
+    whose lower logQ bits are rounded away."""
+    return int(cfg["logQ"]) + encode_shift(cfg)
 
 def register_rate(curve, log_q):
     """P(SDC) for a bit drawn uniformly from [0, logQ): interpolate the sampled bits."""
@@ -133,7 +146,9 @@ def register_rate(curve, log_q):
 # Plot
 # ------------------------------------------------------------------ #
 def mark_params(ax, cfg):
-    for val, name in [(cfg["logDelta"], r"$\log\Delta$"), (cfg["logQ"], r"$\log Q$")]:
+    # On the HEAAN encode panel both references move up by logQ (see encode_shift).
+    s = encode_shift(cfg)
+    for val, name in [(cfg["logDelta"] + s, r"$\log\Delta$"), (cfg["logQ"] + s, r"$\log Q$")]:
         ax.axvline(val, color="black", lw=0.8, ls="--", alpha=0.7, zorder=4)
         ax.text(val, 1.02, name, transform=ax.get_xaxis_transform(),
                 ha="center", va="bottom", fontsize=FONT - 5)
@@ -163,7 +178,7 @@ def plot(stages, args):
     ncols = min(args.ncols, n)
     nrows = -(-n // ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows),
-                             sharex=True, sharey=True, squeeze=False)
+                             sharex=False, sharey=True, squeeze=False)
     n_min = {}      # fewest injections behind any bit of each panel
     p_reg = {}      # P(SDC | uniformly random bit of the register), per panel
     for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):

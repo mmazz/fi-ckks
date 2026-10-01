@@ -307,17 +307,6 @@ _ev_dec_mul:
 _ev_mul_rns:
 	$(CURVE) --title ev_mul_rns --where $(OFHE) pipeline=mul mult_depth=3 withNTT=0 logSlots=$(SL) \
 	    --metric is_sdc --per stage
-
-# ======================================================================================
-# Incremental build of the thesis figures: `make c1_fig01` runs the recipe _c1_fig01 only
-# when img/.c1_fig01.done is older than FIG_DEPS. Delete img/ (or one stamp) to force it.
-# ======================================================================================
-FIGS = $(CH1) $(CH2) $(EV) $(NNF)
-.PHONY: $(addprefix _,$(FIGS))
-$(FIGS): %: img/.%.done
-img/.%.done: $(FIG_DEPS)
-	$(MAKE) --no-print-directory _$*
-	@mkdir -p img && touch $@
 # ======================================================================================
 # Neural network: P(SDC) per bit of the client registers (scripts/NNCampaigns.py)
 # ======================================================================================
@@ -330,6 +319,17 @@ _nn_client:            ; $(NN) --title nn_client_heaan         --where library=h
 _nn_client_stack:      ; $(NN) --title nn_client_heaan_stack   --where library=heaanNN --mode stack
 _nn_client_ofhe:       ; $(NN) --title nn_client_openfhe       --where library=openfheNN
 _nn_client_ofhe_stack: ; $(NN) --title nn_client_openfhe_stack --where library=openfheNN --mode stack
+# ======================================================================================
+# Incremental build of the thesis figures: `make c1_fig01` runs the recipe _c1_fig01 only
+# when img/.c1_fig01.done is older than FIG_DEPS. Delete img/ (or one stamp) to force it.
+# ======================================================================================
+FIGS = $(CH1) $(CH2) $(EV) $(NNF)
+.PHONY: $(addprefix _,$(FIGS))
+$(FIGS): %: img/.%.done
+img/.%.done: $(FIG_DEPS)
+	$(MAKE) --no-print-directory _$*
+	@mkdir -p img && touch $@
+
 	
 # ======================================================================================
 # Not thesis: other papers and workloads
