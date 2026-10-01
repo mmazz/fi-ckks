@@ -265,3 +265,146 @@ A new backend has to implement the five functions in `core/backend_interface.h`.
 - Random campaigns sample different coefficients for each seed. That's fine for
   per-bit curves, but not for coefficient maps.
 - NN data from before the refactor (Sept 2026) is not comparable with the new data.
+
+
+## Workflow
+
+End to end: build → run campaigns → check → plot locally → publish a data release → plot in the thesis.
+
+### Where things live
+
+| Path | Contents |
+|------|----------|
+| `results_client/` | raw data of `scripts/clientCampaigns.py` (chapter 1 and the `ev_` figures) |
+| `results_server/` | raw data of `scripts/serverCampaigns.py` (chapter 2) |
+| `results_NN/` | raw data of `scripts/NNCampaigns.py` |
+| `results_taco/`, `results/` | raw data of `scripts/TACO_campaings.py` (papers, not the thesis) |
+| `<raw>/collapsed/` | local cache, written by the plotting scripts on their own |
+| `export/` | staging area of the last data release (gitignored) |
+| `<thesis>/figures/` | the part of `analysis/` the thesis uses, plus `data.mk` (written by `export_thesis.sh`) |
+| `<thesis>/data/` | the downloaded data release (never committed) |
+
+A raw dir has three things. `campaigns_start.csv` has one row per launched campaign, with all of its parameters. `campaigns_end.csv` has one row per finished campaign. `data/campaign_XXXXXX.csv.gz` has one row per injection. A campaign that is in `start` but not in `end` is ignored by every script.
+
+### 1. Build and test (once, and after touching the C++)
+
+```sh
+./third_party/setup_thirdParty.sh            # clones and builds both forks (once)
+make build
+ctest --test-dir build --output-on-failure
+tests/regress.sh check                       # reference campaigns, byte for byte
+```
+
+If a change of the numbers is intended, look at the diff first. Then freeze the new references:
+
+```sh
+tests/regress.sh create
+git add -f tests/reference/*.csv.gz          # *.csv.gz is gitignored
+```
+
+### 2. Add or change campaigns
+
+Never produce data by running a binary by hand. Every campaign belongs to a group in `scripts/*Campaigns.py`, so it is versioned and reproducible.
+
+- **Repetitions** are `SEEDS × INPUTS`: campaigns that differ only in `seed` / `seed_input`. They are averaged together. Groups that are compared in one figure should have the same number of repetitions.
+- **`bitsPerCoeff`** has to be above `logQ`, typically `logQ + 4`. Key-switching steps (`mul`, `rot`) work mod q·Q and need `2·logQ + 4`. HEAAN `encode` is `logQ + logDelta` bits wide.
+- **HEAAN levels**: after the last rescale, at least `logDelta` bits have to remain. The binary checks this before the baseline.
+- **Exhaustive or random**: exhaustive is `limbs · 2^logN · bitsPerCoeff` injections, so use it with `logN` 4 or 6 for register maps. Random is `numSamples · ~30 bits`, and is the choice for large `logN` and for the NN.
+
+Before launching, size the group and run a smoke test:
+
+```sh
+python3 scripts/serverCampaigns.py op_mul --dry-run | wc -l          # number of runs
+python3 scripts/serverCampaigns.py op_mul --dry-run | head -1        # copy one command
+./build/bin/fi_heaan <that command> --isExhaustive 0 --numSamples 1 --results_dir /tmp/smoke
+```
+
+Read its output:
+- `WARNING ... sweep is incomplete`: `bitsPerCoeff` is too small.
+- `never reached` / `is not implemented`: the stage or op_step does not exist in that backend.
+- `Error with golden norm`: the parameters cannot run the pipeline.
+- `contaminated state`: a bug. Stop.
+
+### 3. Run
+
+```sh
+make campaigns JOBS=10          # client + server + NN, appends to campaigns.log
+make client                     # or one script only: client / server / nn
+```
+
+- Every campaign is its own process. Finished campaigns are skipped (`Campaign already done`), so a run can be killed and relaunched at any time.
+- **Never launch the same group twice at the same time.** Both copies get the same `campaign_id` and write the same data file.
+- **Never run `make` in the root while campaigns are running.** It rebuilds the binaries that the running pool keeps launching, and it relaunches every group, which breaks the previous rule.
+- Progress: `wc -l results_*/campaigns_{start,end}.csv`
+
+### 4. Check
+
+```sh
+make check                      # check_results.py on the three dirs + refresh the caches
+```
+
+This lists unfinished campaigns, duplicated ids, configs with fewer repetitions than the rest, and the share of non-finite / `out_of_range` rows per stage. These are safe to run while campaigns are running, because the raw dirs are only read.
+
+### 5. Plot locally
+
+```sh
+cd analysis
+make ch1 ch2 ev                 # thesis figures -> img/
+make c1_fig07 SHOW=--show       # one figure, on screen
+make explore OP=mul             # every op_step of one operation (choose representatives)
+make nn                         # NN P(SDC) curves
+make client_panels              # client registers side by side (results_taco)
+```
+
+The scripts accept a raw dir or a collapsed one, and refresh `<raw>/collapsed/` on their own. That cache is rebuilt only when the set of finished campaigns changes, not when the code changes. Force it after touching `analysis/utils/collapse.py` or `add_derived()`:
+
+```sh
+python3 analysis/collapse.py results_client --force
+```
+
+`export_thesis.sh` does its own collapse and forces it when that code changed, so this is only needed for local plots.
+
+Every figure needs one config (seeds aside). If a script says `different configs; they differ in [...]`, add that column to `--where`, or move it to `--vary` (one curve per value) or `--per` (one figure per value).
+
+### 6. Publish a data release
+
+The data never goes into the thesis repo. It is published as a release asset of fi-ckks, and the thesis Makefile downloads it.
+
+```sh
+git add -A && git commit -m "..." && git push    # the release tag points at HEAD
+gh auth status
+./scripts/export_thesis.sh ../licar/tesis/2026_Mazzanti <tag>
+```
+
+The script does five things:
+1. It copies the scripts the thesis uses into `<thesis>/figures/`.
+2. It collapses every raw dir that has finished campaigns into `export/data/{client,server,nn}`.
+3. It packs that into `thesis-data.tar.gz`.
+4. It creates the release `<tag>` on fi-ckks.
+5. It writes `<thesis>/figures/data.mk` pinned to that release.
+
+The data is collapsed: one file per experiment, with one row per `(limb, coeff, bit)` averaged over the repetitions.
+
+- **A tag is never overwritten.** Running the script with an existing tag only re-pins it, and nothing is collapsed or published. New data needs a new tag (`thesis-data-1`, `TAG_V2`, ...).
+- **Partial exports are fine**, even while campaigns are running, for example the NN client stages before the rest of the NN group finishes. Only finished campaigns go in. Every campaign in `campaigns_end.csv` has a complete data file, because the data file is closed before the end line is written. The release is a snapshot; when the rest finishes, publish a new tag.
+- Without `<tag>`, only the scripts are copied (data pin unchanged).
+
+### 7. Plot in the thesis
+
+```sh
+cd ../licar/tesis/2026_Mazzanti/figures
+make -k all
+```
+
+The first run (and every run after `DATA_TAG` changes) downloads the release into `../data` and replots everything. After that, only figures whose script, Makefile or data changed are replotted. `-k` keeps going when one figure has no data yet. Commit `figures/` and `data.mk`, and keep `/data/` and `/data.tmp/` in the thesis `.gitignore`.
+
+### Checklist
+
+```sh
+make campaigns JOBS=10                                    # run (resumable)
+make check                                                # health check
+cd analysis && make ch1 ch2 ev && cd ..                   # look at the figures
+git commit -am "..." && git push                          # tag points at HEAD
+./scripts/export_thesis.sh ../licar/tesis/2026_Mazzanti <new tag>
+cd ../licar/tesis/2026_Mazzanti/figures && make -k all    # thesis figures
+```

@@ -341,10 +341,10 @@ client_panels: ; $(CMP) --title client_panels --diagram client --where library=h
 # TACO: register map of one (stage, pipeline), e.g.
 #   make taco TS=decrypt_c1 "TP=mul x3; boot"
 TS ?= encrypt_c0
-TP ?= mul x3; boot
+TP ?= mul x4; boot
 taco:
-	python3 register_map.py --results ../results_taco $(SHOW) --title taco_$(TS) \
-	    --where library=heaan logN=6 logSlots=4 logQ=840 logDelta=40 bitsPerCoeff=860 \
+	python3 register_map.py --results ../results_client $(SHOW) --title taco_$(TS) \
+	    --where $(BOOTP) \
 	    stage=$(TS) "pipeline=$(TP)"
 
 # ======================================================================================
