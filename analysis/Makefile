@@ -366,6 +366,11 @@ taco:
 	    --where library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=$(TB) \
 	    stage=$(TS) "pipeline=$(TP)"
 
+RNSEnc:
+	python3 register_map.py --results ../results_client --show \
+	    --title rnsEnc_$(TS)$ \
+	    --where library=openfhe logN=6 logSlots=4 logQ=60 logDelta=30 bitsPerCoeff=64 mult_depth=4 \
+	    stage=$(TS)
 # ======================================================================================
 # Thesis repo only: download the pinned data release before plotting. The stamp file
 # carries DATA_TAG, so moving the pin downloads again; otherwise it is fetched once.

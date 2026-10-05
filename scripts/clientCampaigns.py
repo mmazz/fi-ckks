@@ -146,8 +146,11 @@ GROUPS = {
     # FIG 13 (NTT domain: a single flip spreads over every coefficient).
     "addNTT": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", withNTT=1),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
+
     "test":  grid(dict(BASE, stage="decode", bitsPerCoeff=64), seed=SEEDS, seed_input=INPUTS),
 
+
+    "RNSEncrypt": grid(dict(CLIENT_OPENFHE, mult_depth = 4), stage=ENC, seed=SEEDS, seed_input=INPUTS),
 
 }
 
