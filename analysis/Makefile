@@ -34,6 +34,7 @@ FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
 # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
 # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
 ENC    = stage in ["encrypt_c0", "encrypt_c1"]
+ENC_DEC    = stage in ["encrypt_c0", "encrypt_c1", "decode"]
 
 
 .PHONY: check ch1 ch2 ev nn all
@@ -75,10 +76,11 @@ _c1_fig03:
 	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
 	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
 
+
 _c1_fig04:
-	$(SHIFT) --title c1_fig04_encode_c0_c1 --where $(BASE) pipeline= \
-	    --query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC) and bitsPerCoeff == 64))' \
-	    --vary stage $(YL)
+	$(SHIFT) --title c1_fig04_encode_c0_c1_dec --where $(BASE) pipeline= \
+	    --query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC_DEC) and bitsPerCoeff == 64))' \
+	    --vary stage --labels 'encode (bit $$-$$ logQ)' 'encrypt_c0' 'encrypt_c1' 'decode' $(YL)
 
 _c1_fig05:
 	$(CURVE) --title c1_fig05_logDelta \
@@ -91,8 +93,18 @@ _c1_fig05b:
 	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
+# May be better to show c1
+_c1_fig05c:
+	$(CURVE) --title c1_fig05b_logDelta_shift \
+	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
+
 _c1_fig06:
 	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
+	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
+	    --vary logQ --xnorm over_q $(YL)
+_c1_fig06b:
+	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 \
 	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
 	    --vary logQ --xnorm over_q $(YL)
 

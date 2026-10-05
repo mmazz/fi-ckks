@@ -113,7 +113,7 @@ GROUPS = {
     # EVIDENCE: with a null pipeline decrypt_c0 == encrypt_c0, decrypt_c1 == encrypt_c1
     # and decode == encode (same config as enc_seeds / plain_cmp).
     "dec_stages": grid(dict(BASE), stage=DEC, seed=SEEDS, seed_input=INPUTS)
-                + grid(dict(BASE, stage="decode", bitsPerCoeff=128), seed=SEEDS, seed_input=INPUTS),
+                + grid(dict(BASE, stage="decode", bitsPerCoeff=64), seed=SEEDS, seed_input=INPUTS),
 
     # ---- With pipeline -------------------------------------------------------------
     # FIG 9 (add + rot preserves the coefficient gaps: the automorphism maps multiples
@@ -146,6 +146,9 @@ GROUPS = {
     # FIG 13 (NTT domain: a single flip spreads over every coefficient).
     "addNTT": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", withNTT=1),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
+    "test":  grid(dict(BASE, stage="decode", bitsPerCoeff=64), seed=SEEDS, seed_input=INPUTS),
+
+
 }
 
 if __name__ == "__main__":
