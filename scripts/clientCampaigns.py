@@ -94,11 +94,13 @@ GROUPS = {
                + grid(dict(BASE_OPENFHE, stage="encode"), seed=SEEDS, seed_input=INPUTS),
 
     # FIG 5 (logDelta). Plot also with x = bit - logDelta: the curves should collapse.
-    "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"),
+    "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"), stage=ENC,
                         logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
 
     # FIG 6 (logQ, x normalised by logQ). Scale invariance: logDelta moves with logQ.
     "sweep_q": sweep_q("encrypt_c0"),
+
+    "sweep_q2": sweep_q("encrypt_c1"),
 
     # FIG 7 (logSlots, panel c0 = gaps visible / panel c1 = no gaps).
     "sweep_slots": grid(dict(SWEEP_SLOTS), stage=ENC, logSlots=LOGSLOTS_SWEEP,
@@ -147,8 +149,8 @@ GROUPS = {
     "addNTT": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", withNTT=1),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
 
-    "test":  grid(dict(BASE, stage="decode", bitsPerCoeff=64), seed=SEEDS, seed_input=INPUTS),
-
+    "test": grid(dict(SWEEP_DELTA, stage="encrypt_c1"), 
+                        logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
 
     "RNSEncrypt": grid(dict(CLIENT_OPENFHE, mult_depth = 4), stage=ENC, seed=SEEDS, seed_input=INPUTS),
 
