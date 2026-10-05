@@ -61,8 +61,10 @@ def parse_args():
     p.add_argument("--metric", default="l2_rel", help="column of data to be plotted")
     p.add_argument("--stat", choices=list(STATS), default="mean",
                    help="how to combine the coefficients of each bit")
-    p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q","minus_level"], default="none",
-                   help="x axis: bit | bit - logDelta | bit / logQ | bit - logq of the injection level")
+    p.add_argument("--xnorm", choices=["none", "minus_delta", "over_q", "minus_level", "top_bit"],
+                   default="none",
+                   help="x axis: bit | bit - logDelta | bit / logQ | bit - logq of the injection "
+                        "level | top bit of the burst (bit + amountBits - 1)")
     p.add_argument("--drop_coeffs", nargs="*", default=[], help="coefficients to be excluded: 0 N/2 ...")
     p.add_argument("--band", nargs="?", const="p10_90", default=None, choices=["p10_90", "std"],
                    help="shaded band across coefficients: p10_90 (default if no value) or std (mean +- 1 std)")
@@ -139,8 +141,7 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
             rep = (load_reps(g, results).groupby("bit")[metric]
                    .agg(rep_lo="min", rep_hi="max").reset_index())
             d = d.merge(rep, on="bit", how="left")
-
-        for c in ["library", "logN", "logSlots", "logQ", "logDelta", "stage", "pipeline", *keys]:
+        for c in ["library", "logN", "logSlots", "logQ", "logDelta", "amountBits", "stage", "pipeline", *keys]:
             d[c] = cfg[c]
         d["gap"] = gap
         d["level"] = level_logq(cfg)
@@ -156,6 +157,8 @@ def x_values(bits, df, xnorm):
         return bits / df["logQ"].iloc[0]
     if xnorm == "minus_level":
         return bits - df["level"].iloc[0]
+    if xnorm == "top_bit":
+        return bits + int(df["amountBits"].iloc[0]) - 1
     return bits
 
 
@@ -267,7 +270,7 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
         if top > 0:            # all zeros: leave matplotlib's default instead of an empty range
             ax.set_ylim(0, top * 3.0 if np.isfinite(top * 3.0) else top)
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
-              "over_q": r"Bit index relative to $\log Q$","minus_level": r"Bit index $-\ \log q_\ell$"}[args.xnorm]
+              "over_q": r"Bit index relative to $\log Q$","minus_level": r"Bit index $-\ \log q_\ell$", "top_bit": r"Top bit of the burst ($b + k - 1$)"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
     ax.tick_params(labelsize=TICK_FONT)
     ax.set_ylabel(args.ylabel or f"{args.stat} {args.metric} ({scale})", fontsize=FONT)

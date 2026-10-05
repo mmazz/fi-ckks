@@ -19,7 +19,7 @@ Old flags -> pipeline:  doAdd 2 -> "add x2", doMul 3 -> "mul x3", doRot 2 -> "ro
 doBoot 1 -> "boot" (at the end), exhaustiveSingleBitFlip -> isExhaustive=1,
 randomSingleBitFlip -> isExhaustive=0.
 """
-from campaigns import ROOT, grid, main
+from campaigns import BURSTS, RESULTS_BURST, ROOT, grid, main
 
 RESULTS = str(ROOT / "results_server")
 
@@ -135,6 +135,12 @@ GROUPS = {
     "boot_eval": steps(dict(BOOT, stage="boot_eval", pipeline="mul x4; boot", logSlots=2),
                        BOOT_EVAL_STEPS, seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
+        # ---- Multi-bit (burst) faults inside mul --------------------------------------------
+    # Same hypothesis as the burst_* groups of clientCampaigns.py, now on the registers of
+    # the operation, including the key-switching ones (mod qQ: 10, 11, 14), where the shift
+    # by logQ drops the low part of a burst. MUL_REPR only, 1 seed x 3 inputs as op_mul_depth.
+    "burst_op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul", results_dir=RESULTS_BURST),
+                          MUL_REPR, seeds=SEEDS_MUL[:1], inputs=SEEDS_MUL, amountBits=BURSTS),
     # ---- Not plotted in this chapter --------------------------------------------------
     # ML dataset: client fault, several pipelines ending in boot.
     # logQ=660 is not enough for the boot with logDelta=34 (HEAAN segfaults): 840.

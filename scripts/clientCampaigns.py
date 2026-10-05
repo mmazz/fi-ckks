@@ -12,7 +12,7 @@ Each group is tagged with the figure it feeds (FIG n) or with the claim it backs
 without being plotted (EVIDENCE). Re-running a group is safe: the registry skips the
 campaigns that already finished.
 """
-from campaigns import ROOT, grid, main
+from campaigns import BURSTS, RESULTS_BURST, ROOT, grid, main
 
 RESULTS = str(ROOT / "results_client")
 
@@ -135,7 +135,8 @@ GROUPS = {
     # FIG 11 (the same muls followed by bootstrapping). Only compared within itself.
     "boot": grid(BOOT, pipeline=["mul x4", "mul x4; boot"], stage=ENC,
                  seed=SEEDS, seed_input=INPUTS),
-
+   "boot_sweep": grid(BOOT, pipeline=["mul; boot", "mul x2; boot", "mul x3; boot", "mul x5; boot"], stage=ENC,
+                 seed=SEEDS, seed_input=INPUTS),
     # ---- RNS / NTT (OpenFHE) ---------------------------------------------------------
     # FIG 12 (RNS: add + rot keeps the gaps). mult_depth=3 -> 4 limbs; use --vary limb.
     "add_rotRNS": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", mult_depth=3),
@@ -154,7 +155,24 @@ GROUPS = {
 
     "RNSEncrypt": grid(dict(CLIENT_OPENFHE, mult_depth = 4), stage=ENC, seed=SEEDS, seed_input=INPUTS),
 
-}
+            # ---- Multi-bit (burst) faults -----------------------------------------------------
+    # --amountBits k flips bits b .. b+k-1. Hypothesis: the burst behaves as a single flip
+    # of its top bit b+k-1 (if the k bits are random, E|error| is exactly 2^(b+k-1)), so
+    # each curve is the k=1 one shifted left by k-1. Where single flips are masked, the
+    # burst behaves as its highest non-masked bit. Plot with --vary amountBits --xnorm top_bit.
+    # Null pipeline: the pure shift (BASE, as enc_seeds).
+    "burst_enc": grid(dict(BASE, results_dir=RESULTS_BURST), stage=ENC, amountBits=BURSTS,
+                      seed=SEEDS, seed_input=INPUTS),
+    # RNS (FIG 12 config): the burst leaves the limb modulus (out_of_range) k-1 bits earlier.
+    "burst_rns": grid(dict(CLIENT_OPENFHE, results_dir=RESULTS_BURST, pipeline="add; rot 3",
+                           mult_depth=3, logSlots=3),
+                      stage=ENC, amountBits=BURSTS, seed=SEEDS, seed_input=INPUTS),
+    # Through bootstrapping (FIG 11 config), the only non-linear step. Random and the most
+    # expensive group: every injection runs a full boot. Launch it last.
+    "burst_boot": grid(dict(BOOT, results_dir=RESULTS_BURST, pipeline="mul x4; boot"),
+                       stage=ENC, amountBits=BURSTS, seed=SEEDS, seed_input=INPUTS),
+
+    }
 
 if __name__ == "__main__":
     main(GROUPS, __doc__)

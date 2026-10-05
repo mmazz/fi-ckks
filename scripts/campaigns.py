@@ -16,7 +16,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BIN_DIR = ROOT / "build" / "bin"
-
+# Multi-bit (burst) groups of both chapters. They get their own results dir: with the same
+# config as a single-bit figure but another amountBits, they would be a second config under
+# that figure's --where and break it. Hence k=1 is in BURSTS: the reference is re-run here.
+RESULTS_BURST = str(ROOT / "results_burst")
+BURSTS = [1, 2, 4, 8]   # --amountBits
 
 def grid(fixed, **sweep):
     """Producto cartesiano: grid(base, stage=["a", "b"], seed=[1, 2]) -> 4 corridas."""
