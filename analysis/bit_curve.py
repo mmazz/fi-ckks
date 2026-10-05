@@ -3,9 +3,9 @@
 
 Seeds of the same config are first averaged in each (limb, coeff, bit); then the
 coefficients of each bit are combined with --stat.
-
-  --split gap   two subplots: coefficients with coeff % gap == 0 and the rest,
-                with gap = (N/2) / slots = 2^(logN - 1 - logSlots)
+  --split gap   two files, <title>_aligned (coefficients with coeff % gap == 0) and
+                <title>_other (the rest), with gap = (N/2) / slots = 2^(logN - 1 - logSlots).
+                Same y axis in both, so they can go side by side as two subfigures
   --vary COL    one curve per value of COL (logN, logQ, stage, library, gap_aligned, limb...)
   --per COL     one figure per value of COL (typically op_step)
   --labels ...  legend labels, one per curve, overriding the automatic ones
@@ -35,6 +35,10 @@ SCATER_SIZE = 24
 FONT = 24
 TICK_FONT = 18
 IMG_DIR = Path(__file__).resolve().parent / "img"
+FIGSIZE = (12, 5)
+# --split gap: one panel of the old side-by-side figure (16x5 / 2), so the fonts keep
+# their size when each file goes into a 0.49\textwidth subfigure.
+SPLIT_FIGSIZE = (8, 5)
 COLORS = ["#4382B4", "#E31A1C", "#EE7733", "#31A354", "#AA3377", "#663333", "#66CCEE", "#CCBB44"]
 STATS = {"mean": "mean", "median": "median",
          "geomean": lambda x: float(np.exp(np.log(np.maximum(x, 1e-300)).mean()))}
@@ -52,7 +56,8 @@ def parse_args():
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
     p.add_argument("--vary", nargs="*", default=[], help="columns: one curve per combination of values")
     p.add_argument("--per", default=None, help="one figure per value of this column (e.g. op_step)")
-    p.add_argument("--split", choices=["none", "gap"], default="none")
+    p.add_argument("--split", choices=["none", "gap"], default="none",
+                   help="gap: save <title>_aligned and <title>_other as two separate files")
     p.add_argument("--metric", default="l2_rel", help="column of data to be plotted")
     p.add_argument("--stat", choices=list(STATS), default="mean",
                    help="how to combine the coefficients of each bit")
@@ -277,30 +282,47 @@ def _linthresh(values):
     pos = values[values > 0]
     return float(10 ** np.floor(np.log10(pos.min()))) if len(pos) else 1e-12
 
-
-def make_figure(data, vary, args, name):
-    # Curve identity comes from the FULL data, so a curve missing from one panel (e.g. no
-    # non-aligned coefficients when gap=1) keeps its color, size and label in the other.
-    args.curve_keys = [k for k, _ in data.groupby(vary)] if vary else [None]
-    if args.split == "gap":
-        fig, axes = plt.subplots(1, 2, figsize=(16, 5), sharey=True)
-        # Left: coefficients the decode reads (coeff % gap == 0). Right: the rest.
-        plot_curves(axes[0], data[data["gap_aligned"]], vary, args, yref=data)
-        plot_curves(axes[1], data[~data["gap_aligned"]], vary, args, yref=data, legend=False)
-        axes[1].set_ylabel("")
-    else:
-        fig, ax = plt.subplots(figsize=(12, 5))
-        plot_curves(ax, data, vary, args)
+def save_figure(fig, name, args):
     if args.suptitle:
         fig.suptitle(args.suptitle, fontsize=FONT - 2, y=1.02)
     IMG_DIR.mkdir(exist_ok=True)
+    # f-string, not with_suffix(): a name with a dot (e.g. '..._logDelta_0.5_aligned')
+    # would lose everything after the dot and the two --split files would overwrite each other.
     out = IMG_DIR / name
-    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
-    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=120)
+    fig.savefig(f"{out}.pdf", bbox_inches="tight")
+    fig.savefig(f"{out}.png", bbox_inches="tight", dpi=120)
     print(f"-> {out}.png")
     if args.show:
         plt.show()
     plt.close(fig)
+
+
+def make_figure(data, vary, args, name):
+    """--split none: one file <name>. --split gap: <name>_aligned (coefficients the decode
+    reads, coeff % gap == 0) and <name>_other (the rest), each in its own file."""
+    # Curve identity comes from the FULL data, so a curve missing from one file (e.g. no
+    # non-aligned coefficients when gap=1) keeps its color, size and label in the other.
+    args.curve_keys = [k for k, _ in data.groupby(vary)] if vary else [None]
+    if args.split == "none":
+        fig, ax = plt.subplots(figsize=FIGSIZE)
+        plot_curves(ax, data, vary, args)
+        save_figure(fig, name, args)
+        return
+    parts = {"aligned": data[data["gap_aligned"]], "other": data[~data["gap_aligned"]]}
+    for suffix, part in parts.items():
+        if part.empty:
+            print(f"  {name}_{suffix}: no coefficients in this subset (gap = 1), not saved")
+            continue
+        fig, ax = plt.subplots(figsize=SPLIT_FIGSIZE)
+        # yref=data: both files get the same y scale and limits, computed from ALL the data
+        plot_curves(ax, part, vary, args, yref=data, legend=(suffix == "aligned"))
+        if suffix == "other":
+            # Same y axis and colors as _aligned: the y label, the tick labels and the
+            # legend are drawn only there. The ticks and the grid stay.
+            ax.set_ylabel("")
+            ax.tick_params(axis="y", labelleft=False)
+        save_figure(fig, f"{name}_{suffix}", args)
+
 
 def select_campaigns(args):
     """Finished campaigns matching --where (fixed values) and --query (any pandas expression)."""
