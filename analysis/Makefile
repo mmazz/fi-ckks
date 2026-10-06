@@ -26,7 +26,9 @@ CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
 SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
 HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
 REG    = python3 register_map.py --results $(RES) $(SHOW)
-YL     = --linthresh 1 --ylabel 'L$$_2$$ norm (symlog)'
+# en rango [-1,1] 10⁻²	valores corridos 1 %
+# L2 ≈ 2^(b − logΔ) / (√2 · rms de la entrada)
+YL     = --linthresh 1e-2 --ylabel 'L$$_2$$ norm (symlog)'
 # What a thesis figure reads: the plotting scripts, this Makefile and the data. A figure
 # is replotted only when one of them is newer than its stamp (see "Incremental build").
 FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \

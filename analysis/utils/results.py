@@ -135,6 +135,20 @@ def add_derived(data):
     data["frac_failed"] = data["failed"] / slots
     data["is_sdc"] = ((data["corrupted"] + data["failed"]) > 0).astype(float)
     data["is_masked"] = (data["correct"] == slots).astype(float)
+    # Does a fault break every slot or only some? Per injection, at 1 % (correct = <= 1 %)
+    # and at 10 % (corrupted + failed = > 10 %). Classified before the seeds are averaged,
+    # so the mean of each column is a probability. "None" is is_masked / 1 - is_sdc.
+    over1 = slots - data["correct"]
+    over10 = data["corrupted"] + data["failed"]
+    data["all_over1"] = (over1 == slots).astype(float)
+    data["some_over1"] = ((over1 > 0) & (over1 < slots)).astype(float)
+    data["all_over10"] = (over10 == slots).astype(float)
+    data["some_over10"] = ((over10 > 0) & (over10 < slots)).astype(float)
+    # crest = max / rms of the ABSOLUTE error over the slots: ~1.4 when every slot gets the
+    # same error (a cosine), sqrt(n_slots) when it all sits in one slot. NaN if no error.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        data["crest"] = data["linf_abs"] * np.sqrt(slots) / data["l2_abs"]
+    data.loc[~np.isfinite(data["crest"]), "crest"] = np.nan
     data["detected"] = data["detected"].astype(float)            # OpenFHE SDC detector
     data["misclassified"] = data["misclassified"].astype(float)  # NN workloads only
     data["out_of_range"] = data["out_of_range"].astype(float)    # OpenFHE only
