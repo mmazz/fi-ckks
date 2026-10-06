@@ -24,6 +24,7 @@ RES_BURST   ?= ../results_burst
 SHOW     ?=
 
 CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
+SHARE  = python3 slot_share.py   --results $(RES) $(SHOW)
 SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
 HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
 REG    = python3 register_map.py --results $(RES) $(SHOW)
