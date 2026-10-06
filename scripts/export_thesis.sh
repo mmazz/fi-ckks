@@ -44,7 +44,7 @@ if [ -n "$TAG" ]; then
         # the code that computes its columns changes. Rebuild everything if that code changed.
         CODE_HASH="$(cat "$ROOT/analysis/utils/collapse.py" "$ROOT/analysis/utils/results.py" \
                      | sha1sum | cut -d' ' -f1)"
-        for pair in client:results_client server:results_server nn:results_NN; do
+        for pair in client:results_client server:results_server nn:results_NN burst:results_burst; do
             name="${pair%%:*}"; raw="$ROOT/${pair#*:}"; out="$STAGE/data/$name"
             [ -d "$raw" ] || { echo "skip $raw (missing)"; continue; }
             # Only a header line: nothing finished yet (e.g. the NN campaigns are still running).
@@ -73,6 +73,7 @@ DATA_URL = https://github.com/$REPO/releases/download/$TAG/thesis-data.tar.gz
 RES1     = ../data/client
 RES2     = ../data/server
 RES_NN   = ../data/nn
+RES_BURST = ../data/burst
 MK
 fi
 

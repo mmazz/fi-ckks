@@ -11,7 +11,7 @@
 # evidence with ev_.
 #
 # Thesis repo only: data.mk (written by scripts/export_thesis.sh) pins the data release
-# and points RES1 / RES2 / RES_NN at the downloaded copy. In fi-ckks it does not exist.
+# and points RES1 / RES2 / RES_NN / RES_BURST at the downloaded copy. In fi-ckks it does not exist.
 -include data.mk
 # scripts/clientCampaigns.py: chapter 1 and the ev_ figures
 RES1     ?= ../results_client
@@ -20,6 +20,7 @@ RES2     ?= ../results_server
 # scripts/TACO_campaings.py: ASPLOS panels (mul_panels, client_panels)
 RES      ?= ../results
 RES_NN      ?= ../results_NN
+RES_BURST   ?= ../results_burst
 SHOW     ?=
 
 CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
@@ -32,19 +33,21 @@ YL     = --linthresh 1e-2 --ylabel 'L$$_2$$ norm (symlog)'
 # What a thesis figure reads: the plotting scripts, this Makefile and the data. A figure
 # is replotted only when one of them is newer than its stamp (see "Incremental build").
 FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
-           $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv $(RES_NN)/campaigns_*.csv)
+           $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv $(RES_NN)/campaigns_*.csv $(RES_BURST)/campaigns_*.csv)
 # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
 # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
 ENC    = stage in ["encrypt_c0", "encrypt_c1"]
 ENC_DEC    = stage in ["encrypt_c0", "encrypt_c1", "decode"]
 
+.PHONY: check ch1 ch2 ev nn burst all
+all: ch1 ch2 ev nn burst
 
-.PHONY: check ch1 ch2 ev nn all
-all: ch1 ch2 ev nn
 
 check:
 	python3 check_results.py $(RES1)
 	python3 check_results.py $(RES2)
+	python3 check_results.py $(RES_NN)
+	python3 check_results.py $(RES_BURST)
 # ======================================================================================
 # Chapter 1: client side
 # ======================================================================================
@@ -57,7 +60,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 SL        ?= 3
 
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig10 c1_fig11 c1_fig12 c1_fig13
+      c1_fig09 c1_fig10 c1_fig11 c1_fig11b c1_fig12 c1_fig13
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
@@ -135,6 +138,12 @@ _c1_fig11:
 	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
 	    --vary pipeline --per stage $(YL)
+# Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group). The curves
+# come sorted by the pipeline string, so "mul; boot" is the last one: hence the labels.
+_c1_fig11b:
+	$(CURVE) --title c1_fig11b_boot_sweep --where $(BOOTP) \
+	    --query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
+	    --vary pipeline --per stage --labels '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' '1 mul + boot' $(YL)
 
 _c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
@@ -240,6 +249,42 @@ _c2_fig07:
 	$(HEAT) --title c2_fig07_boot_eval_heat_aligned --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap aligned --tol 3
 	$(HEAT) --title c2_fig07_boot_eval_heat_other   --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot" --gap other --tol 3
 
+
+# ======================================================================================
+# Multi-bit faults (burst_* groups). A burst of k = amountBits bits from bit b should act
+# as a single flip of its top bit b+k-1: with --xnorm top_bit every k lands on the k=1
+# curve. Each figure reuses the config of a single-bit one (named next to it).
+# ======================================================================================
+MB = mb_enc_shift mb_enc mb_rns mb_boot mb_op_mul
+.PHONY: $(MB)
+burst: $(MB)
+$(addprefix _,$(MB)): RES = $(RES_BURST)
+
+# x = first bit of the burst: each curve is the k=1 one shifted left by k-1 (c1_fig01 config).
+_mb_enc_shift:
+	$(CURVE) --title mb_enc_shift --where $(BASE) bitsPerCoeff=64 pipeline= \
+	    --query '$(ENC)' --vary amountBits --per stage $(YL)
+
+# Same data, x = top bit of the burst: the curves collapse into one.
+_mb_enc:
+	$(CURVE) --title mb_enc --where $(BASE) bitsPerCoeff=64 pipeline= \
+	    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+
+# RNS (c1_fig12 config), averaged over the limbs.
+_mb_rns:
+	$(CURVE) --title mb_rns --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=3 \
+	    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+
+# Through bootstrapping (c1_fig11 config), the only non-linear step.
+_mb_boot:
+	$(CURVE) --title mb_boot --where $(BOOTP) "pipeline=mul x4; boot" \
+	    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+
+# Inside mul (c2_fig02 config): one figure per op_step of MUL_REPR.
+_mb_op_mul:
+	$(CURVE) --title mb_op_mul --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
+	    --vary amountBits --per op_step --xnorm top_bit $(YL)
+
 # ======================================================================================
 # Exploration: every op_step of one operation, to draw conclusions before choosing
 # the representative steps. Output: img/ex_<OP>_*.
@@ -337,7 +382,7 @@ _nn_client_ofhe_stack: ; $(NN) --title nn_client_openfhe_stack --where library=o
 # Incremental build of the thesis figures: `make c1_fig01` runs the recipe _c1_fig01 only
 # when img/.c1_fig01.done is older than FIG_DEPS. Delete img/ (or one stamp) to force it.
 # ======================================================================================
-FIGS = $(CH1) $(CH2) $(EV) $(NNF)
+FIGS = $(CH1) $(CH2) $(EV) $(NNF) $(MB)
 .PHONY: $(addprefix _,$(FIGS))
 $(FIGS): %: img/.%.done
 img/.%.done: $(FIG_DEPS)
