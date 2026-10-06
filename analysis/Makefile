@@ -339,7 +339,7 @@ comma := ,
 # ======================================================================================
 # Evidence: claims made in the text, not plotted in the thesis
 # ======================================================================================
-EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns
+EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_pmul_gap
 .PHONY: $(EV)
 ev: $(EV)
 $(addprefix _,$(EV)): RES = $(RES1)
@@ -361,6 +361,11 @@ _ev_dec_mul:
 	$(CURVE) --title ev_dec_mul --where library=heaan logN=6 logSlots=3 logDelta=30 \
 	    --query 'stage in ["decrypt_c0", "decrypt_c1"] and ((pipeline == "mul x3" and logQ == 150) or (pipeline == "" and logQ == 60))' \
 	    --vary pipeline --per stage $(YL)
+# c0 gaps: a ciphertext operand (mul) leaks the fault through its noise, a plaintext one (pmul) does not.
+_ev_pmul_gap:
+	$(CURVE) --title ev_pmul_gap --where $(CLIENT_MUL) stage=encrypt_c0 \
+	    --query 'pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
+	    --vary pipeline --split gap $(YL)
 
 # RNS + mul: probability of SDC per bit (the "it breaks everything" claim).
 _ev_mul_rns:

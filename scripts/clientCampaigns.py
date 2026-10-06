@@ -131,7 +131,11 @@ GROUPS = {
     # it ends at. Same config as "mul", so it compares directly with it.
     "dec_after_mul": grid(dict(CLIENT_MUL, pipeline="mul x3"), stage=DEC + ["decode"],
                           seed=SEEDS, seed_input=INPUTS),
-
+    # EVIDENCE: with a plaintext operand (no encryption noise) the gap coefficients of c0
+    # stay fully resilient, so with "mul" the fault reaches them through the noise of the
+    # fresh ciphertext. Same config as "mul", so it compares directly with it.
+    "pmul_gap": grid(dict(CLIENT_MUL), stage=["encrypt_c0"], pipeline=["pmul", "pmul x3"],
+                     seed=SEEDS, seed_input=INPUTS),
     # FIG 11 (the same muls followed by bootstrapping). Only compared within itself.
     "boot": grid(BOOT, pipeline=["mul x4", "mul x4; boot"], stage=ENC,
                  seed=SEEDS, seed_input=INPUTS),
