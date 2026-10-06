@@ -60,7 +60,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 SL        ?= 3
 
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig10 c1_fig11 c1_fig11b c1_fig12 c1_fig13
+      c1_fig09 c1_fig10 c1_fig11 c1_fig11b c1_fig12 c1_fig13 c1_share
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
