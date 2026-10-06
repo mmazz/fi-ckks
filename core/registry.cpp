@@ -224,9 +224,30 @@ CampaignRegistry::CampaignRegistry(const CampaignArgs& args)
         if (!f)
             throw std::runtime_error("CampaignRegistry: failed to write to " + start_csv_);
     }
+       // Two processes with the same config get the same campaign_id (the second one sees it
+   // started but not finished) and would write the same data file. Hold a per-campaign
+   // lock while it runs; the kernel releases it if the process dies.
+   if (!already_done) {
+       const std::string run_lock = results_dir + "/.running_" + std::to_string(campaign_id) + ".lock";
+       run_lock_fd_ = open(run_lock.c_str(), O_CREAT | O_RDWR, 0666);
+       if (run_lock_fd_ < 0)
+           throw std::runtime_error("CampaignRegistry: could not open " + run_lock);
+       if (flock(run_lock_fd_, LOCK_EX | LOCK_NB) != 0) {
+           close(run_lock_fd_);
+           run_lock_fd_ = -1;
+           running_elsewhere = true;
+       }
+   }
     // ~FileLock() libera el flock aca.
 }
 
+CampaignRegistry::~CampaignRegistry()
+   {
+       if (run_lock_fd_ >= 0) {
+           flock(run_lock_fd_, LOCK_UN);
+           close(run_lock_fd_);
+       }
+   }
 void CampaignRegistry::register_end(const CampaignEndRecord& r)
 {
     FileLock lock(lockfile_);

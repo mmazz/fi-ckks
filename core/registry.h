@@ -28,6 +28,10 @@ public:
 
     uint32_t campaign_id;
     bool already_done = false; 
+     bool running_elsewhere = false;   // another process holds this campaign's run lock
+   ~CampaignRegistry();
+   CampaignRegistry(const CampaignRegistry&) = delete;
+   CampaignRegistry& operator=(const CampaignRegistry&) = delete;
     static std::string csvEscape(const std::string& field);
         // Read-only check, does not create or write anything: a config that is already in
     // campaigns_end.csv can be skipped before paying for setup_campaign + baseline +
@@ -42,7 +46,7 @@ private:
     std::string start_csv_;
     std::string end_csv_;
     std::string lockfile_;
-
+   int run_lock_fd_ = -1;
     class FileLock {
     public:
         explicit FileLock(const std::string& path);

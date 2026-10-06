@@ -177,6 +177,7 @@ int main(int argc, char** argv)
             std::cout << "Campaign already done" << std::endl;
             return 0;
         }
+
         CtxPtr ctx(setup_campaign(args), destroy_campaign);
         const std::vector<double> ckks_golden  = run_clean(ctx.get(), args);
         const std::vector<double> plain_golden = get_reference_output(ctx.get());
@@ -212,6 +213,11 @@ int main(int argc, char** argv)
             std::cout << "Campaign already done" << std::endl;
             return 0;
         }
+       if (registry.running_elsewhere) {
+           std::cout << "Campaign " << registry.campaign_id
+                     << " is already running in another process: skipped" << std::endl;
+           return 0;
+       }
         seed_rng(args.seed, args.seed_input);
         CampaignLogger logger(registry.campaign_id, args.results_dir + "/data");
         std::unique_ptr<VectorLogger> vlogger;
