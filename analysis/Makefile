@@ -49,6 +49,11 @@ check:
 	python3 check_results.py $(RES2)
 	python3 check_results.py $(RES_NN)
 	python3 check_results.py $(RES_BURST)
+
+stats:
+	python3 slot_stats.py ../results_client ../results_server
+	python3 slot_stats.py ../results_client --by stage logMin logMax
+	python3 slot_stats.py ../results_server --by stage op_step
 # ======================================================================================
 # Chapter 1: client side
 # ======================================================================================
