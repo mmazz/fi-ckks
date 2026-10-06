@@ -159,7 +159,7 @@ GROUPS = {
 
     "RNSEncrypt": grid(dict(CLIENT_OPENFHE, mult_depth = 4), stage=ENC, seed=SEEDS, seed_input=INPUTS),
 
-            # ---- Multi-bit (burst) faults -----------------------------------------------------
+    # ---- Multi-bit (burst) faults -----------------------------------------------------
     # --amountBits k flips bits b .. b+k-1. Hypothesis: the burst behaves as a single flip
     # of its top bit b+k-1 (if the k bits are random, E|error| is exactly 2^(b+k-1)), so
     # each curve is the k=1 one shifted left by k-1. Where single flips are masked, the
