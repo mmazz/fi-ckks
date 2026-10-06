@@ -133,18 +133,19 @@ _c1_fig10:
 	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
 	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
 	    --vary pipeline --split gap --per stage $(YL)
-
 _c1_fig11:
 	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
-	    --vary pipeline --per stage $(YL)
-# Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group). The curves
-# come sorted by the pipeline string, so "mul; boot" is the last one: hence the labels.
+	    --vary pipeline --per stage --labels '4 mul' '4 mul + boot' \
+	    --xlim 0 300 --ymax 1e6 --lines --boot_cutoff $(YL)
+# Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group).
 _c1_fig11b:
 	$(CURVE) --title c1_fig11b_boot_sweep --where $(BOOTP) \
 	    --query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
-	    --vary pipeline --per stage --labels '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' '1 mul + boot' $(YL)
-
+	    --vary pipeline --per stage \
+	    --order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
+	    --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
+	    --xlim 0 300 --lines --boot_cutoff $(YL)
 _c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
@@ -154,7 +155,9 @@ _c1_fig13:
 	$(CURVE) --title c1_fig13_ntt \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) \
 	    --per stage $(YL)
-
+# Does a fault break every slot or only a few? Per bit: no slot / some / every slot > 1 %.
+_c1_share:
+	$(SHARE) --title c1_share --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
 # ======================================================================================
 # Chapter 2: server side. Base figure of each op = heatmap op_step x bit (it also prints
 # the patterns and one representative per pattern), then the curves of a few steps.

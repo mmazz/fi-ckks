@@ -24,7 +24,8 @@ CELL = ["limb", "coeff", "bit"]
 # Averaged over the repetitions of each cell. The names are the raw ones, so --metric
 # means the same thing on a raw and on a collapsed dir.
 MEAN_COLS = ["l2_abs", "l2_rel", "linf_abs", "linf_rel", "err_bits", "err_saturated",
-             "frac_bad", "frac_failed", "is_sdc", "is_masked", "detected", "misclassified",
+             "frac_bad", "frac_failed", "is_sdc", "is_masked", "all_over1", "some_over1",
+             "all_over10", "some_over10", "crest", "detected", "misclassified",
              "out_of_range", "sdc_undetected", "false_alarm", "tolerable_sdc"]
 # Min / max over the repetitions of each cell, finite values only, saved as <col>_lo /
 # <col>_hi. bit_curve --raw_spread takes the min of _lo and the max of _hi over the

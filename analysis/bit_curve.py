@@ -95,6 +95,19 @@ def parse_args():
     p.add_argument("--raw_spread",action="store_true",
                     help="shaded band = min..max per bit over all raw "
                          "(seed, seed_input, limb, coeff) values" )
+    p.add_argument("--xlim", nargs=2, type=float, default=None, metavar=("LO", "HI"),
+                   help="x axis range, in plotted units; reference lines outside it are dropped")
+    p.add_argument("--ymax", type=float, default=None,
+                   help="top of the y axis: values above it are drawn as open triangles on "
+                        "the top edge instead of stretching the axis")
+    p.add_argument("--lines", action="store_true",
+                   help="join the points of each curve with a thin line")
+    p.add_argument("--order", nargs="+", default=None,
+                   help="values of the (single) --vary column in the order the curves are "
+                        "drawn, colored and listed; --labels follows this order")
+    p.add_argument("--boot_cutoff", action="store_true",
+                   help="HEAAN only: dotted line per curve at the bit from which the boot "
+                        "removes the fault, logq_boot + k*logDelta (k = mults before the boot)")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -112,6 +125,23 @@ def level_logq(cfg):
     n_mults = sum(o in MULTS for o in ops[:max(pos, 0)])
     return int(cfg["logQ"]) - int(cfg["logDelta"]) * n_mults
 
+# backends/heaan.cpp: the boot starts with a modDown to logq_boot = logDelta + 10.
+HEAAN_BOOT_EXTRA_BITS = 10
+
+
+def boot_cutoff_bit(cfg):
+    """First bit whose fault the HEAAN boot removes: after k mults (one rescale by
+    logDelta each) the fault is a multiple of 2^(b - k*logDelta), and the modDown to
+    q_boot = 2^(logDelta + 10) drops it once that exponent reaches logq_boot.
+    NaN when there is no boot after the injection point."""
+    ops = expand(cfg["pipeline"])
+    pos = injection_index(ops, cfg["stage"], int(cfg["op_depth"]))
+    after = ops[pos + 1:] if pos is not None and pos >= 0 else ops
+    if pos is None or cfg["library"] != "heaan" or "boot" not in after:
+        return np.nan
+    k = sum(o in MULTS for o in after[:after.index("boot")])
+    delta = int(cfg["logDelta"])
+    return delta + HEAAN_BOOT_EXTRA_BITS + k * delta
 
 def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False):
     """One row per (curve, limb, coeff, bit), seeds already averaged. Adds gap_aligned."""
@@ -145,6 +175,7 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
             d[c] = cfg[c]
         d["gap"] = gap
         d["level"] = level_logq(cfg)
+        d["boot_cut"] = boot_cutoff_bit(cfg)
         d["gap_aligned"] = (d["coeff"] % gap == 0)
         parts.append(d)
     return pd.concat(parts, ignore_index=True)
@@ -171,6 +202,8 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
     yref = data if yref is None else yref
     groups = list(data.groupby(vary)) if vary else [(None, data)]
     keys = getattr(args, "curve_keys", [k for k, _ in groups])
+    # Draw in the order of keys (--order), so the legend lists the curves in that order.
+    groups.sort(key=lambda kv: keys.index(kv[0]))
     if args.labels and len(args.labels) != len(keys):
         sys.exit(f"--labels has {len(args.labels)} entries but there are {len(keys)} curves: "
                  f"{vary} = {keys}")
@@ -196,7 +229,21 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
         # First curve biggest and at the back, last one at SCATER_SIZE on top: when two
         # curves coincide, the bigger dot behind still shows as a ring.
         size = SCATER_SIZE + (len(keys) - 1 - i) * SIZE_STEP
+        over = yv > args.ymax if args.ymax is not None else np.zeros(yv.size, dtype=bool)
+        yv = np.where(over, np.nan, yv)            # off-scale points: triangles, below
+        if args.lines:
+            # NaN cuts the line, so it never runs up to an off-scale point.
+            ax.plot(x, yv, color=color, lw=1.2, alpha=0.6, zorder=1 + i)
         ax.scatter(x, yv, s=size, color=color, label=label, zorder=2 + i)
+        if over.any():
+            ax.scatter(x[over], np.full(over.sum(), 0.985), s=size, marker="^",
+                       facecolors="none", edgecolors=color, linewidths=1.2, clip_on=False,
+                       transform=ax.get_xaxis_transform(), zorder=2 + i)
+            print(f"  {label or 'curve'}: {over.sum()} bit(s) above --ymax {args.ymax:g}, "
+                  f"max {np.nanmax(y.to_numpy(dtype=float)):.3g}")
+        if args.boot_cutoff and np.isfinite(d["boot_cut"].iloc[0]):
+            cut = float(x_values(np.array([d["boot_cut"].iloc[0]]), d, args.xnorm)[0])
+            ax.axvline(cut, color=color, ls=":", lw=1.5, zorder=1)
         if overflow_bits.size:
             ax.plot(x_values(overflow_bits, d, args.xnorm),
                     np.full(overflow_bits.size, 0.97), ls="none", marker="|", ms=9,
@@ -244,6 +291,8 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             refs = data[col]
         if refs.nunique() == 1:
             ref = float(refs.iloc[0])
+            if args.xlim and not args.xlim[0] <= ref <= args.xlim[1]:
+                continue          # out of range: the label would be drawn outside the axes
             ax.axvline(ref, color="black", ls="--", lw=1)
             ax.text(ref, 1.0, f" {name}", transform=ax.get_xaxis_transform(),
                     va="bottom", ha="center", fontsize=FONT - 4)
@@ -265,10 +314,14 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             ax.set_ylim(float(pos.min()) / 3.0, float(pos.max()) * 3.0)
     elif args.metric in RATE_METRICS and scale == "linear":
         ax.set_ylim(-0.02, 1.02)
+    elif args.ymax is not None:
+        ax.set_ylim(0, args.ymax)
     else:
         top = float(finite_vals.max()) if finite_vals.size else 0.0
         if top > 0:            # all zeros: leave matplotlib's default instead of an empty range
             ax.set_ylim(0, top * 3.0 if np.isfinite(top * 3.0) else top)
+    if args.xlim:
+        ax.set_xlim(*args.xlim)
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
               "over_q": r"Bit index relative to $\log Q$","minus_level": r"Bit index $-\ \log q_\ell$", "top_bit": r"Top bit of the burst ($b + k - 1$)"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
@@ -306,6 +359,15 @@ def make_figure(data, vary, args, name):
     # Curve identity comes from the FULL data, so a curve missing from one file (e.g. no
     # non-aligned coefficients when gap=1) keeps its color, size and label in the other.
     args.curve_keys = [k for k, _ in data.groupby(vary)] if vary else [None]
+    if args.order:
+        # --order gives the values as text; map them onto the groupby keys (with one
+        # --vary column these can be scalars or 1-tuples, depending on pandas).
+        by_name = {str(k[0] if isinstance(k, tuple) else k): k for k in args.curve_keys}
+        missing = [v for v in args.order if v not in by_name]
+        if len(vary) != 1 or missing or len(args.order) != len(by_name):
+            sys.exit(f"--order needs exactly one --vary column and all its values once: "
+                     f"got {args.order}, the curves are {list(by_name)}")
+        args.curve_keys = [by_name[v] for v in args.order]
     if args.split == "none":
         fig, ax = plt.subplots(figsize=FIGSIZE)
         plot_curves(ax, data, vary, args)
