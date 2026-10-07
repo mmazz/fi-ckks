@@ -180,6 +180,32 @@ def collapse(curves, spec, args):
         print(f"  WARNING: steps in no group of --rows (not drawn): {missing}")
     return pd.DataFrame(rows).T
 
+def visible_ranges(curves):
+    """Per row: first and last bit whose MREP is above the Masked threshold, and how many
+    bits that is (if count != last - first + 1 the range has holes)."""
+    out = []
+    for label, row in curves.iterrows():
+        vis = row[row > rm.MASKED_PCT].index
+        first, last = (int(vis.min()), int(vis.max())) if len(vis) else (None, None)
+        out.append({"row": label, "first": first, "last": last, "count": len(vis)})
+    # Nullable integers: a row with no visible bit must not turn the columns into floats.
+    return pd.DataFrame(out).astype({"first": "Int64", "last": "Int64"})
+
+
+def report_ranges(curves, name):
+    """Print the visible bit range of every row and save it next to the figure."""
+    ranges = visible_ranges(curves)
+    print(f"  bits with MREP > {rm.MASKED_PCT:g}%:")
+    for r in ranges.itertuples():
+        if r.count == 0:
+            print(f"    {r.row:>12}: none")
+            continue
+        holes = "" if r.count == r.last - r.first + 1 else f"  (not contiguous: {r.count} bits)"
+        print(f"    {r.row:>12}: {r.first}-{r.last}{holes}")
+    IMG_DIR.mkdir(exist_ok=True)
+    out = IMG_DIR / f"{name}_ranges.csv"
+    ranges.to_csv(out, index=False)
+    print(f"  -> {out}")
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
@@ -295,6 +321,8 @@ def main():
         print(f"  representatives: {[g[0] for g in groups]}")
         if args.rows:
             curves = collapse(curves, args.rows, args)
+        if args.color == "mrep":
+            report_ranges(curves, name)
         plot(curves, groups, sub.iloc[0], name, args)
 
 
