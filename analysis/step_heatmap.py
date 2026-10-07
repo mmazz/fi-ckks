@@ -71,6 +71,7 @@ def parse_args():
                    help="only the coefficients the decode reads (aligned), only the rest, or all")
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
+    p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.tol is None:
@@ -144,24 +145,34 @@ def patterns(curves, args):
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
-def draw_mrep(fig, ax, values):
+def draw_mrep(fig, ax, values, args):
     """Same colors as register_map.py: categories, severe as a red -> black log gradient."""
     vmax = finite_max(values, rm.MODERATE_PCT)
     flat = values.ravel()
     rgba = rm.mrep_colors(flat, vmax)
     rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
-    handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
-               for color, label in [
-                   (rm.GREEN, rf"Masked ($\leq${rm.MASKED_PCT:g}%)"),
-                   (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
-                   (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
-                   (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
-                   (NOT_FLIPPED, "not injected")]]
-    # Above the axes, clear of the logDelta / logQ labels.
-    ax.legend(handles=handles, loc="lower center", ncol=3, frameon=False,
-              fontsize=TICK_FONT, bbox_to_anchor=(0.5, 1.05))
 
+    if not args.no_legend:
+        handles = [
+            Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
+            for color, label in [
+                (rm.GREEN, rf"Masked ($\leq${rm.MASKED_PCT:g}%)"),
+                (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
+                (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+                (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
+                (NOT_FLIPPED, "not injected"),
+            ]
+        ]
+
+        ax.legend(
+            handles=handles,
+            loc="lower center",
+            ncol=3,
+            frameon=False,
+            fontsize=TICK_FONT,
+            bbox_to_anchor=(0.5, 1.05),
+        )
 
 def draw_log2(fig, ax, values, floor):
     # Sequential, light = small error. It starts at 15% of Blues so the smallest real error
@@ -190,7 +201,7 @@ def plot(curves, groups, cfg, name, args):
     fig, ax = plt.subplots(figsize=(14, 0.35 * len(curves) + 2.5))
     values = curves.to_numpy(dtype=float)
     if args.color == "mrep":
-        draw_mrep(fig, ax, values)
+        draw_mrep(fig, ax, values, args)
     else:
         draw_log2(fig, ax, values, args.floor)
 
