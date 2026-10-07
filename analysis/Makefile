@@ -66,7 +66,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 SL        ?= 3
 
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig10 c1_fig11 c1_fig11b c1_fig12 c1_fig13 c1_share
+      c1_fig09 c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig13 c1_share
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
@@ -139,11 +139,22 @@ _c1_fig10:
 	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
 	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
 	    --vary pipeline --split gap --per stage $(YL)
+
+# # FIG 10b: c0 gaps, a ciphertext operand (mul) leaks the fault through its noise, a plaintext one (pmul) does not.
+_c1_fig10b:
+	$(CURVE) --title c1_fig10b_pmul_c0 --where $(CLIENT_MUL) \
+	    --query 'stage == "encrypt_c0" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
+	    --vary pipeline --split gap $(YL)
+	$(CURVE) --title c1_fig10b_pmul_c1 --where $(CLIENT_MUL) \
+	    --query 'stage == "encrypt_c1" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
+	    --vary pipeline --split gap $(YL)
+
 _c1_fig11:
 	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
 	    --vary pipeline --per stage --labels '4 mul' '4 mul + boot' \
 	    --xlim 0 300 --ymax 1e6 --lines --boot_cutoff $(YL)
+
 # Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group).
 _c1_fig11b:
 	$(CURVE) --title c1_fig11b_boot_sweep --where $(BOOTP) \
@@ -152,6 +163,7 @@ _c1_fig11b:
 	    --order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
 	    --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
 	    --xlim 0 300 --lines --boot_cutoff $(YL)
+
 _c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
@@ -348,7 +360,7 @@ comma := ,
 # ======================================================================================
 # Evidence: claims made in the text, not plotted in the thesis
 # ======================================================================================
-EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_pmul_gap
+EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns 
 .PHONY: $(EV)
 ev: $(EV)
 $(addprefix _,$(EV)): RES = $(RES1)
@@ -370,11 +382,6 @@ _ev_dec_mul:
 	$(CURVE) --title ev_dec_mul --where library=heaan logN=6 logSlots=3 logDelta=30 \
 	    --query 'stage in ["decrypt_c0", "decrypt_c1"] and ((pipeline == "mul x3" and logQ == 150) or (pipeline == "" and logQ == 60))' \
 	    --vary pipeline --per stage $(YL)
-# c0 gaps: a ciphertext operand (mul) leaks the fault through its noise, a plaintext one (pmul) does not.
-_ev_pmul_gap:
-	$(CURVE) --title ev_pmul_gap --where $(CLIENT_MUL) stage=encrypt_c0 \
-	    --query 'pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
-	    --vary pipeline --split gap $(YL)
 
 # RNS + mul: probability of SDC per bit (the "it breaks everything" claim).
 _ev_mul_rns:
@@ -432,6 +439,19 @@ RNSEnc:
 	    --title rnsEnc_$(TS)$ \
 	    --where library=openfhe logN=6 logSlots=4 logQ=60 logDelta=30 bitsPerCoeff=64 mult_depth=4 \
 	    stage=$(TS)
+	
+# TACO: boot sweep as register maps, one panel per pipeline, common color scale.
+# Reads the thesis campaigns (groups boot + boot_sweep of clientCampaigns.py, config
+# BOOTP): results_taco only has "mul x4" and "mul x4; boot" with logSlots=3.
+TACO_BOOT_PIPES  = "mul x4" "mul; boot" "mul x2; boot" "mul x3; boot" "mul x4; boot" "mul x5; boot"
+TACO_BOOT_LABELS = "4 mul" "1 mul + boot" "2 mul + boot" "3 mul + boot" "4 mul + boot" "5 mul + boot"
+taco_boot_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	    python3 register_map_compare.py --results $(RES1) $(SHOW) --title taco_boot_map_$$s \
+	        --where $(BOOTP) stage=$$s --vary pipeline --values $(TACO_BOOT_PIPES) \
+	        --labels $(TACO_BOOT_LABELS) --ylim 0 300 --boot_cutoff --fill_bits \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ); \
+	done
 # ======================================================================================
 # Thesis repo only: download the pinned data release before plotting. The stamp file
 # carries DATA_TAG, so moving the pin downloads again; otherwise it is fetched once.
