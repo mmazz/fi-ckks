@@ -29,7 +29,7 @@ from utils.results import (load_campaigns, load_data, select, require_single_con
 # ------------------------------------------------------------------ #
 # Categorias de MREP (en %). Ajusta los umbrales aca.
 # ------------------------------------------------------------------ #
-MASKED_PCT = 0.1      # <= epsilon = 0.1 % -> Masked
+MASKED_PCT = 1      # <= epsilon = 0.1 % -> Masked
 MINOR_PCT = 10.0      # epsilon < MREP <= 10 % -> Minor SDC
 MODERATE_PCT = 100.0  # 10 % < MREP <= 100 % -> Moderate SDC ; > 100 % -> Severe
 
