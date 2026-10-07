@@ -182,7 +182,7 @@ def draw_stack(ax, curve):
     x = curve["bit"].to_numpy()
     ax.stackplot(x, curve["masked"], curve["tolerable"], curve["rate"],
                  colors=[rm.GREEN, rm.YELLOW, rm.RED], alpha=0.9, zorder=2,
-                 labels=["Masked", "Tolerable SDC", "Misclassification"]
+                 labels=["Masked", "Tolerable SDC", "Misclassification"])
     ax.set_ylim(0, 1)
     ax.set_yticks([0, 0.5, 1])
 
