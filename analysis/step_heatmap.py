@@ -69,6 +69,10 @@ def parse_args():
                         "about the Masked threshold of register_map.py (default: exactly 0)")
     p.add_argument("--gap", choices=["all", "aligned", "other"], default="all",
                    help="only the coefficients the decode reads (aligned), only the rest, or all")
+    p.add_argument("--rows", default=None,
+                   help="one row per group of op_steps instead of one per op_step, e.g. "
+                        "'0-9;10,12;11,13;14;15;16-21,24;22,23,25'. Each row draws the first "
+                        "step of its group. Use the same groups in every panel so the rows line up")
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
@@ -120,6 +124,13 @@ def categories(values):
     cat = np.where(np.isnan(values), -1, cat)
     return np.where(np.isinf(values), 3, cat)
 
+def same_pattern(ref, row, args):
+    """True if two step curves are close enough (see --tol) on every bit both have."""
+    both = ref.notna() & row.notna()
+    if args.color == "mrep":
+        return (categories(ref[both].to_numpy()) != categories(row[both].to_numpy())).sum() <= args.tol
+    diff = (ref[both] - row[both]).abs()
+    return diff.empty or diff.max() < args.tol
 
 def patterns(curves, args):
     """Greedy grouping: each step joins the first pattern whose representative is close
@@ -127,20 +138,47 @@ def patterns(curves, args):
     groups = []
     for step, row in curves.iterrows():
         for g in groups:
-            ref = curves.loc[g[0]]
-            both = ref.notna() & row.notna()
-            if args.color == "mrep":
-                same = (categories(ref[both].to_numpy()) != categories(row[both].to_numpy())).sum() <= args.tol
-            else:
-                diff = (ref[both] - row[both]).abs()
-                same = diff.empty or diff.max() < args.tol
-            if same:
+            if same_pattern(curves.loc[g[0]], row, args):
                 g.append(step)
                 break
         else:
             groups.append([step])
     return groups
 
+def parse_rows(spec):
+    """'0-9;10,12' -> [("0-9", [0, ..., 9]), ("10,12", [10, 12])]."""
+    groups = []
+    for chunk in spec.split(";"):
+        steps = []
+        for part in chunk.split(","):
+            lo, _, hi = part.strip().partition("-")
+            steps += range(int(lo), int(hi or lo) + 1)
+        groups.append((chunk.strip(), steps))
+    return groups
+
+
+def collapse(curves, spec, args):
+    """One row per group of --rows: the curve of its first step, labelled with the whole
+    group. Warns when a step of a group is not the same pattern as its first step, and
+    when a step of the data is in no group."""
+    rows = {}
+    listed = set()
+    for chunk, steps in parse_rows(spec):
+        steps = [s for s in steps if s in curves.index]
+        listed.update(steps)
+        if not steps:
+            print(f"  WARNING: no data for the steps of group '{chunk}'")
+            continue
+        ref = curves.loc[steps[0]]
+        for s in steps[1:]:
+            if not same_pattern(ref, curves.loc[s], args):
+                print(f"  WARNING: step {s} is not the same pattern as step {steps[0]} (--tol {args.tol})")
+        label = chunk.replace("-", "\u2013").replace(",", ", ")
+        rows[label] = ref
+    missing = sorted(set(curves.index) - listed)
+    if missing:
+        print(f"  WARNING: steps in no group of --rows (not drawn): {missing}")
+    return pd.DataFrame(rows).T
 
 # ------------------------------------------------------------------ #
 # Plot
@@ -204,12 +242,15 @@ def plot(curves, groups, cfg, name, args):
         draw_mrep(fig, ax, values, args)
     else:
         draw_log2(fig, ax, values, args.floor)
-
-    # Row labels: op_step and its pattern letter.
-    letter = {s: chr(ord("A") + i) for i, g in enumerate(groups) for s in g}
+    # Row labels: the op_steps of each row (--rows), or each op_step and its pattern letter.
     ax.set_yticks(range(len(curves)))
-    ax.set_yticklabels([f"{s} ({letter[s]})" for s in curves.index], fontsize=TICK_FONT - 2)
-    ax.set_ylabel("op_step (pattern)", fontsize=FONT)
+    if args.rows:
+        ax.set_yticklabels(list(curves.index), fontsize=TICK_FONT)
+        ax.set_ylabel("op_step", fontsize=FONT)
+    else:
+        letter = {s: chr(ord("A") + i) for i, g in enumerate(groups) for s in g}
+        ax.set_yticklabels([f"{s} ({letter[s]})" for s in curves.index], fontsize=TICK_FONT - 2)
+        ax.set_ylabel("op_step (pattern)", fontsize=FONT)
 
     step = max(1, len(bits) // 16)
     ax.set_xticks(range(0, len(bits), step))
@@ -252,6 +293,8 @@ def main():
         for i, g in enumerate(groups):
             print(f"  {chr(ord('A') + i)}: steps {g}  (representative: {g[0]})")
         print(f"  representatives: {[g[0] for g in groups]}")
+        if args.rows:
+            curves = collapse(curves, args.rows, args)
         plot(curves, groups, sub.iloc[0], name, args)
 
 

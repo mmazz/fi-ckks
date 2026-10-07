@@ -193,6 +193,7 @@ ADD_SHOW  ?= 0, 2
 MUL_SHOW  ?= 0, 1, 4, 11, 14, 24
 ROT_SHOW  ?= 0, 1, 3, 6, 10
 MIX_DEPTH ?= 0
+MUL_ROWS = 0-9;10,12;11,13;14;15;16-21,24;22,23,25
 
 CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 .PHONY: $(CH2)
@@ -208,8 +209,8 @@ _c2_fig01:
 
 _c2_fig02:
 	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap aligned --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --gap other --tol 3 --no-legend
+	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --rows "$(MUL_ROWS)" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --rows "$(MUL_ROWS)" --gap other --tol 3 --no-legend
 	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
 	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
