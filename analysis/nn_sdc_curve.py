@@ -38,6 +38,14 @@ from utils.results import (load_campaigns, load_data, select, require_single_con
                            assign_config_id, parse_value)
 
 CLIENT_STAGES = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"]
+# Panel titles: stage number of the client pipeline (Fig. 4 of the DSN paper) + register.
+STAGE_LABEL = {"encode": "1: plaintext (encode)", "encrypt_c0": "3: $c_0$ (encrypt)",
+               "encrypt_c1": "4: $c_1$ (encrypt)", "decrypt_c0": "7: $c_0$ (before decrypt)",
+               "decrypt_c1": "8: $c_1$ (before decrypt)", "decode": "9: plaintext (decode)"}
+# Levels the HEAAN network spends before the logits: W1, x^2, x^3, -0.23*x^3, W2
+# (workloads/nn/heaan_nn.cpp). The output registers live mod 2^(logQ - NN_LEVELS*logDelta).
+NN_LEVELS = 5
+OUTPUT_STAGES = {"decrypt_c0", "decrypt_c1", "decode"}
 RATE_CMAP = mcolors.LinearSegmentedColormap.from_list("rate", [rm.GREEN, rm.YELLOW, rm.RED])
 # gamma < 1 so that a small but non-zero rate is already visibly yellow, not green.
 RATE_NORM = mcolors.PowerNorm(gamma=0.5, vmin=0.0, vmax=1.0)
@@ -131,13 +139,18 @@ def encode_shift(cfg):
     return int(cfg["logQ"]) if heaan_encode else 0
 
 
+
 def register_width(cfg):
-    """Bits the fault can land in: logQ for a ciphertext, 2*logQ (mod qQ) for HEAAN encode,
-    whose lower logQ bits are rounded away."""
+    """Bits the fault can land in: the width of the register at the injection point.
+    HEAAN: logQ for the input ciphertext, logQ - NN_LEVELS*logDelta for the logits
+    (decrypt_*, decode), 2*logQ for encode (mod qQ; its lower logQ bits are rounded away).
+    OpenFHE: logQ, the first limb."""
+    if str(cfg["library"]).startswith("heaan") and cfg["stage"] in OUTPUT_STAGES:
+        return int(cfg["logQ"]) - NN_LEVELS * int(cfg["logDelta"])
     return int(cfg["logQ"]) + encode_shift(cfg)
 
 def register_rate(curve, log_q):
-    """P(SDC) for a bit drawn uniformly from [0, logQ): interpolate the sampled bits."""
+    """P(SDC) for a bit drawn uniformly from the register at the injection point, [0, log_q): interpolate the sampled bits."""
     bits = np.arange(int(log_q))
     return float(np.interp(bits, curve["bit"], curve["rate"]).mean())
 
@@ -148,7 +161,8 @@ def register_rate(curve, log_q):
 def mark_params(ax, cfg):
     # On the HEAAN encode panel both references move up by logQ (see encode_shift).
     s = encode_shift(cfg)
-    for val, name in [(cfg["logDelta"] + s, r"$\log\Delta$"), (cfg["logQ"] + s, r"$\log Q$")]:
+    for val, name in [(cfg["logDelta"] + s, r"$\log\Delta$"),
+                      (register_width(cfg), r"$\log q_\ell$")]:
         ax.axvline(val, color="black", lw=0.8, ls="--", alpha=0.7, zorder=4)
         ax.text(val, 1.02, name, transform=ax.get_xaxis_transform(),
                 ha="center", va="bottom", fontsize=FONT - 5)
@@ -168,7 +182,7 @@ def draw_stack(ax, curve):
     x = curve["bit"].to_numpy()
     ax.stackplot(x, curve["masked"], curve["tolerable"], curve["rate"],
                  colors=[rm.GREEN, rm.YELLOW, rm.RED], alpha=0.9, zorder=2,
-                 labels=["Masked", "Tolerable SDC", "Critical SDC"])
+                 labels=["Masked", "Tolerable SDC", "Misclassification"]
     ax.set_ylim(0, 1)
     ax.set_yticks([0, 0.5, 1])
 
@@ -186,11 +200,16 @@ def plot(stages, args):
         n_min[stage] = int(curve["n"].min())
         (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
         mark_params(ax, cfg)
-        # Interpolated over every bit of the register: the sampled bits are not uniform
+        # interpolated over every bit of the register at the injection point and averaged
         # (dense near logDelta and logQ), so the plain mean of the samples would be biased.
         p_reg[stage] = register_rate(curve, register_width(cfg))
-        ax.set_title(f"{stage}  (P = {p_reg[stage]:.2f})", fontsize=FONT - 3, pad=20)
+        ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {p_reg[stage]:.2f})",
+                       fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
+        # Output registers are only log q_l = 70 bits wide: crop so that the window is
+        # readable. The control points above (up to bitsPerCoeff) are all masked.
+        if stage in OUTPUT_STAGES:
+            ax.set_xlim(-3, register_width(cfg) + 30)
         ax.tick_params(labelsize=FONT - 5)
     for ax in axes.flat[n:]:
         ax.set_visible(False)
@@ -201,7 +220,7 @@ def plot(stages, args):
     if args.mode == "rate":
         # Proxies: the scatter is colored point by point, its own handle would be green.
         handles = [Line2D([], [], ls="none", marker="o", mfc=rm.RED, mec="black", mew=0.3,
-                          label="P(SDC) per bit"),
+                          label="P(misclassification) per bit"),
                    Patch(facecolor=BAND_COLOR, alpha=0.45, label="95% Wilson CI")]
     else:
         handles, _ = axes.flat[0].get_legend_handles_labels()
