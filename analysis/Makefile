@@ -66,7 +66,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 SL        ?= 3
 
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig13 c1_share
+      c1_fig09 c1_fig09b c1_fig09c c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig12b c1_fig12c c1_fig13 c1_share
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
@@ -135,6 +135,17 @@ _c1_fig09:
 	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
+_c1_fig09b:
+	$(CURVE) --title c1_fig09_add_pmul_rot \
+	    --where library=heaan "pipeline=add x2; pmul x3; rot 3" logN=6 logQ=150 logDelta=30 bitsPerCoeff=170 \
+	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
+
+_c1_fig09c:
+	$(CURVE) --title c1_fig09_add_rotOpen \
+	    --where $(OFHE) "pipeline=add x2; rot 3" mult_depth=0 withNTT=0  \
+	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset --drop_coeffs 0
+
+
 _c1_fig10:
 	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
 	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
@@ -167,7 +178,17 @@ _c1_fig11b:
 _c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
-	    --vary limb --per stage $(YL)
+	    --vary limb --per stage $(YL) --detect_onset --drop_coeffs 0
+
+_c1_fig12b:
+	$(CURVE) --title c1_fig12_rns_pmul \
+		--where $(OFHE) "pipeline=pmul" mult_depth=3 withNTT=0 logSlots=$(SL) --drop_coeffs 0\
+		--vary limb --per stage --detect_onset $(YL) --detect_onset --drop_coeffs 0
+
+_c1_fig12c:
+	$(CURVE) --title c1_fig12_rns_add_pmul_rot \
+	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=0 withNTT=0 logSlots=$(SL) \
+	    --vary limb --per stage $(YL) --detect_onset --drop_coeffs 0
 
 _c1_fig13:
 	$(CURVE) --title c1_fig13_ntt \
@@ -361,7 +382,7 @@ comma := ,
 # ======================================================================================
 # Evidence: claims made in the text, not plotted in the thesis
 # ======================================================================================
-EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns 
+EV = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector
 .PHONY: $(EV)
 ev: $(EV)
 $(addprefix _,$(EV)): RES = $(RES1)
@@ -388,6 +409,12 @@ _ev_dec_mul:
 _ev_mul_rns:
 	$(CURVE) --title ev_mul_rns --where $(OFHE) pipeline=mul mult_depth=3 withNTT=0 logSlots=$(SL) \
 	    --metric is_sdc --per stage
+
+# OpenFHE SDC detector: L2 per bit with the mean bit from which the detector fires
+# (p10..p90 over the coefficients shaded). Single limb, so the onset is not trivially bit 0.
+_ev_detector:
+	$(CURVE) --title ev_detector --where library=openfhe logN=6 logSlots=5 logQ=60 logDelta=40 \
+	    bitsPerCoeff=64 mult_depth=0 withNTT=0 stage=encode pipeline= --detect_onset $(YL)
 # ======================================================================================
 # Neural network: P(SDC) per bit of the client registers (scripts/NNCampaigns.py)
 # ======================================================================================
@@ -450,8 +477,20 @@ taco_boot_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	    python3 register_map_compare.py --results $(RES1) $(SHOW) --title taco_boot_map_$$s \
 	        --where $(BOOTP) stage=$$s --vary pipeline --values $(TACO_BOOT_PIPES) \
-	        --labels $(TACO_BOOT_LABELS) --ylim 0 300 --boot_cutoff --fill_bits \
+	        --labels $(TACO_BOOT_LABELS) --ylim 0 300 --boot_cutoff --fill_bits  --taco\
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ); \
+	done
+
+# c1_fig10b as register maps (paper format). Panels ordered so each mul sits next to its
+# pmul. One figure per stage; the legend only on c0, so c1 can be stacked below it.
+FIG10B_PIPES  = "mul" "pmul" "mul x3" "pmul x3"
+FIG10B_LABELS = "1 mul" "1 pmul" "3 mul" "3 pmul"
+taco_pmul_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	    python3 register_map_compare.py --results $(RES1) $(SHOW) --title taco_pmul_map_$$s \
+	        --where $(CLIENT_MUL) stage=$$s --vary pipeline --values $(FIG10B_PIPES)  --taco \
+	        --labels $(FIG10B_LABELS) \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
 # ======================================================================================
 # Thesis repo only: download the pinned data release before plotting. The stamp file

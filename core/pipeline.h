@@ -29,6 +29,8 @@ void apply_plain(const Op& op, std::vector<T>& g, const std::vector<T>& base) {
         for (size_t i = 0; i < g.size(); ++i) g[i] += base[i];
         break;
     case OpType::PMul:
+        for (size_t i = 0; i < g.size(); ++i) g[i] *= base[i];
+        break;
     case OpType::Mul:
         for (size_t i = 0; i < g.size(); ++i) g[i] *= base[i];
         break;

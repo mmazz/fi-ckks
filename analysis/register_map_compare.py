@@ -66,6 +66,8 @@ def parse_args():
     p.add_argument("--fill_bits", action="store_true",
                    help="random campaigns inject a subset of the bits: give each row that was not "
                         "injected the color of the next injected bit above it, instead of white")
+    p.add_argument("--taco", action="store_true",
+                   help=f"masked threshold of {rm.TACO_MASKED_PCT:g}%% instead of {rm.MASKED_PCT:g}%%")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if (args.diagram is None) == (args.vary is None):
@@ -74,6 +76,7 @@ def parse_args():
         p.error("--vary needs --values")
     if args.labels and len(args.labels) != len(args.values or []):
         p.error("--labels needs one entry per --values")
+    args.masked = rm.TACO_MASKED_PCT if args.taco else rm.MASKED_PCT
     return args
 
 # ------------------------------------------------------------------ #
@@ -138,7 +141,7 @@ def fill_unsampled_rows(img, sampled):
     src = np.searchsorted(sampled, np.arange(img.shape[0]), side="left")
     return img[sampled[np.minimum(src, sampled.size - 1)]]
 
-def panel_image(cells, cfg, vmax, fill=False):
+def panel_image(cells, cfg, vmax, masked, fill=False):
     """(bits, x, RGBA) image: one pixel per (coeff, bit), limbs side by side."""
     N = 1 << int(cfg["logN"])
     n_limbs = int(cells["limb"].max()) + 1
@@ -146,13 +149,13 @@ def panel_image(cells, cfg, vmax, fill=False):
     img = np.tile(np.array(EMPTY), (n_bits, N * n_limbs, 1))
     x = cells["limb"].to_numpy() * N + cells["coeff"].to_numpy()
     y = cells["bit"].to_numpy()
-    img[y, x] = rm.mrep_colors(cells["mrep"].to_numpy(dtype=float), vmax)
+    img[y, x] = rm.mrep_colors(cells["mrep"].to_numpy(dtype=float), vmax, masked)
     if fill:
         img = fill_unsampled_rows(img, y)
     return img, N, n_limbs
 
 def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
-    img, N, n_limbs = panel_image(cells, cfg, vmax, fill=args.fill_bits)
+    img, N, n_limbs = panel_image(cells, cfg, vmax, args.masked, fill=args.fill_bits)
     n_bits, n_x = img.shape[:2]
     # One pixel per cell: no marker-size tuning, no gaps, exact at any figure size.
     ax.imshow(img, origin="lower", aspect="auto", interpolation="nearest",
@@ -210,7 +213,7 @@ def plot_comparison(panels, vmax, show_legend, args):
         # overlaps short panels; the severe gradient is still red -> black in the plot.
         handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
                    for color, label in [
-                       (rm.GREEN, rf"Masked ($\leq${rm.MASKED_PCT:g}%)"),
+                       (rm.GREEN, rf"Masked ($\leq${args.masked:g}%)"),
                        (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
                        (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
                        (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%)")]]

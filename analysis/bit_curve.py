@@ -46,6 +46,9 @@ STATS = {"mean": "mean", "median": "median",
 # linear y axis instead of symlog. See load_data() in utils/results.py.
 RATE_METRICS = {"is_sdc", "is_masked", "frac_bad", "frac_failed", "detected",
                 "misclassified", "sdc_undetected", "false_alarm"}
+# --detect_onset: a (limb, coeff) counts as detected from the lowest bit where OpenFHE's
+# SDC detector fired in at least this fraction of the repetitions (seed x seed_input).
+DETECT_RATE = 0.5
 # ------------------------------------------------------------------ #
 # CLI
 # ------------------------------------------------------------------ #
@@ -108,6 +111,10 @@ def parse_args():
     p.add_argument("--boot_cutoff", action="store_true",
                    help="HEAAN only: dotted line per curve at the bit from which the boot "
                         "removes the fault, logq_boot + k*logDelta (k = mults before the boot)")
+    p.add_argument("--detect_onset", action="store_true",
+                   help="OpenFHE only: dash-dot line per curve at the mean bit from which the "
+                        "SDC detector fires (per coefficient: lowest bit with detected >= "
+                        "DETECT_RATE), shaded p10..p90 over the coefficients")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -143,7 +150,15 @@ def boot_cutoff_bit(cfg):
     delta = int(cfg["logDelta"])
     return delta + HEAAN_BOOT_EXTRA_BITS + k * delta
 
-def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False):
+def detector_onset(d):
+    """Bit from which OpenFHE's SDC detector fires, one value per (limb, coeff) of `d`:
+    the lowest bit whose detection rate over the repetitions is >= DETECT_RATE.
+    Returns (onset bits, list of (limb, coeff) where it never fires)."""
+    onset = d[d["detected"] >= DETECT_RATE].groupby(["limb", "coeff"])["bit"].min()
+    never = sorted(set(d.groupby(["limb", "coeff"]).groups) - set(onset.index))
+    return onset.to_numpy(dtype=float), never
+
+def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False, detect_onset=False):
     """One row per (curve, limb, coeff, bit), seeds already averaged. Adds gap_aligned."""
     keys = [c for c in vary if c in camps.columns] # 'limb' comes from the data, not from the registry     
     groups = camps.groupby(keys) if keys else [((), camps)]
@@ -158,6 +173,8 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
         agg = {metric: "mean"}                              # mean over seeds
+        if detect_onset:
+            agg["detected"] = "mean"     # kept per cell: plot_curves() needs it for the onset
         if raw_spread:
             lo, hi = f"{metric}_lo", f"{metric}_hi"
             if lo not in d.columns:
@@ -244,6 +261,26 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
         if args.boot_cutoff and np.isfinite(d["boot_cut"].iloc[0]):
             cut = float(x_values(np.array([d["boot_cut"].iloc[0]]), d, args.xnorm)[0])
             ax.axvline(cut, color=color, ls=":", lw=1.5, zorder=1)
+        if args.detect_onset:
+            onset, never = detector_onset(d)
+            name = label or "curve"
+            if onset.size == 0:
+                print(f"  {name}: the SDC detector never fires, no onset line")
+            else:
+                if never:
+                    print(f"  {name}: the detector never fires on {len(never)} (limb, coeff) "
+                          f"cell(s), left out of the onset: {never[:6]}")
+                xo = x_values(onset, d, args.xnorm)
+                mean = float(np.mean(xo))
+                # p10..p90, not +- std: one coefficient the detector misses until the top
+                # bits would stretch a std band over the whole region.
+                lo, hi = np.percentile(xo, [10, 90])
+                ax.axvline(mean, color=color, ls="-.", lw=2, zorder=1,
+                           label=f"detector onset ({mean:.1f})")
+                ax.axvspan(lo, hi, color=color, alpha=0.1, lw=0, zorder=0)
+                print(f"  {name}: detector onset bit mean {onset.mean():.2f}, median "
+                      f"{np.median(onset):g}, range {onset.min():g}..{onset.max():g}, "
+                      f"over {onset.size} cell(s)")
         if overflow_bits.size:
             ax.plot(x_values(overflow_bits, d, args.xnorm),
                     np.full(overflow_bits.size, 0.97), ls="none", marker="|", ms=9,
@@ -330,7 +367,7 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
     ax.grid(True, ls="--", alpha=0.3)
     if subset_label:
         ax.set_title(subset_label, fontsize=FONT, pad=26)
-    if legend and (vary or args.labels or args.band == "std" or args.minmax or args.rep_spread or args.raw_spread):
+    if legend and (vary or args.labels or args.band == "std" or args.minmax or args.rep_spread or args.raw_spread or args.detect_onset):
         ax.legend(fontsize=FONT - 6, frameon=False)
 
 def _linthresh(values):
@@ -407,7 +444,7 @@ def main():
         sub = camps if pv is None else camps[camps[args.per] == pv]
         try:
             data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs,
-                args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread)
+                args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread, detect_onset=args.detect_onset)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"

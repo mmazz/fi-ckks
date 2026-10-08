@@ -31,6 +31,7 @@ NUM_SAMPLES = 50
 
 # Number of op_step of each stage in the HEAAN fork (0 .. n-1)
 ADD_STEPS = 6
+PMUL_STEPS = 6
 MUL_STEPS = 26
 RESCALE_STEPS = 4
 ROT_STEPS = 12
@@ -96,7 +97,8 @@ GROUPS = {
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
     "op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul"), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
-
+    # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
+    "op_pmul": steps(dict(SERVER_KS, stage="pmul", pipeline="pmul"), PMUL_STEPS),
     # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
     # and 1 seed x 3 inputs (chapter 1 shows the seed does not matter): 26 steps x 9
     # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so

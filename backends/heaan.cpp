@@ -86,7 +86,7 @@ void backend_prepare_args(CampaignArgs& args)
     long logq = long(args.logQ);
     require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
                                Stage::DecryptC0, Stage::DecryptC1, Stage::Decode,
-                               Stage::Add, Stage::Mul, Stage::MulAsplos, Stage::Rescale,
+                               Stage::Add, Stage::PMul, Stage::Mul, Stage::MulNonTransient, Stage::Rescale,
                                Stage::Rot, Stage::RotAsplos, Stage::Boot, Stage::BootCoeff,
                                Stage::BootEval, Stage::BootSlot}, "heaan");
     for (const Op& op : args.ops) {
@@ -251,7 +251,13 @@ IterationResult run_iteration(
            break;
 
        case OpType::PMul:
-           c = ctx.scheme.multByPoly(c, pmul_poly, args.logDelta);
+           align_clean();
+           if (inj.here(Stage::PMul, d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.multByPolyBitFlip(c, pmul_poly, args.logDelta, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else {
+               c = ctx.scheme.multByPoly(c, pmul_poly, args.logDelta);
+           }
            rescale();
            break;
 
@@ -260,7 +266,7 @@ IterationResult run_iteration(
            if (inj.here(Stage::Mul, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.multBitFlip(c, c_clean, f.op_step, f.coeff, f.bit, f.amountBits);
-           } else if (inj.here(Stage::MulAsplos, d)) {
+           } else if (inj.here(Stage::MulNonTransient, d)) {
                const FaultSpec& f = inj.spec();
                Ciphertext operand = c_clean;
                c = ctx.scheme.multBitFlipAsplos(c, operand, f.op_step, f.coeff, f.bit, f.amountBits);

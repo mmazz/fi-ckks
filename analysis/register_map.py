@@ -29,7 +29,8 @@ from utils.results import (load_campaigns, load_data, select, require_single_con
 # ------------------------------------------------------------------ #
 # Categorias de MREP (en %). Ajusta los umbrales aca.
 # ------------------------------------------------------------------ #
-MASKED_PCT = 1      # <= epsilon = 0.1 % -> Masked
+MASKED_PCT = 1.0        # MREP <= 1 % -> Masked (default)
+TACO_MASKED_PCT = 0.1   # --taco: stricter masked threshold of the TACO paper
 MINOR_PCT = 10.0      # epsilon < MREP <= 10 % -> Minor SDC
 MODERATE_PCT = 100.0  # 10 % < MREP <= 100 % -> Moderate SDC ; > 100 % -> Severe
 
@@ -77,8 +78,12 @@ def parse_args():
     p.add_argument("--title", default="register")
     p.add_argument("--no-legend", "--no_legend", dest="no_legend", action="store_true",
                    help="ocultar la leyenda completa (categorias, umbrales y escala)")
+    p.add_argument("--taco", action="store_true",
+                   help=f"masked threshold of {TACO_MASKED_PCT:g}%% instead of {MASKED_PCT:g}%%")
     p.add_argument("--show", action="store_true")
-    return p.parse_args()
+    args = p.parse_args()
+    args.masked = TACO_MASKED_PCT if args.taco else MASKED_PCT
+    return args
 
 
 # ------------------------------------------------------------------ #
@@ -96,11 +101,13 @@ def mrep_per_cell(data, stat):
     data = data.assign(mrep=data[col].astype(float) * 100.0)
     return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
 
-def mrep_colors(mrep, vmax):
-    """RGBA por punto: color por categoria; los severos en gradiente log entre 100 % y vmax."""
-    rgba = np.tile(mcolors.to_rgba(NOCOLOR), (len(mrep), 1))     # NaN -> gris
-    for mask, color in [(mrep <= MASKED_PCT, GREEN),
-                        ((mrep > MASKED_PCT) & (mrep <= MINOR_PCT), YELLOW),
+
+def mrep_colors(mrep, vmax, masked=MASKED_PCT):
+    """RGBA per point: color by category; severe ones on a log gradient between 100 % and vmax.
+    `masked` is the Masked / Minor SDC threshold in % (TACO_MASKED_PCT with --taco)."""
+    rgba = np.tile(mcolors.to_rgba(NOCOLOR), (len(mrep), 1))     # NaN -> gray
+    for mask, color in [(mrep <= masked, GREEN),
+                        ((mrep > masked) & (mrep <= MINOR_PCT), YELLOW),
                         ((mrep > MINOR_PCT) & (mrep <= MODERATE_PCT), ORANGE)]:
         rgba[mask] = mcolors.to_rgba(color)
     severe = mrep > MODERATE_PCT
@@ -109,11 +116,10 @@ def mrep_colors(mrep, vmax):
         rgba[severe] = SEVERE_CMAP(norm(mrep[severe]))
     return rgba
 
-
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
-def plot_register_map(ax, cells, cfg, vmax):
+def plot_register_map(ax, cells, cfg, vmax, masked):
     N = 1 << int(cfg["logN"])
     n_limbs = int(cells["limb"].max()) + 1
     n_bits = int(cfg["bitsPerCoeff"])
@@ -121,8 +127,7 @@ def plot_register_map(ax, cells, cfg, vmax):
 
     x = cells["limb"].to_numpy() * N + cells["coeff"].to_numpy()
     y = cells["bit"].to_numpy()
-    c = mrep_colors(cells["mrep"].to_numpy(), vmax)
-
+    c = mrep_colors(cells["mrep"].to_numpy(), vmax, masked)
     # Diametro ligeramente mayor que la separacion en AMBOS ejes.
     # Usar min dejaba huecos cuando las celdas no eran cuadradas.
     fig = ax.figure
@@ -155,8 +160,7 @@ def plot_register_map(ax, cells, cfg, vmax):
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
 
-
-def add_legend(fig, ax, vmax):
+def add_legend(fig, ax, vmax, masked):
     """Una unica franja: categorias arriba y sus umbrales debajo."""
     legend_ax = ax.inset_axes([0, 1.025, 1, 0.10])
     legend_ax.set_xlim(0, 1)
@@ -164,7 +168,7 @@ def add_legend(fig, ax, vmax):
     legend_ax.set_axis_off()
 
     categories = [
-        (0.02, GREEN, "Masked", r"$\leq\varepsilon$"),
+        (0.02, GREEN, "Masked", rf"$\leq {masked:g}\%$"),
         (0.16, YELLOW, "Minor SDC", rf"$\leq {MINOR_PCT:g}\%$"),
         (0.32, ORANGE, "Moderate SDC", f"{MINOR_PCT:g}% - {MODERATE_PCT:g}%"),
     ]
@@ -216,9 +220,9 @@ def main():
     IMG_DIR.mkdir(exist_ok=True)
     for step, (cfg, cells, n_seeds) in per_step.items():
         fig, ax = plt.subplots(figsize=(14, 8))
-        plot_register_map(ax, cells, cfg, vmax)
+        plot_register_map(ax, cells, cfg, vmax, args.masked)
         if not args.no_legend:
-            add_legend(fig, ax, vmax)
+            add_legend(fig, ax, vmax, args.masked)
 
         out = IMG_DIR / f"{args.title}_op_step_{step}"
         fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
