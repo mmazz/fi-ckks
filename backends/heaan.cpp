@@ -87,7 +87,7 @@ void backend_prepare_args(CampaignArgs& args)
     require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
                                Stage::DecryptC0, Stage::DecryptC1, Stage::Decode,
                                Stage::Add, Stage::PMul, Stage::Mul, Stage::MulNonTransient, Stage::Rescale,
-                               Stage::Rot, Stage::RotAsplos, Stage::Boot, Stage::BootCoeff,
+                               Stage::Rot, Stage::RotNonTransient, Stage::Boot, Stage::BootCoeff,
                                Stage::BootEval, Stage::BootSlot}, "heaan");
     for (const Op& op : args.ops) {
         if (op.type == OpType::Boot) {
@@ -269,7 +269,7 @@ IterationResult run_iteration(
            } else if (inj.here(Stage::MulNonTransient, d)) {
                const FaultSpec& f = inj.spec();
                Ciphertext operand = c_clean;
-               c = ctx.scheme.multBitFlipAsplos(c, operand, f.op_step, f.coeff, f.bit, f.amountBits);
+               c = ctx.scheme.multBitFlipNonTransient(c, operand, f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
                c = ctx.scheme.mult(c, c_clean);
            }
@@ -286,9 +286,9 @@ IterationResult run_iteration(
            if (inj.here(Stage::Rot, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.leftRotateFastBitFlip(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
-           } else if (inj.here(Stage::RotAsplos, d)) {
+           } else if (inj.here(Stage::RotNonTransient, d)) {
                const FaultSpec& f = inj.spec();
-               c = ctx.scheme.leftRotateFastBitFlipAsplos(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
+               c = ctx.scheme.leftRotateFastBitFlipNonTransient(c, k, f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
                c = ctx.scheme.leftRotateFast(c, k);
            }

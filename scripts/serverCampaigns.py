@@ -39,7 +39,7 @@ BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
 
 # One representative op_step per pattern of mul. FIRST GUESS from reading
-# multBitFlipAsplos; replace it with one step per band of the op_mul heatmap:
+# multBitFlipNonTransient; replace it with one step per band of the op_mul heatmap:
 #   0, 1   input ciphertext (ax, bx)
 #   4      (a1+b1): only the cross term d1
 #   8      b1 in b1*b2: goes straight to the output c0

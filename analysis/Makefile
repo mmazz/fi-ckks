@@ -307,11 +307,11 @@ burst: $(MB)
 $(addprefix _,$(MB)): RES = $(RES_BURST)
 
 # x = first bit of the burst: each curve is the k=1 one shifted left by k-1 (c1_fig01 config).
-MB_ENC_SHIFT_ARGS = --where $(BASE) bitsPerCoeff=64 pipeline= \
+MB_ENC_SHIFT_ARGS = --where $(BASE) logSlots=3 bitsPerCoeff=64 pipeline= \
     --query '$(ENC)' --vary amountBits --per stage $(YL)
 
 # Same data, x = top bit of the burst: the curves collapse into one.
-MB_ENC_ARGS = --where $(BASE) bitsPerCoeff=64 pipeline= \
+MB_ENC_ARGS = --where $(BASE) logSlots=3 bitsPerCoeff=64 pipeline= \
     --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
 
 # RNS (c1_fig12 config), averaged over the limbs.

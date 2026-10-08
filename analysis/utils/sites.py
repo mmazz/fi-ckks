@@ -22,9 +22,9 @@ class ClientSite(Enum):
 
 
 # Both HEAAN mult stages use the same op_step indices; they differ in the restores:
-#   "mul_asplos" -> Scheme::multBitFlipAsplos  (group op_mul, op_mul_depth)
-#   "mul"        -> Scheme::multBitFlip        (group asplos_mul: restores the inputs)
-MUL = "mul_asplos"
+#   "mul_NonTransient" -> Scheme::multBitFlipNonTransient  (group op_mul, op_mul_depth)
+#   "mul"        -> Scheme::multBitFlip        (group NonTransient_mul: restores the inputs)
+MUL = "mul_non_transient"
 
 
 class MulSite(Enum):
