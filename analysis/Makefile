@@ -227,21 +227,29 @@ ch2: $(CH2)
 $(addprefix _,$(CH2)): RES = $(RES2)
 
 _c2_fig01:
-	$(HEAT)  --title c2_fig01_add_heat         --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --tol 3
-	$(HEAT)  --title c2_fig01_add_heat_aligned --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap aligned --tol 3
-	$(HEAT)  --title c2_fig01_add_heat_other   --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" --gap other --tol 3 --no-legend
-	$(CURVE) --title c2_fig01_add      --where $(SERVER) bitsPerCoeff=64 stage=add "pipeline=add x2" \
+	$(HEAT)  --title c2_fig01_add_heat         --where $(SERVER) op_depth=1 bitsPerCoeff=64 stage=add "pipeline=add x2" --tol 3
+	$(HEAT)  --title c2_fig01_add_heat_aligned --where $(SERVER) op_depth=1 bitsPerCoeff=64 stage=add "pipeline=add x2" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig01_add_heat_other   --where $(SERVER) op_depth=1 bitsPerCoeff=64 stage=add "pipeline=add x2" --gap other --tol 3 --no-legend
+	$(CURVE) --title c2_fig01_add      --where $(SERVER) op_depth=1 bitsPerCoeff=64 stage=add "pipeline=add x2" \
 	    --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
 _c2_fig02:
-	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --rows "$(MUL_ROWS)" --gap aligned --tol 3
-	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul --rows "$(MUL_ROWS)" --gap other --tol 3 --no-legend
-	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
+	$(HEAT)  --title c2_fig02_mul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="mul x2" --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="mul x2" --rows "$(MUL_ROWS)" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02_mul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="mul x2" --rows "$(MUL_ROWS)" --gap other --tol 3 --no-legend
+	$(CURVE) --title c2_fig02_mul      --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1  pipeline="mul x2" \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
-	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
+	$(CURVE) --title c2_fig02_mul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1  pipeline="mul x2" \
 	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 
+_c2_fig02b:
+	$(HEAT)  --title c2_fig02_pmul_heat         --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="pmul x2" --tol 3
+	$(HEAT)  --title c2_fig02_pmul_heat_aligned --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="pmul x2" --rows "$(MUL_ROWS)" --gap aligned --tol 3
+	$(HEAT)  --title c2_fig02_pmul_heat_other   --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="pmul x2" --rows "$(MUL_ROWS)" --gap other --tol 3 --no-legend
+	$(CURVE) --title c2_fig02_pmul      --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="pmul x2" \
+	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
+	$(CURVE) --title c2_fig02_pmul_gap  --where $(SERVER) bitsPerCoeff=124 stage=mul op_depth=1 pipeline="pmul x2" \
+	    --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 # Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
 _c2_fig02b:
 	$(HEAT)  --title c2_fig02b_mul_depth_heat         --where $(DEPTH) stage=mul "pipeline=mul x3" --per op_depth --tol 3

@@ -64,8 +64,11 @@ def keyswitch_bits(logQ):
 # Server operations, exhaustive. logSlots=3 (gap = 4) as in chapter 1.
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
+SERVER_MUL = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=3, logQ=120, logDelta=30, bitsPerCoeff=64)
 # mul and rot have key-switching steps (mod qQ).
 SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
+SERVER_MUL = dict(SERVER_MUL, bitsPerCoeff=keyswitch_bits(60))
 # mul x3: 3*30 = 90 bits consumed, 70 left at decryption.
 SERVER_DEPTH = dict(SERVER, logQ=160, bitsPerCoeff=keyswitch_bits(160))
 # mul x2: 2*30 = 60 bits consumed; logQ=100 leaves 40 >= logDelta at decryption.
@@ -92,13 +95,13 @@ def steps(base, op_steps, seeds=SEEDS, inputs=INPUTS, **sweep):
 GROUPS = {
     # ---- Single operations: heatmap op_step x bit, then one curve per pattern ----------
     # FIG 1 (add). Expected 2 patterns: steps {0, 1, 4} behave as c1, {2, 3, 5} as c0.
-    "op_add": steps(dict(SERVER, stage="add", pipeline="add x2"), ADD_STEPS),
+    "op_add": steps(dict(SERVER, stage="add", pipeline="add x2", op_depth=1), ADD_STEPS),
 
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
-    "op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul"), MUL_STEPS,
+    "op_mul": steps(dict(SERVER_MUL, stage="mul", pipeline="mul x2", op_depth=1), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
-    "op_pmul": steps(dict(SERVER_KS, stage="pmul", pipeline="pmul"), PMUL_STEPS),
+    "op_pmul": steps(dict(SERVER_MUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS),
     # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
     # and 1 seed x 3 inputs (chapter 1 shows the seed does not matter): 26 steps x 9
     # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so
