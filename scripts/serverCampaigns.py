@@ -65,10 +65,9 @@ def keyswitch_bits(logQ):
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
 SERVER_MUL = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=3, logQ=120, logDelta=30, bitsPerCoeff=64)
+              logN=6, logSlots=3, logQ=100, logDelta=30, bitsPerCoeff=120)
 # mul and rot have key-switching steps (mod qQ).
 SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
-SERVER_MUL = dict(SERVER_MUL, bitsPerCoeff=keyswitch_bits(60))
 # mul x3: 3*30 = 90 bits consumed, 70 left at decryption.
 SERVER_DEPTH = dict(SERVER, logQ=160, bitsPerCoeff=keyswitch_bits(160))
 # mul x2: 2*30 = 60 bits consumed; logQ=100 leaves 40 >= logDelta at decryption.

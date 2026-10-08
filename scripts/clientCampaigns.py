@@ -188,7 +188,7 @@ GROUPS = {
     # each curve is the k=1 one shifted left by k-1. Where single flips are masked, the
     # burst behaves as its highest non-masked bit. Plot with --vary amountBits --xnorm top_bit.
     # Null pipeline: the pure shift (BASE, as enc_seeds).
-    "burst_enc": grid(dict(BASE, results_dir=RESULTS_BURST), stage=ENC, amountBits=BURSTS,
+    "burst_enc": grid(dict(BASE, results_dir=RESULTS_BURST, logSlots=3), stage=ENC, amountBits=BURSTS,
                       seed=SEEDS, seed_input=INPUTS),
     # RNS (FIG 12 config): the burst leaves the limb modulus (out_of_range) k-1 bits earlier.
     "burst_rns": grid(dict(CLIENT_OPENFHE, results_dir=RESULTS_BURST, pipeline="add; rot 3",
@@ -196,7 +196,7 @@ GROUPS = {
                       stage=ENC, amountBits=BURSTS, seed=SEEDS, seed_input=INPUTS),
     # Through bootstrapping (FIG 11 config), the only non-linear step. Random and the most
     # expensive group: every injection runs a full boot. Launch it last.
-    "burst_boot": grid(dict(BOOT, results_dir=RESULTS_BURST, pipeline="mul x4; boot"),
+    "burst_boot": grid(dict(BOOT, logSlots=3, results_dir=RESULTS_BURST, pipeline="mul x4; boot"),
                        stage=ENC, amountBits=BURSTS, seed=SEEDS, seed_input=INPUTS),
 
     }
