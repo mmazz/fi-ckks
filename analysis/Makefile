@@ -66,7 +66,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 SL        ?= 3
 
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig09b c1_fig09c c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig12b c1_fig12c c1_fig13 c1_share
+      c1_fig09 c1_fig09b c1_fig09c c1_fig09d c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig12b c1_fig12c c1_fig13 c1_share
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
@@ -142,7 +142,12 @@ _c1_fig09b:
 
 _c1_fig09c:
 	$(CURVE) --title c1_fig09_add_rotOpen \
-	    --where $(OFHE) "pipeline=add x2; rot 3" mult_depth=0 withNTT=0  \
+	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=0 \
+	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset
+
+_c1_fig09d:
+	$(CURVE) --title c1_fig09_add_pmul_rotRNS \
+	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0  \
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset --drop_coeffs 0
 
 
@@ -178,17 +183,17 @@ _c1_fig11b:
 _c1_fig12:
 	$(CURVE) --title c1_fig12_rns_add_rot \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
-	    --vary limb --per stage $(YL) --detect_onset --drop_coeffs 0
+	    --vary limb --per stage --split gap $(YL) --detect_onset --drop_coeffs 0
 
 _c1_fig12b:
 	$(CURVE) --title c1_fig12_rns_pmul \
 		--where $(OFHE) "pipeline=pmul" mult_depth=3 withNTT=0 logSlots=$(SL) --drop_coeffs 0\
-		--vary limb --per stage --detect_onset $(YL) --detect_onset --drop_coeffs 0
+		--vary limb --per stage --split gap --detect_onset $(YL)  
 
 _c1_fig12c:
 	$(CURVE) --title c1_fig12_rns_add_pmul_rot \
-	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=0 withNTT=0 logSlots=$(SL) \
-	    --vary limb --per stage $(YL) --detect_onset --drop_coeffs 0
+	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
+	    --vary limb --per stage $(YL) --split gap --detect_onset --drop_coeffs 0
 
 _c1_fig13:
 	$(CURVE) --title c1_fig13_ntt \

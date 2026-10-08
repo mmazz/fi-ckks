@@ -126,7 +126,7 @@ GROUPS = {
     "add_pmul_rot": grid(dict(CLIENT_MUL, pipeline="add x2; pmul x3; rot 3"),
                     stage=ENC, logSlots=LOGSLOTS_SWEEP, seed=SEEDS, seed_input=INPUTS),
 
-    "add_rotOpen": grid(dict(CLIENT_OPENFHE, pipeline="add x2;  rot 3"),
+    "add_rotOpen": grid(dict(CLIENT_OPENFHE, pipeline="add;  rot 3"),
                     stage=ENC, logSlots=LOGSLOTS_SWEEP, seed=SEEDS, seed_input=INPUTS),
 
     # FIG 10 (1, 2 and 3 muls, and what happens to the gaps).
@@ -151,14 +151,28 @@ GROUPS = {
     # FIG 12 (RNS: add + rot keeps the gaps). mult_depth=3 -> 4 limbs; use --vary limb.
     "add_rotRNS": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", mult_depth=3),
                        stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
+
     "add_pmul_rotRNS": grid(dict(CLIENT_OPENFHE, pipeline="add x2; pmul x3; rot 3", mult_depth=3),
-                       stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
+                       stage=ENC, logSlots=LOGSLOTS_SWEEP, seed=SEEDS, seed_input=INPUTS),
     # EVIDENCE: with a mul in RNS every bit breaks the output. Not plotted; quote the
     # SDC rate in the text.
     "mulRNS": grid(dict(CLIENT_OPENFHE, pipeline="mul", mult_depth=3),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
     "pmulRNS": grid(dict(CLIENT_OPENFHE, pipeline="pmul", mult_depth=3),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),
+
+    # EVIDENCE (TACO Table pmult, RNS columns): in coefficient form, a plaintext
+    # multiplication keeps the gap coefficients of c0 and of the encoded plaintext masked,
+    # as add and rot do; mul does not. Same config as add_rotRNS with gap 4.
+    "pmulRNSpipes": grid(dict(CLIENT_OPENFHE, logSlots=3, mult_depth=3),
+                    pipeline=["pmul", "pmul x3", "add; rot 3; pmul", "add; rot 3", "mul"],
+                    stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"],
+                    seed=SEEDS, seed_input=INPUTS),
+    # EVIDENCE: the same pipelines in NTT form (RNS+NTT): every flip is an SDC.
+    "pmulRNS_NTT": grid(dict(CLIENT_OPENFHE, logSlots=3, mult_depth=3, withNTT=1),
+                        pipeline=["pmul", "add; rot 3; pmul"],
+                        stage=["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0"],
+                        seed=SEEDS, seed_input=INPUTS),
     # FIG 13 (NTT domain: a single flip spreads over every coefficient).
     "addNTT": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", withNTT=1),
                    stage=ENC, logSlots=[3, 5], seed=SEEDS, seed_input=INPUTS),

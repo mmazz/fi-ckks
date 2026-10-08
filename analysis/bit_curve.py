@@ -158,6 +158,17 @@ def detector_onset(d):
     never = sorted(set(d.groupby(["limb", "coeff"]).groups) - set(onset.index))
     return onset.to_numpy(dtype=float), never
 
+def detector_bound(d, metric, never):
+    """Largest `metric` a fault reached WITHOUT being detected, leaving out the cells
+    where the detector never fires: above it the detector always fired. Uses <metric>_hi
+    (max over the repetitions of each cell) when the collapse has it, so the bound holds
+    for every single injection, not only for the per-cell means.
+    Returns (bound or None if every fault was detected, column used)."""
+    col = f"{metric}_hi" if f"{metric}_hi" in d.columns else metric
+    blind = d.set_index(["limb", "coeff"]).index.isin(never)
+    missed = d.loc[(d["detected"] < 1) & ~blind, col]
+    return (float(missed.max()) if len(missed) else None), col
+
 def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False, detect_onset=False):
     """One row per (curve, limb, coeff, bit), seeds already averaged. Adds gap_aligned."""
     keys = [c for c in vary if c in camps.columns] # 'limb' comes from the data, not from the registry     
@@ -175,6 +186,8 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
         agg = {metric: "mean"}                              # mean over seeds
         if detect_onset:
             agg["detected"] = "mean"     # kept per cell: plot_curves() needs it for the onset
+            if f"{metric}_hi" in d.columns:
+                agg[f"{metric}_hi"] = "max"  # max over repetitions: detector_bound() needs it
         if raw_spread:
             lo, hi = f"{metric}_lo", f"{metric}_hi"
             if lo not in d.columns:
@@ -271,16 +284,25 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
                     print(f"  {name}: the detector never fires on {len(never)} (limb, coeff) "
                           f"cell(s), left out of the onset: {never[:6]}")
                 xo = x_values(onset, d, args.xnorm)
-                mean = float(np.mean(xo))
+                # Median, not mean: it is an actual bit position, and one coefficient the
+                # detector misses until the top bits does not move it.
+                bit = int(np.median(onset))
                 # p10..p90, not +- std: one coefficient the detector misses until the top
                 # bits would stretch a std band over the whole region.
                 lo, hi = np.percentile(xo, [10, 90])
-                ax.axvline(mean, color=color, ls="-.", lw=2, zorder=1,
-                           label=f"detector onset ({mean:.1f})")
+
+                ax.axvline(x_values(np.array([bit]), d, args.xnorm)[0], color=color, ls="-.",
+                           lw=2, zorder=1, label=f"detector onset: bit {bit}")
                 ax.axvspan(lo, hi, color=color, alpha=0.1, lw=0, zorder=0)
                 print(f"  {name}: detector onset bit mean {onset.mean():.2f}, median "
                       f"{np.median(onset):g}, range {onset.min():g}..{onset.max():g}, "
                       f"over {onset.size} cell(s)")
+                bound, col = detector_bound(d, args.metric, never)
+                if bound is None:
+                    print(f"  {name}: the detector fired on every fault")
+                else:
+                    print(f"  {name}: every undetected fault has {col} <= {bound:.3g} "
+                          f"(never-detected cells left out): above it the detector always fires")
         if overflow_bits.size:
             ax.plot(x_values(overflow_bits, d, args.xnorm),
                     np.full(overflow_bits.size, 0.97), ls="none", marker="|", ms=9,
