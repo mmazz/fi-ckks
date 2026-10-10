@@ -69,6 +69,7 @@ stats:
 # Chapter 1: client side
 # ======================================================================================
 BASE       = library=heaan logN=6 logSlots=5 logQ=60 logDelta=40
+BASE_OPENFHE = library=openfhe logN=6 logSlots=5 logQ=60 logDelta=40 attackModeSKA=1
 CLIENT     = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30 bitsPerCoeff=64
 CLIENT_MUL = library=heaan logN=6 logSlots=3 logQ=150 logDelta=30 bitsPerCoeff=170
 OFHE       = library=openfhe logN=6 logQ=60 logDelta=30 bitsPerCoeff=64
@@ -76,7 +77,7 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 # logSlots of the OpenFHE figures (3 or 5)
 SL        ?= 3
 
-CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
+CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig03b c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
       c1_fig09 c1_fig09b c1_fig09c c1_fig09d c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig12b c1_fig12c c1_fig13 c1_share
 .PHONY: $(CH1)
 ch1: $(CH1)
@@ -95,9 +96,13 @@ _c1_fig02:
 
 _c1_fig03:
 	$(SHIFT) --title c1_fig03_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
-	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
+	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
 	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
 
+_c1_fig03b:
+	$(SHIFT) --title c1_fig03b_encode_attackMode --where $(subst library=openfhe ,,$(BASE_OPENFHE)) stage=encode pipeline= \
+	    --query '(library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 0) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
+	    --vary library --labels 'OpenFHE (SKA 0)' 'OpenFHE (SKA 1)' $(YL)
 
 _c1_fig04:
 	$(SHIFT) --title c1_fig04_encode_c0_c1_dec --where $(BASE) pipeline= \
