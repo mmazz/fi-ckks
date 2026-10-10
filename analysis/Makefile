@@ -99,10 +99,12 @@ _c1_fig03:
 	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
 	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
 
+# Encode stage only: compare SKA attack modes on OpenFHE
 _c1_fig03b:
-	$(SHIFT) --title c1_fig03b_encode_attackMode --where $(subst library=openfhe ,,$(BASE_OPENFHE)) stage=encode pipeline= \
-	    --query '(library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 0) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
-	    --vary library --labels 'OpenFHE (SKA 0)' 'OpenFHE (SKA 1)' $(YL)
+	$(CURVE) --title c1_fig03b_encode_attackMode \
+	    --where $(filter-out attackModeSKA=% stage=% pipeline=%,$(BASE_OPENFHE)) stage=encode pipeline= \
+	    --query 'bitsPerCoeff == 64 and attackModeSKA in [0, 1]' \
+	    --vary attackModeSKA --labels 'OpenFHE (SKA 0)' 'OpenFHE (SKA 1)' $(YL)
 
 _c1_fig04:
 	$(SHIFT) --title c1_fig04_encode_c0_c1_dec --where $(BASE) pipeline= \
