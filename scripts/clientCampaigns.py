@@ -198,7 +198,11 @@ GROUPS = {
     # expensive group: every injection runs a full boot. Launch it last.
     "burst_boot": grid(dict(BOOT, logSlots=3, results_dir=RESULTS_BURST, pipeline="mul x4; boot"),
                        stage=ENC, amountBits=BURSTS, seed=SEEDS, seed_input=INPUTS),
-
+    
+        # EVIDENCE: the 1.4x of FIG 3 is OpenFHE's decode noise (CompleteInjection).
+    # Without it (attackModeSKA=0) OpenFHE and HEAAN should coincide on every coefficient.
+    "plain_cmp_nonoise": grid(dict(BASE_OPENFHE, stage="encode", attackModeSKA=0),
+                              seed=SEEDS, seed_input=INPUTS),
     }
 
 if __name__ == "__main__":
