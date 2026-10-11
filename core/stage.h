@@ -13,7 +13,7 @@ enum class Stage : uint8_t {
     // client side
     Encode, EncryptC0, EncryptC1, DecryptC0, DecryptC1, Decode,
     // server side, inside the operations
-    Add, PMul, Mul, MulNonTransient, Rescale, Rot, RotNonTransient,
+    Add, PMul, PMulNonTransient, Mul, MulNonTransient, Rescale, Rot, RotNonTransient,
     Boot, BootCoeff, BootEval, BootSlot,
     // neural network workload
     ChebyTanh3, HiddenLayer,
@@ -32,6 +32,7 @@ inline constexpr StageName kStageNames[] = {
     {"decode",       Stage::Decode},
     {"add",          Stage::Add},
     {"pmul",         Stage::PMul},
+    {"pmul_non_transient",   Stage::PMulNonTransient},
     {"mul",          Stage::Mul},
     {"mul_non_transient",   Stage::MulNonTransient},
     {"rescale",      Stage::Rescale},

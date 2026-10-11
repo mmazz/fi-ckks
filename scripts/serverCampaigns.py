@@ -38,6 +38,9 @@ ROT_STEPS = 12
 BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
 
+
+PMUL_STEPS_NONTRANSIENT = [1]
+MUL_STEPS_NONTRANSIENT = [0, 1, 2, 3]
 # One representative op_step per pattern of mul. FIRST GUESS from reading
 # multBitFlipNonTransient; replace it with one step per band of the op_mul heatmap:
 #   0, 1   input ciphertext (ax, bx)
@@ -99,8 +102,11 @@ GROUPS = {
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
     "op_mul": steps(dict(SERVER_MUL, stage="mul", pipeline="mul x2", op_depth=1), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
+    "op_mul_nonTransient": steps(dict(SERVER_MUL, stage="mul", pipeline="mul x2", op_depth=1), MUL_STEPS_NONTRANSIENT,
+                    seeds=SEEDS_MUL, inputs=SEEDS_MUL),
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
     "op_pmul": steps(dict(SERVER_MUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS),
+    "op_pmul_nonTransient": steps(dict(SERVER_MUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS_NONTRANSIENT),
     # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
     # and 1 seed x 3 inputs (chapter 1 shows the seed does not matter): 26 steps x 9
     # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so

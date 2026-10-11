@@ -86,7 +86,7 @@ void backend_prepare_args(CampaignArgs& args)
     long logq = long(args.logQ);
     require_stage(args.stage, {Stage::Encode, Stage::EncryptC0, Stage::EncryptC1,
                                Stage::DecryptC0, Stage::DecryptC1, Stage::Decode,
-                               Stage::Add, Stage::PMul, Stage::Mul, Stage::MulNonTransient, Stage::Rescale,
+                               Stage::Add, Stage::PMul, Stage::PMulNonTransient, Stage::Mul, Stage::MulNonTransient, Stage::Rescale,
                                Stage::Rot, Stage::RotNonTransient, Stage::Boot, Stage::BootCoeff,
                                Stage::BootEval, Stage::BootSlot}, "heaan");
     for (const Op& op : args.ops) {
@@ -255,6 +255,9 @@ IterationResult run_iteration(
            if (inj.here(Stage::PMul, d)) {
                const FaultSpec& f = inj.spec();
                c = ctx.scheme.multByPolyBitFlip(c, pmul_poly, args.logDelta, f.op_step, f.coeff, f.bit, f.amountBits);
+           } else if (inj.here(Stage::PMulNonTransient, d)) {
+               const FaultSpec& f = inj.spec();
+               c = ctx.scheme.multByPolyBitFlipNonTransient(c, pmul_poly, args.logDelta, f.op_step, f.coeff, f.bit, f.amountBits);
            } else {
                c = ctx.scheme.multByPoly(c, pmul_poly, args.logDelta);
            }
