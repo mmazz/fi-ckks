@@ -221,9 +221,9 @@ def draw_mrep(fig, ax, values, args):
         handles = [
             Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
             for color, label in [
-                (rm.GREEN, rf"Masked ($\leq${rm.MASKED_PCT:g}%)"),
-                (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
-                (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+                (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
+                (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
+                (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
                 (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
                 (NOT_FLIPPED, "not injected"),
             ]

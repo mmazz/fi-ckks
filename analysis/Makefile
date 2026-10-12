@@ -235,10 +235,13 @@ MIXP   = $(BOOTP) numSamples=50
 # Steps shown as curves: one per pattern, taken from what step_heatmap.py prints.
 ADD_SHOW  ?= 0, 2
 MUL_SHOW  ?= 0, 1, 4, 11, 14, 24
+# XXX CHEQUEAR ESTO DE PMUL
+PMUL_SHOW  ?= 0, 2
 ROT_SHOW  ?= 0, 1, 3, 6, 10
 MIX_DEPTH ?= 0
 MUL_ROWS = 0-9;10,12;11,13;14;15;16-21,24;22,23,25
-
+     # Rows of the plaintext multiplication map: input c1, the two reads of p, input c0, outputs.
+PMUL_ROWS = 0;1,3;2;4;5
 CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig02c c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 .PHONY: $(CH2)
 ch2: $(CH2)
@@ -272,9 +275,9 @@ _c2_fig02b:
 	$(CURVE) --title c2_fig02b_mul_depth_gap $(F02B_WHERE) --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
 _c2_fig02c:
-	$(call HEAT3,c2_fig02_pmul,$(F02C_WHERE),--rows "$(MUL_ROWS)")
-	$(CURVE) --title c2_fig02_pmul     $(F02C_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
-	$(CURVE) --title c2_fig02_pmul_gap $(F02C_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig02_pmul,$(F02C_WHERE),--rows "$(PMUL_ROWS)")
+	$(CURVE) --title c2_fig02_pmul     $(F02C_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step $(YL)
+	$(CURVE) --title c2_fig02_pmul_gap $(F02C_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
 
 _c2_fig03:
 	$(call HEAT3,c2_fig03_rescale,$(F03_WHERE) --per op_depth)
@@ -308,7 +311,7 @@ _c2_fig07:
 # as a single flip of its top bit b+k-1: with --xnorm top_bit every k lands on the k=1
 # curve. Each figure reuses the config of a single-bit one (named next to it).
 # ======================================================================================
-MB = mb_enc_shift mb_enc mb_rns mb_boot mb_op_mul
+MB = mb_enc_shift mb_enc mb_rns mb_boot mb_boot_top mb_boot_cut mb_op_mul
 .PHONY: $(MB)
 burst: $(MB)
 $(addprefix _,$(MB)): RES = $(RES_BURST)
@@ -328,7 +331,16 @@ MB_RNS_ARGS = --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSl
 # Through bootstrapping (c1_fig11 config), the only non-linear step.
 MB_BOOT_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" \
     --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+# Near the boot cutoff (c1_fig11 config, c1 only). x = top bit of the burst: the curves
+# no longer collapse, each one drops at cut + k - 1.
+MB_BOOT_TOP_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" --query 'stage == "encrypt_c1"' \
+   --vary amountBits --xnorm top_bit --xlim 200 225 --boot_cutoff --lines \
+   --labels 'k=1' 'k=2' 'k=4' 'k=8' $(YL)
 
+# Same data, x = first bit b of the burst: every k drops at the same bit, the cutoff.
+MB_BOOT_CUT_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" --query 'stage == "encrypt_c1"' \
+   --vary amountBits --xlim 200 220 --boot_cutoff --lines \
+   --labels 'k=1' 'k=2' 'k=4' 'k=8' $(YL)
 # Inside mul (c2_fig02 config): one figure per op_step of MUL_REPR.
 MB_OP_MUL_ARGS = --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
     --vary amountBits --per op_step --xnorm top_bit $(YL)
@@ -349,6 +361,12 @@ _mb_boot:
 
 _mb_op_mul:
 	$(call CURVE3,mb_op_mul,$(MB_OP_MUL_ARGS))
+
+_mb_boot_top:
+	$(call CURVE3,mb_boot_top,$(MB_BOOT_TOP_ARGS))
+
+_mb_boot_cut:
+	$(call CURVE3,mb_boot_cut,$(MB_BOOT_CUT_ARGS))
 # ======================================================================================
 # Exploration: every op_step of one operation, to draw conclusions before choosing
 # the representative steps. Output: img/ex_<OP>_*.
