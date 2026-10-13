@@ -14,6 +14,7 @@
 #   make                    # the figures the thesis includes: teo ch1 burst ch2 nn
 #   make all                # those and the evidence (ev)
 #   make c1_fig07 SHOW=--show
+#   make numbers            # every number of the text and tables -> numbers.txt
 #
 # Output: img/<title>.pdf and .png.
 #
@@ -96,7 +97,7 @@ OP_boot_eval = $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline
 ENC     = stage in ["encrypt_c0", "encrypt_c1"]
 ENC_DEC = stage in ["encrypt_c0", "encrypt_c1", "decode"]
 
-.PHONY: thesis all check stats ch1 burst ch2 nn ev
+.PHONY: thesis all check stats numbers ch1 burst ch2 nn ev
 # Default goal: the figures the thesis includes (see "Incremental build").
 thesis: img/.thesis.done
 all: thesis ev
@@ -106,6 +107,14 @@ check:
 	python3 check_results.py $(RES2)
 	python3 check_results.py $(RES_NN)
 	python3 check_results.py $(RES_BURST)
+
+# Every number the thesis quotes, from the same data as the figures: one text file with a
+# section per chapter (4 to 8), the configuration and the statistic behind each number.
+# NUM_ONLY=6 7 limits it to those chapters.
+NUM_ONLY ?=
+numbers:
+	python3 thesis_numbers.py --client $(RES1) --server $(RES2) --burst $(RES_BURST) \
+	    --nn $(RES_NN) --out numbers.txt $(if $(NUM_ONLY),--only $(NUM_ONLY))
 
 # Slot statistics. Needs the raw results dirs, not the collapsed release (fi-ckks only).
 stats:
@@ -586,5 +595,5 @@ $(DATA_STAMP):
 	curl -fsSL "$(DATA_URL)" | tar -xzm -C ../data.tmp
 	rm -rf ../data && mv ../data.tmp ../data
 	touch $@
-$(patsubst %,img/.%.done,$(FIGS)) explore explore_cmp: $(DATA_STAMP)
+$(patsubst %,img/.%.done,$(FIGS)) explore explore_cmp numbers: $(DATA_STAMP)
 endif

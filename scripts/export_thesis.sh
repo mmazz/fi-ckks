@@ -7,7 +7,8 @@
 #                                                  as release <tag> and pin the thesis to it
 #
 #   <thesis>/figures/          the part of analysis/ the thesis figures use: anything added
-#                              there by hand is deleted on the next export (except img/ and data.mk)
+#                              there by hand is deleted on the next export (except img/,
+#                              data.mk and numbers.txt, the output of `make numbers`)
 #   <thesis>/figures/data.mk   pinned data release + where the Makefile finds it
 #   <thesis>/data/             downloaded by make on first use, never committed
 set -euo pipefail
@@ -17,14 +18,14 @@ mkdir -p "$1"
 DEST="$(cd "$1" && pwd)"
 TAG="${2:-}"
 
-# Only what the thesis targets (ch1, ch2, ev, nn, explore) run or import. The rest of
-# analysis/ (collapse, check_results, flat_curve, register_map_compare, utils/collapse,
+# Only what the thesis targets (ch1, ch2, ev, nn, explore, numbers) run or import. The rest
+# of analysis/ (collapse, check_results, flat_curve, register_map_compare, utils/collapse,
 # utils/config, utils/sites) only runs in fi-ckks. --delete-excluded removes files an older
 # export left behind; P protects the figures and the data pin.
 KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py
       nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py slot_share.py
-      master_curve.py)
-filters=(--filter='P /img/' --filter='P /data.mk' --include='/utils/')
+      master_curve.py thesis_numbers.py analytic_baseline.py theory_check.py nn_table.py)
+filters=(--filter='P /img/' --filter='P /data.mk' --filter='P /numbers.txt' --include='/utils/')
 for f in "${KEEP[@]}"; do filters+=(--include="/$f"); done
 rsync -a --delete-excluded "${filters[@]}" --exclude='*' "$ROOT/analysis/" "$DEST/figures/"
 
@@ -81,4 +82,3 @@ fi
 [ -f "$DEST/figures/data.mk" ] || echo "WARNING: no data.mk yet: run once with a tag"
 echo "exported fi-ckks $(git -C "$ROOT" rev-parse --short HEAD) -> $DEST/figures" \
      "(data: $(sed -n 's/^DATA_TAG = //p' "$DEST/figures/data.mk" 2>/dev/null || echo none))"
-
