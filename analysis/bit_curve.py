@@ -480,10 +480,12 @@ def make_figure(data, vary, args, name):
         # yref=data: both files get the same y scale and limits, computed from ALL the data
         plot_curves(ax, part, vary, args, yref=data, legend=(suffix == "aligned"))
         if suffix == "other":
-            # Same y axis and colors as _aligned: the y label, the tick labels and the
-            # legend are drawn only there. The ticks and the grid stay.
-            ax.set_ylabel("")
-            ax.tick_params(axis="y", labelleft=False)
+            # Same y axis and colors as _aligned; the legend is drawn only there. The y label
+            # and the tick labels are kept but transparent: bbox_inches="tight" then crops
+            # both files to the same size, so at the same width in LaTeX both panels get the
+            # same scale (with them removed, _other was 16 % narrower and came out bigger).
+            ax.yaxis.label.set_color("none")
+            ax.tick_params(axis="y", labelcolor="none")
         save_figure(fig, f"{name}_{suffix}", args)
 
 
