@@ -39,8 +39,14 @@ BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
 BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
 
 
+# Steps whose value the operation reads more than once. With the read fault (stage pmul /
+# mul) only one read sees the flip and a cancellation breaks; with the persistent fault
+# (stage *_non_transient) every read sees it.
+#   pmul 1        p, read by both products (c1*p and c0*p)
+#   mul  0..3     the inputs, read for t1/t2 and again for d2/d0
+#   mul  10       d2, read by the two key-switch products (u1, u0)
 PMUL_STEPS_NONTRANSIENT = [1]
-MUL_STEPS_NONTRANSIENT = [0, 1, 2, 3]
+MUL_STEPS_NONTRANSIENT = [0, 1, 2, 3, 10]
 # One representative op_step per pattern of mul. FIRST GUESS from reading
 # multBitFlipNonTransient; replace it with one step per band of the op_mul heatmap:
 #   0, 1   input ciphertext (ax, bx)
@@ -67,10 +73,10 @@ def keyswitch_bits(logQ):
 # Server operations, exhaustive. logSlots=3 (gap = 4) as in chapter 1.
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
-SERVER_MUL = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
-              logN=6, logSlots=3, logQ=100, logDelta=30, bitsPerCoeff=120)
 # mul and rot have key-switching steps (mod qQ).
 SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
+# pmul of the thesis: the second pmul of "pmul x2", at level 90.
+SERVER_PMUL = dict(SERVER, logQ=120, bitsPerCoeff=124)
 # mul x3: 3*30 = 90 bits consumed, 70 left at decryption.
 SERVER_DEPTH = dict(SERVER, logQ=160, bitsPerCoeff=keyswitch_bits(160))
 # mul x2: 2*30 = 60 bits consumed; logQ=100 leaves 40 >= logDelta at decryption.
@@ -100,13 +106,18 @@ GROUPS = {
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2", op_depth=1), ADD_STEPS),
 
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
-    "op_mul": steps(dict(SERVER_MUL, stage="mul", pipeline="mul x2", op_depth=1), MUL_STEPS,
+    "op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul"), MUL_STEPS,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
-    "op_mul_nonTransient": steps(dict(SERVER_MUL, stage="mul", pipeline="mul x2", op_depth=1), MUL_STEPS_NONTRANSIENT,
-                    seeds=SEEDS_MUL, inputs=SEEDS_MUL),
-    # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
-    "op_pmul": steps(dict(SERVER_MUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS),
-    "op_pmul_nonTransient": steps(dict(SERVER_MUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS_NONTRANSIENT),
+    # Same mul with the persistent fault, only in the steps read more than once.
+    "op_mul_nonTransient": steps(dict(SERVER_KS, stage="mul_non_transient", pipeline="mul"),
+                                 MUL_STEPS_NONTRANSIENT, seeds=SEEDS_MUL, inputs=SEEDS_MUL),
+    # pmul, the 6 steps.
+    "op_pmul": steps(dict(SERVER_PMUL, stage="pmul", pipeline="pmul x2", op_depth=1), PMUL_STEPS),
+    # Same pmul with the persistent fault in p.
+    "op_pmul_nonTransient": steps(dict(SERVER_PMUL, stage="pmul_non_transient", pipeline="pmul x2",
+                                       op_depth=1), PMUL_STEPS_NONTRANSIENT),
+
+    "op_rot_nonTransient": steps(dict(SERVER_KS, stage="rot_non_transient", pipeline="rot 2"), [2]),
     # FIG 2b / EVIDENCE (which mul of the chain is hit). Only the representative steps,
     # and 1 seed x 3 inputs (chapter 1 shows the seed does not matter): 26 steps x 9
     # repetitions would be ~15M injections. Each mul multiplies by a fresh encryption, so

@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 
-HEAAN_SHA="3fa7e4c861a4ef8057a5f0a8a42e2c35b7c6607e"
+HEAAN_SHA="a24eb65746491ef418930d3dc227373290fc9900"
 OPENFHE_SHA="b989e4768c65bc5de5400554546809b5217c98e4"   # first commit with fault-hook.h
 
 [ -d HEAAN-PRNG-Control ]   || git clone https://github.com/mmazz/HEAAN-PRNG-Control.git
