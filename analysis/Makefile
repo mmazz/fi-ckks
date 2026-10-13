@@ -79,6 +79,12 @@ OP_pmul      = $(subst logQ=60,logQ=120,$(SERVER)) bitsPerCoeff=124 stage=pmul "
 OP_mul       = $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul
 OP_rescale   = $(RESC) stage=rescale "pipeline=mul x2"
 OP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
+# Persistent fault (stages *_non_transient), only in the steps where it differs from the
+# read fault (*_STEPS_NONTRANSIENT in scripts/serverCampaigns.py). Same configs as above.
+OP_pmul_nt   = $(subst logQ=60,logQ=120,$(SERVER)) bitsPerCoeff=124 stage=pmul_non_transient "pipeline=pmul x2" op_depth=1
+OP_mul_nt    = $(SERVER) bitsPerCoeff=124 stage=mul_non_transient pipeline=mul
+OP_rot_nt    = $(SERVER) bitsPerCoeff=124 stage=rot_non_transient "pipeline=rot 2"
+
 OP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3"
 OP_mix       = $(MIXP) stage=mul "pipeline=$(MIX)"
 OP_mix_boot  = $(MIXP) stage=mul "pipeline=$(MIX); boot"
@@ -268,7 +274,7 @@ _mb_fig02_boot_cut:
 # Chapter 7, server side (c2_). Each operation: heatmap op_step x bit with one row per
 # pattern, then the E_L2 curves of one step per pattern.
 # ======================================================================================
-CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
+CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig05b c2_fig06 c2_fig07
 ch2: $(CH2)
 $(addprefix _,$(CH2)): RES = $(RES2)
 
@@ -300,7 +306,10 @@ _c2_fig04:
 _c2_fig05:
 	$(call HEAT3,c2_fig05_rot,--where $(OP_rot))
 	$(CURVE) --title c2_fig05_rot --where $(OP_rot) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
-
+# Persistent fault in the mul, in the steps where it differs from the read fault. Same
+# config as c2_fig03: its rows compare with the same steps there.
+_c2_fig05b:
+	$(call HEAT3,c2_fig05b_mul_persistent,--where $(OP_mul_nt))
 # Mixed pipeline with and without the final boot, one figure per op_step of the mul
 # number MIX_DEPTH. The thesis puts two steps side by side: half-width panels. Without the
 # boot the error reaches 1e216: above 1e6 it is drawn as triangles, as in c1_fig14.
