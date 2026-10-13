@@ -65,6 +65,8 @@ stats:
 	python3 slot_stats.py ../results_client ../results_server
 	python3 slot_stats.py ../results_client --by stage logMin logMax
 	python3 slot_stats.py ../results_server --by stage op_step
+
+
 # ======================================================================================
 # Chapter 1: client side
 # ======================================================================================
@@ -77,27 +79,133 @@ BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=8
 # logSlots of the OpenFHE figures (3 or 5)
 SL        ?= 3
 
-CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig03b c1_fig04 c1_fig05 c1_fig05b c1_fig06 c1_fig07 c1_fig08 \
-      c1_fig09 c1_fig09b c1_fig09c c1_fig09d c1_fig10 c1_fig10b c1_fig11 c1_fig11b c1_fig12 c1_fig12b c1_fig12c c1_fig13 c1_share
+CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05  c1_fig06 c1_fig07 c1_fig08 \
+      c1_fig09  c1_fig10  c1_fig11  c1_fig12  c1_fig13 \
+      c1_fig14 c1_fig15 c1_fig16  c1_fig17  c1_fig18 
+
 .PHONY: $(CH1)
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
 	
-# Seed variability: band = min..max per bit over every coefficient and repetition.
+# Comparacion codificado heaan vs openfhe
 _c1_fig01:
-	$(CURVE) --title c1_fig01_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
+	$(SHIFT) --title c1_fig01_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
+		--query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
+		--vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
+
+# Seed variability: band = min..max per bit over every coefficient and repetition.
+_c1_fig02:
+	$(CURVE) --title c1_fig02_seeds --where $(BASE) bitsPerCoeff=64 pipeline= \
 	    --query '$(ENC)' --per stage --raw_spread $(YL)
 
-_c1_fig02:
-	$(CURVE) --title c1_fig02_logN \
+# Plain vs C0 vs C1
+_c1_fig03:
+	$(SHIFT) --title c1_fig03_encode_c0_c1_dec --where $(BASE) pipeline= \
+		--query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC_DEC) and bitsPerCoeff == 64))' \
+		--vary stage --labels 'encode (bit $$-$$ logQ)' 'encrypt_c0' 'encrypt_c1' 'decode' $(YL)
+
+# Does a fault break every slot or only a few? Per bit: no slot / some / every slot > 1 %.
+_c1_fig04:
+	$(SHARE) --title c1_fig04_share --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+
+# Log N comparacion
+_c1_fig05:
+	$(CURVE) --title c1_fig05_logN \
 	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
 	    --query 'logSlots == logN - 1' \
 	    --vary logN --labels 'logN=6' 'logN=16' $(YL)
 
-_c1_fig03:
-	$(SHIFT) --title c1_fig03_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
-	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
-	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
+# Impacto Delta
+# Same data, x = bit - logDelta: the curves should collapse into one.
+_c1_fig06:
+	$(CURVE) --title c1_fig06_logDelta_shift \
+		--where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+		--query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
+
+# Impacto LogQ
+_c1_fig07:
+	$(CURVE) --title c1_fig07_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
+		--query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
+		--vary logQ --xnorm over_q $(YL)
+
+# Impacto slots
+_c1_fig08:
+	$(CURVE) --title c1_fig08_logSlots \
+		--where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
+		--query '$(ENC) and logSlots in [3, 4, 5]' \
+		--vary logSlots --split gap --per stage $(YL)
+
+# Valores de entrada
+_c1_fig09:
+	$(CURVE) --title c1_fig09_input \
+		--where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=20 bitsPerCoeff=64 \
+		--query 'logMax == logMin + 1 and $(ENC)' --vary logMin --per stage $(YL)
+
+
+_c1_fig10:
+	$(CURVE) --title c1_fig10_add_rot \
+		--where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
+		--query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
+
+# Openfhe add rot
+_c1_fig11:
+	$(CURVE) --title c1_fig09_add_rotOpen \
+		--where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=0 \
+		--query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset
+
+# mul stage
+_c1_fig12:
+	$(CURVE) --title c1_fig12_mul --where $(CLIENT_MUL) \
+		--query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
+		--vary pipeline --split gap --per stage $(YL)
+
+
+# # FIG 10b: c0 gaps, a ciphertext operand (mul) leaks the fault through its noise, a plaintext one (pmul) does not.
+_c1_fig13:
+	$(CURVE) --title c1_fig13_pmul_c0 --where $(CLIENT_MUL) \
+		--query 'stage == "encrypt_c0" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
+		--vary pipeline --split gap $(YL)
+	$(CURVE) --title c1_fig13_pmul_c1 --where $(CLIENT_MUL) \
+		--query 'stage == "encrypt_c1" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
+		--vary pipeline --split gap $(YL)
+
+# Boot comparison
+_c1_fig14:
+	$(CURVE) --title c1_fig14_boot --where $(BOOTP) \
+		--query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
+		--vary pipeline --per stage --labels '4 mul' '4 mul + boot' \
+		--xlim 0 300 --ymax 1e6 --lines --boot_cutoff $(YL)
+
+# Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group).
+_c1_fig15:
+	$(CURVE) --title c1_fig15_boot_sweep --where $(BOOTP) \
+		--query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
+		--vary pipeline --per stage \
+		--order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
+		--labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
+		--xlim 0 300 --lines --boot_cutoff $(YL)
+
+# RNS add
+_c1_fig16:
+	$(CURVE) --title c1_fig16_rns_add_rot \
+		--where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
+		--vary limb --per stage --split gap $(YL) --detect_onset --drop_coeffs 0
+
+# RNS pmul
+_c1_fig017:
+	$(CURVE) --title c1_fig17_add_pmul_rotRNS \
+		--where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0  \
+		--query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset --drop_coeffs 0
+
+
+_c1_fig18:
+	$(CURVE) --title c1_fig18_ntt \
+		--where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) \
+		--per stage $(YL)
+
+
+### NOT THESIS?
+
 
 # Encode stage only: compare SKA attack modes on OpenFHE
 _c1_fig03b:
@@ -106,21 +214,11 @@ _c1_fig03b:
 	    --query 'bitsPerCoeff == 64 and attackModeSKA in [0, 1]' \
 	    --vary attackModeSKA --labels 'OpenFHE (SKA 0)' 'OpenFHE (SKA 1)' $(YL)
 
-_c1_fig04:
-	$(SHIFT) --title c1_fig04_encode_c0_c1_dec --where $(BASE) pipeline= \
-	    --query '((stage == "encode" and bitsPerCoeff == 128) or ($(ENC_DEC) and bitsPerCoeff == 64))' \
-	    --vary stage --labels 'encode (bit $$-$$ logQ)' 'encrypt_c0' 'encrypt_c1' 'decode' $(YL)
 
 _c1_fig05:
 	$(CURVE) --title c1_fig05_logDelta \
 	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta $(YL)
-
-# Same data, x = bit - logDelta: the curves should collapse into one.
-_c1_fig05b:
-	$(CURVE) --title c1_fig05b_logDelta_shift \
-	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
-	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
 # May be better to show c1
 _c1_fig05c:
@@ -128,81 +226,16 @@ _c1_fig05c:
 	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
-_c1_fig06:
-	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
-	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
-	    --vary logQ --xnorm over_q $(YL)
 _c1_fig06b:
 	$(CURVE) --title c1_fig06_logQ --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 \
 	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' \
 	    --vary logQ --xnorm over_q $(YL)
 
-_c1_fig07:
-	$(CURVE) --title c1_fig07_logSlots \
-	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
-	    --query '$(ENC) and logSlots in [3, 4, 5]' \
-	    --vary logSlots --split gap --per stage $(YL)
-
-_c1_fig08:
-	$(CURVE) --title c1_fig08_input \
-	    --where library=heaan pipeline= logN=6 logSlots=5 logQ=60 logDelta=20 bitsPerCoeff=64 \
-	    --query 'logMax == logMin + 1 and $(ENC)' --vary logMin --per stage $(YL)
-
-_c1_fig09:
-	$(CURVE) --title c1_fig09_add_rot \
-	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
-	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
 _c1_fig09b:
 	$(CURVE) --title c1_fig09_add_pmul_rot \
 	    --where library=heaan "pipeline=add x2; pmul x3; rot 3" logN=6 logQ=150 logDelta=30 bitsPerCoeff=170 \
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
-
-_c1_fig09c:
-	$(CURVE) --title c1_fig09_add_rotOpen \
-	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=0 \
-	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset
-
-_c1_fig09d:
-	$(CURVE) --title c1_fig09_add_pmul_rotRNS \
-	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0  \
-	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL) --detect_onset --drop_coeffs 0
-
-
-_c1_fig10:
-	$(CURVE) --title c1_fig10_mul --where $(CLIENT_MUL) \
-	    --query 'pipeline in ["mul", "mul x2", "mul x3"] and $(ENC)' \
-	    --vary pipeline --split gap --per stage $(YL)
-
-# # FIG 10b: c0 gaps, a ciphertext operand (mul) leaks the fault through its noise, a plaintext one (pmul) does not.
-_c1_fig10b:
-	$(CURVE) --title c1_fig10b_pmul_c0 --where $(CLIENT_MUL) \
-	    --query 'stage == "encrypt_c0" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
-	    --vary pipeline --split gap $(YL)
-	$(CURVE) --title c1_fig10b_pmul_c1 --where $(CLIENT_MUL) \
-	    --query 'stage == "encrypt_c1" and pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' \
-	    --vary pipeline --split gap $(YL)
-
-_c1_fig11:
-	$(CURVE) --title c1_fig11_boot --where $(BOOTP) \
-	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
-	    --vary pipeline --per stage --labels '4 mul' '4 mul + boot' \
-	    --xlim 0 300 --ymax 1e6 --lines --boot_cutoff $(YL)
-
-# Boot after 1 to 5 muls (boot_sweep + the "mul x4; boot" of the boot group).
-_c1_fig11b:
-	$(CURVE) --title c1_fig11b_boot_sweep --where $(BOOTP) \
-	    --query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
-	    --vary pipeline --per stage \
-	    --order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
-	    --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
-	    --xlim 0 300 --lines --boot_cutoff $(YL)
-
-_c1_fig12:
-	$(CURVE) --title c1_fig12_rns_add_rot \
-	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
-	    --vary limb --per stage --split gap $(YL) --detect_onset --drop_coeffs 0
-
 _c1_fig12b:
 	$(CURVE) --title c1_fig12_rns_pmul \
 		--where $(OFHE) "pipeline=pmul" mult_depth=3 withNTT=0 logSlots=$(SL) --drop_coeffs 0\
@@ -213,13 +246,6 @@ _c1_fig12c:
 	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0 logSlots=$(SL) \
 	    --vary limb --per stage $(YL) --split gap --detect_onset --drop_coeffs 0
 
-_c1_fig13:
-	$(CURVE) --title c1_fig13_ntt \
-	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) \
-	    --per stage $(YL)
-# Does a fault break every slot or only a few? Per bit: no slot / some / every slot > 1 %.
-_c1_share:
-	$(SHARE) --title c1_share --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
 # ======================================================================================
 # Chapter 2: server side. Base figure of each op = heatmap op_step x bit (it also prints
 # the patterns and one representative per pattern), then the curves of a few steps.
@@ -242,19 +268,17 @@ MIX_DEPTH ?= 0
 MUL_ROWS = 0-9;10,12;11,13;14;15;16-21,24;22,23,25
      # Rows of the plaintext multiplication map: input c1, the two reads of p, input c0, outputs.
 PMUL_ROWS = 0;1,3;2;4;5
-CH2 = c2_fig01 c2_fig02 c2_fig02b c2_fig02c c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
+CH2 = c2_fig01 c2_fig02  c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 .PHONY: $(CH2)
 ch2: $(CH2)
 $(addprefix _,$(CH2)): RES = $(RES2)
 
 
 F01_WHERE  = --where $(SERVER) op_depth=1 bitsPerCoeff=64 stage=add "pipeline=add x2"
-F02_WHERE  = --where $(SERVER_MUL) bitsPerCoeff=124 stage=mul op_depth=1 "pipeline=mul x2"
-F02B_WHERE = --where $(DEPTH) stage=mul "pipeline=mul x3"
-F02C_WHERE = --where $(SERVER_MUL) bitsPerCoeff=124 stage=pmul op_depth=1 "pipeline=pmul x2"
-F03_WHERE  = --where $(RESC) stage=rescale "pipeline=mul x2"
-F04_WHERE  = --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
-F05_WHERE  = --where $(MIXP) stage=mul "pipeline=$(MIX)"
+F02_WHERE = --where $(SERVER_MUL) bitsPerCoeff=124 stage=pmul op_depth=1 "pipeline=pmul x2"
+F03_WHERE  = --where $(SERVER_MUL) bitsPerCoeff=124 stage=mul op_depth=1 "pipeline=mul x2"
+F04_WHERE  = --where $(RESC) stage=rescale "pipeline=mul x2"
+F05_WHERE  = --where $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
 F06_WHERE  = --where $(MIXP) stage=mul "pipeline=$(MIX); boot"
 F07_WHERE  = --where $(BOOTP) stage=boot "pipeline=mul x4; boot"
 F07E_WHERE = --where $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
@@ -264,73 +288,69 @@ _c2_fig01:
 	$(CURVE) --title c2_fig01_add $(F01_WHERE) --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
 _c2_fig02:
-	$(call HEAT3,c2_fig02_mul,$(F02_WHERE),--rows "$(MUL_ROWS)")
-	$(CURVE) --title c2_fig02_mul     $(F02_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
-	$(CURVE) --title c2_fig02_mul_gap $(F02_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig02_pmul,$(F02_WHERE),--rows "$(PMUL_ROWS)")
+	$(CURVE) --title c2_fig02_pmul     $(F02_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step $(YL)
+	$(CURVE) --title c2_fig02_pmul_gap $(F02_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
 
+_c2_fig03:
+	$(call HEAT3,c2_fig03_mul,$(F03_WHERE),--rows "$(MUL_ROWS)")
+	$(CURVE) --title c2_fig03_mul     $(F03_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step $(YL)
+	$(CURVE) --title c2_fig03_mul_gap $(F03_WHERE) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
+
+_c2_fig04:
+	$(call HEAT3,c2_fig04_rescale,$(F04_WHERE) --per op_depth)
+	$(CURVE) --title c2_fig04_rescale     $(F04_WHERE) --vary op_step --per op_depth $(YL)
+	$(CURVE) --title c2_fig04_rescale_gap $(F04_WHERE) --vary op_step --per op_depth --split gap $(YL)
+
+_c2_fig05:
+	$(call HEAT3,c2_fig05_rot,$(F05_WHERE))
+	$(CURVE) --title c2_fig05_rot $(F05_WHERE) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
+
+# Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
+_c2_fig06:
+	$(call HEAT3,c2_fig06_mix_boot,$(F06_WHERE) --per op_depth)
+	$(CURVE) --title c2_fig06_mix_boot --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
+		--query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
+	$(CURVE) --title c2_fig06_mix_boot_gap --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
+		--query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
+
+_c2_fig07:
+	$(call HEAT3,c2_fig07_boot,$(F07_WHERE))
+	$(call HEAT3,c2_fig07_boot_eval,$(F07E_WHERE))
+
+
+### NOT THESIS?
+
+F02B_WHERE = --where $(DEPTH) stage=mul "pipeline=mul x3"
 # Which mul of the chain is hit: x = bit - logq of the level where that mul runs.
 _c2_fig02b:
 	$(call HEAT3,c2_fig02b_mul_depth,$(F02B_WHERE) --per op_depth)
 	$(CURVE) --title c2_fig02b_mul_depth     $(F02B_WHERE) --vary op_depth --per op_step --xnorm minus_level $(YL)
 	$(CURVE) --title c2_fig02b_mul_depth_gap $(F02B_WHERE) --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 
-_c2_fig02c:
-	$(call HEAT3,c2_fig02_pmul,$(F02C_WHERE),--rows "$(PMUL_ROWS)")
-	$(CURVE) --title c2_fig02_pmul     $(F02C_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step $(YL)
-	$(CURVE) --title c2_fig02_pmul_gap $(F02C_WHERE) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
 
-_c2_fig03:
-	$(call HEAT3,c2_fig03_rescale,$(F03_WHERE) --per op_depth)
-	$(CURVE) --title c2_fig03_rescale     $(F03_WHERE) --vary op_step --per op_depth $(YL)
-	$(CURVE) --title c2_fig03_rescale_gap $(F03_WHERE) --vary op_step --per op_depth --split gap $(YL)
-
-_c2_fig04:
-	$(call HEAT3,c2_fig04_rot,$(F04_WHERE))
-	$(CURVE) --title c2_fig04_rot $(F04_WHERE) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
-
+F05b_WHERE  = --where $(MIXP) stage=mul "pipeline=$(MIX)"
 # Mixed pipeline, fault in the 1st or the 2nd mul.
-_c2_fig05:
-	$(call HEAT3,c2_fig05_mix,$(F05_WHERE) --per op_depth)
-	$(CURVE) --title c2_fig05_mix     $(F05_WHERE) --vary op_depth --per op_step --xnorm minus_level $(YL)
-	$(CURVE) --title c2_fig05_mix_gap $(F05_WHERE) --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
-
-# Same, with and without the final boot (one figure per op_step, mul number MIX_DEPTH).
-_c2_fig06:
-	$(call HEAT3,c2_fig06_mix_boot,$(F06_WHERE) --per op_depth)
-	$(CURVE) --title c2_fig06_mix_boot --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
-	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
-	$(CURVE) --title c2_fig06_mix_boot_gap --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
-	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
-
-_c2_fig07:
-	$(call HEAT3,c2_fig07_boot,$(F07_WHERE))
-	$(call HEAT3,c2_fig07_boot_eval,$(F07E_WHERE))
+_c2_fig05b:
+	$(call HEAT3,c2_fig05b_mix,$(F05_WHERE) --per op_depth)
+	$(CURVE) --title c2_fig05b_mix     $(F05_WHERE) --vary op_depth --per op_step --xnorm minus_level $(YL)
+	$(CURVE) --title c2_fig05b_mix_gap $(F05_WHERE) --vary op_depth --per op_step --xnorm minus_level --split gap $(YL)
 	
 # ======================================================================================
 # Multi-bit faults (burst_* groups). A burst of k = amountBits bits from bit b should act
 # as a single flip of its top bit b+k-1: with --xnorm top_bit every k lands on the k=1
 # curve. Each figure reuses the config of a single-bit one (named next to it).
 # ======================================================================================
-MB = mb_enc_shift mb_enc mb_rns mb_boot mb_boot_top mb_boot_cut mb_op_mul
+MB = mb_enc mb_rns  mb_boot_top mb_boot_cut 
 .PHONY: $(MB)
 burst: $(MB)
 $(addprefix _,$(MB)): RES = $(RES_BURST)
 
-# x = first bit of the burst: each curve is the k=1 one shifted left by k-1 (c1_fig01 config).
-MB_ENC_SHIFT_ARGS = --where $(BASE) logSlots=3 bitsPerCoeff=64 pipeline= \
-    --query '$(ENC)' --vary amountBits --per stage $(YL)
 
 # Same data, x = top bit of the burst: the curves collapse into one.
 MB_ENC_ARGS = --where $(BASE) logSlots=3 bitsPerCoeff=64 pipeline= \
     --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
 
-# RNS (c1_fig12 config), averaged over the limbs.
-MB_RNS_ARGS = --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=3 \
-    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
-
-# Through bootstrapping (c1_fig11 config), the only non-linear step.
-MB_BOOT_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" \
-    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
 # Near the boot cutoff (c1_fig11 config, c1 only). x = top bit of the burst: the curves
 # no longer collapse, each one drops at cut + k - 1.
 MB_BOOT_TOP_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" --query 'stage == "encrypt_c1"' \
@@ -341,17 +361,38 @@ MB_BOOT_TOP_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" --query 'stage == "e
 MB_BOOT_CUT_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" --query 'stage == "encrypt_c1"' \
    --vary amountBits --xlim 200 220 --boot_cutoff --lines \
    --labels 'k=1' 'k=2' 'k=4' 'k=8' $(YL)
-# Inside mul (c2_fig02 config): one figure per op_step of MUL_REPR.
-MB_OP_MUL_ARGS = --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
-    --vary amountBits --per op_step --xnorm top_bit $(YL)
 
 .PHONY: _mb_enc_shift _mb_enc _mb_rns _mb_boot _mb_op_mul
 
+_mb_fig01_enc:
+	$(call CURVE3,mb_fig01_enc,$(MB_ENC_ARGS))
+
+_mb_fig02_boot_top:
+	$(call CURVE3,mb_fig02_boot_top,$(MB_BOOT_TOP_ARGS))
+
+_mb_fig02_boot_cut:
+	$(call CURVE3,mb_fig02_boot_cut,$(MB_BOOT_CUT_ARGS))
+
+
+# NOT THESIS?
+
+
+
+# RNS (c1_fig12 config), averaged over the limbs.
+MB_RNS_ARGS = --where $(OFHE) "pipeline=add; rot 3" mult_depth=3 withNTT=0 logSlots=3 \
+    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+
+# Through bootstrapping (c1_fig11 config), the only non-linear step.
+MB_BOOT_ARGS = --where $(BOOTP) "pipeline=mul x4; boot" \
+    --query '$(ENC)' --vary amountBits --per stage --xnorm top_bit $(YL)
+## x = first bit of the burst: each curve is the k=1 one shifted left by k-1 (c1_fig01 config).
+MB_ENC_SHIFT_ARGS = --where $(BASE) logSlots=3 bitsPerCoeff=64 pipeline= \
+    --query '$(ENC)' --vary amountBits --per stage $(YL)
+# Inside mul (c2_fig02 config): one figure per op_step of MUL_REPR.
+MB_OP_MUL_ARGS = --where $(SERVER) bitsPerCoeff=124 stage=mul pipeline=mul \
+				 --vary amountBits --per op_step --xnorm top_bit $(YL)
 _mb_enc_shift:
 	$(call CURVE3,mb_enc_shift,$(MB_ENC_SHIFT_ARGS))
-
-_mb_enc:
-	$(call CURVE3,mb_enc,$(MB_ENC_ARGS))
 
 _mb_rns:
 	$(call CURVE3,mb_rns,$(MB_RNS_ARGS))
@@ -361,12 +402,6 @@ _mb_boot:
 
 _mb_op_mul:
 	$(call CURVE3,mb_op_mul,$(MB_OP_MUL_ARGS))
-
-_mb_boot_top:
-	$(call CURVE3,mb_boot_top,$(MB_BOOT_TOP_ARGS))
-
-_mb_boot_cut:
-	$(call CURVE3,mb_boot_cut,$(MB_BOOT_CUT_ARGS))
 # ======================================================================================
 # Exploration: every op_step of one operation, to draw conclusions before choosing
 # the representative steps. Output: img/ex_<OP>_*.
