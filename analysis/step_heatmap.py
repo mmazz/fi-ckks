@@ -105,7 +105,7 @@ def gap_of(cfg):
     """Distance between the coefficients the decode reads: (N/2) / slots."""
     return ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
 
-def step_curves(camps, results, args):
+def step_curves(camps, results, args, gap_sel=None):
     """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2)."""
     gap_sel = args.gap if gap_sel is None else gap_sel
     rows = {}
