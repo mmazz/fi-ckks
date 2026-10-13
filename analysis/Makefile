@@ -35,9 +35,9 @@ YL     = --linthresh 1e-2 --ylabel 'L$$_2$$ norm (symlog)'
 # Heatmaps of every coefficient, of the aligned ones and of the other ones.
 # $(1) = title prefix, $(2) = arguments for the three, $(3) = arguments for aligned/other only
 define HEAT3
-$(HEAT) --title $(1)_heat         $(2) --tol 3
-$(HEAT) --title $(1)_heat_aligned $(2) $(3) --gap aligned --tol 3
-$(HEAT) --title $(1)_heat_other   $(2) $(3) --gap other   --tol 3 --no-legend
+$(HEAT) --title $(1)_heat         $(2) --tol 3 --collapse
+$(HEAT) --title $(1)_heat_aligned $(2) $(3) --gap aligned --tol 3 --collapse
+$(HEAT) --title $(1)_heat_other   $(2) $(3) --gap other   --tol 3 --collapse --no-legend
 endef
 define CURVE3
 $(CURVE) --title $(1)         $(2) --split gap

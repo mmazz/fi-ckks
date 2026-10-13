@@ -76,6 +76,11 @@ def parse_args():
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
+    p.add_argument("--collapse", action="store_true",
+                   help="one row per pattern, found from the data: two steps share a row if "
+                        "they are the same pattern (--tol) on the aligned AND on the non-aligned "
+                        "coefficients, so the --gap aligned / other panels get the same rows. "
+                        "Prints the groups as a --rows string, to pin them in the Makefile")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.tol is None:
@@ -96,8 +101,13 @@ def select_campaigns(args):
 # ------------------------------------------------------------------ #
 # Data
 # ------------------------------------------------------------------ #
+def gap_of(cfg):
+    """Distance between the coefficients the decode reads: (N/2) / slots."""
+    return ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
+
 def step_curves(camps, results, args):
     """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2)."""
+    gap_sel = args.gap if gap_sel is None else gap_sel
     rows = {}
     for step, g in camps.groupby("op_step"):
         try:
@@ -105,6 +115,9 @@ def step_curves(camps, results, args):
         except ValueError as e:
             sys.exit(f"ERROR at op_step={step}: {e}\n  -> add a filter with --where / --query")
         d = load_data(g, results)
+        if gap_sel != "all":
+            aligned = d["coeff"] % gap_of(cfg) == 0
+            d = d[aligned] if gap_sel == "aligned" else d[~aligned]
         if args.gap != "all":
             gap = ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
             aligned = d["coeff"] % gap == 0
@@ -206,6 +219,64 @@ def report_ranges(curves, name):
     out = IMG_DIR / f"{name}_ranges.csv"
     ranges.to_csv(out, index=False)
     print(f"  -> {out}")
+
+def joint_patterns(panels, args):
+    """Like patterns(), but over several panels of the same steps (aligned and non-aligned
+    coefficients): a step joins a pattern only if it matches the representative in every
+    panel, so all the panels get the same rows."""
+    groups = []
+    for step in panels[0].index:
+        for g in groups:
+            if all(same_pattern(p.loc[g[0]], p.loc[step], args) for p in panels):
+                g.append(step)
+                break
+        else:
+            groups.append([step])
+    return groups
+
+
+def fmt_steps(steps, sep=", ", dash="\u2013"):
+    """[0, 8, 9, 10, 22, 23] -> '0, 8–10, 22, 23': runs of three or more steps with a dash,
+    as in the tables of the thesis. With sep=',' and dash='-' it is a --rows group."""
+    runs = []
+    start = prev = steps[0]
+    for s in list(steps[1:]) + [None]:
+        if s is not None and s == prev + 1:
+            prev = s
+            continue
+        if prev - start >= 2:
+            runs.append(f"{start}{dash}{prev}")
+        else:
+            runs += [str(x) for x in range(start, prev + 1)]
+        start = prev = s
+    return sep.join(runs)
+
+
+def merge_groups(curves, groups):
+    """One row per group, labelled with its steps. Each bit takes the value of the first
+    step of the group that was injected there, so a bit that one step did not sample is
+    filled by another step of the same pattern instead of showing as not injected."""
+    rows = {fmt_steps(g): curves.loc[g].bfill().iloc[0] for g in groups}
+    return pd.DataFrame(rows).T
+
+
+def collapse_patterns(camps, curves, args):
+    """--collapse: the groups of joint_patterns over the aligned and the non-aligned
+    coefficients (only one panel when every coefficient is aligned). `curves` is the panel
+    being drawn, reused when it is one of the two."""
+    if gap_of(camps.iloc[0]) == 1:
+        panels = [curves]
+    else:
+        panels = [curves if args.gap == sel else step_curves(camps, args.results, args, sel)
+                  for sel in ("aligned", "other")]
+        if args.color == "log2" and args.floor is not None:
+            panels = [p.clip(lower=args.floor) for p in panels]
+    groups = joint_patterns(panels, args)
+    print(f"  collapsed (aligned and non-aligned together): {len(groups)} rows")
+    for g in groups:
+        print(f"    {fmt_steps(g)}")
+    print(f"  as --rows: \"{';'.join(fmt_steps(g, sep=',', dash='-') for g in groups)}\"")
+    return groups
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
@@ -270,7 +341,7 @@ def plot(curves, groups, cfg, name, args):
         draw_log2(fig, ax, values, args.floor)
     # Row labels: the op_steps of each row (--rows), or each op_step and its pattern letter.
     ax.set_yticks(range(len(curves)))
-    if args.rows:
+    if args.rows or args.collapse:
         ax.set_yticklabels(list(curves.index), fontsize=TICK_FONT)
         ax.set_ylabel("op_step", fontsize=FONT)
     else:
@@ -321,6 +392,9 @@ def main():
         print(f"  representatives: {[g[0] for g in groups]}")
         if args.rows:
             curves = collapse(curves, args.rows, args)
+        elif args.collapse:
+            groups = collapse_patterns(sub, curves, args)
+            curves = merge_groups(curves, groups)
         if args.color == "mrep":
             report_ranges(curves, name)
         plot(curves, groups, sub.iloc[0], name, args)
