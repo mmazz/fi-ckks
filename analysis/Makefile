@@ -11,7 +11,8 @@
 # The parameters of each block are the ones of the campaign groups in scripts/*Campaigns.py.
 #
 #   make check              # health check of the results dirs, BEFORE plotting
-#   make all                # teo ch1 burst ch2 nn ev
+#   make                    # the figures the thesis includes: teo ch1 burst ch2 nn
+#   make all                # those and the evidence (ev)
 #   make c1_fig07 SHOW=--show
 #
 # Output: img/<title>.pdf and .png.
@@ -89,8 +90,10 @@ OP_boot_eval = $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline
 ENC     = stage in ["encrypt_c0", "encrypt_c1"]
 ENC_DEC = stage in ["encrypt_c0", "encrypt_c1", "decode"]
 
-.PHONY: all check stats ch1 burst ch2 nn ev
-all: teo ch1 burst ch2 nn ev
+.PHONY: thesis all check stats ch1 burst ch2 nn ev
+# Default goal: the figures the thesis includes (see "Incremental build").
+thesis: img/.thesis.done
+all: thesis ev
 
 check:
 	python3 check_results.py $(RES1)
@@ -427,8 +430,13 @@ _ev_mb_op_mul:
 # ======================================================================================
 FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
            $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv $(RES_NN)/campaigns_*.csv $(RES_BURST)/campaigns_*.csv)
-FIGS = teo $(CH1) $(MB) $(CH2) $(NNF) $(EV)
+THESIS_FIGS = teo $(CH1) $(MB) $(CH2) $(NNF)
+FIGS = $(THESIS_FIGS) $(EV)
 .PHONY: $(FIGS)
+# Touched only when a figure of the thesis was replotted: the thesis Makefile depends on it,
+# so the PDF is recompiled when a figure changes and not otherwise.
+img/.thesis.done: $(patsubst %,img/.%.done,$(THESIS_FIGS))
+	@mkdir -p img && touch $@
 $(FIGS): %: img/.%.done
 img/.%.done: $(FIG_DEPS)
 	$(MAKE) --no-print-directory _$*

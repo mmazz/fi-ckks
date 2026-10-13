@@ -22,7 +22,8 @@ TAG="${2:-}"
 # utils/config, utils/sites) only runs in fi-ckks. --delete-excluded removes files an older
 # export left behind; P protects the figures and the data pin.
 KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py
-      nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py slot_share.py)
+      nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py slot_share.py
+      master_curve.py)
 filters=(--filter='P /img/' --filter='P /data.mk' --include='/utils/')
 for f in "${KEEP[@]}"; do filters+=(--include="/$f"); done
 rsync -a --delete-excluded "${filters[@]}" --exclude='*' "$ROOT/analysis/" "$DEST/figures/"
@@ -80,3 +81,4 @@ fi
 [ -f "$DEST/figures/data.mk" ] || echo "WARNING: no data.mk yet: run once with a tag"
 echo "exported fi-ckks $(git -C "$ROOT" rev-parse --short HEAD) -> $DEST/figures" \
      "(data: $(sed -n 's/^DATA_TAG = //p' "$DEST/figures/data.mk" 2>/dev/null || echo none))"
+
