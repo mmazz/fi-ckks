@@ -38,10 +38,16 @@ from utils.results import (load_campaigns, load_data, select, require_single_con
                            assign_config_id, parse_value)
 
 CLIENT_STAGES = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"]
-# Panel titles: stage number of the client pipeline (Fig. 4 of the DSN paper) + register.
-STAGE_LABEL = {"encode": "1: plaintext (encode)", "encrypt_c0": "3: $c_0$ (encrypt)",
-               "encrypt_c1": "4: $c_1$ (encrypt)", "decrypt_c0": "7: $c_0$ (before decrypt)",
-               "decrypt_c1": "8: $c_1$ (before decrypt)", "decode": "9: plaintext (decode)"}
+# Panel titles: number of the injection point in the thesis figure of the client pipeline
+# (1 to 6, in pipeline order) + register.
+STAGE_LABEL = {"encode": "1: plaintext (encode)", "encrypt_c0": "2: $c_0$ (encrypt)",
+               "encrypt_c1": "3: $c_1$ (encrypt)", "decrypt_c0": "4: $c_0$ (before decrypt)",
+               "decrypt_c1": "5: $c_1$ (before decrypt)", "decode": "6: plaintext (decode)"}
+
+
+def comma(v, digits=2):
+    """Decimal comma, as in the text of the thesis: 0.37 -> '0,37'."""
+    return f"{v:.{digits}f}".replace(".", ",")
 # Levels the HEAAN network spends before the logits: W1, x^2, x^3, -0.23*x^3, W2
 # (workloads/nn/heaan_nn.cpp). The output registers live mod 2^(logQ - NN_LEVELS*logDelta).
 NN_LEVELS = 5
@@ -175,7 +181,7 @@ def draw_rate(ax, curve):
                s=28, edgecolors="black", linewidths=0.3, zorder=3)
     ax.set_ylim(-0.05, 1.05)
     ax.set_yticks([0, 0.5, 1])
-    ax.set_yticklabels(["Mask", "0.5", "SDC"])
+    ax.set_yticklabels(["0", "0,5", "1"])
 
 
 def draw_stack(ax, curve):
@@ -203,7 +209,7 @@ def plot(stages, args):
         # interpolated over every bit of the register at the injection point and averaged
         # (dense near logDelta and logQ), so the plain mean of the samples would be biased.
         p_reg[stage] = register_rate(curve, register_width(cfg))
-        ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {p_reg[stage]:.2f})",
+        ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
                        fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
         # Output registers are only log q_l = 70 bits wide: crop so that the window is
@@ -216,11 +222,11 @@ def plot(stages, args):
     for ax in axes[-1]:
         ax.set_xlabel("Bit index", fontsize=FONT - 2)
     for ax in axes[:, 0]:
-        ax.set_ylabel("SDC rate" if args.mode == "rate" else "Fraction", fontsize=FONT - 2)
+        ax.set_ylabel(r"$P(\mathrm{mis})$" if args.mode == "rate" else "Fraction", fontsize=FONT - 2)
     if args.mode == "rate":
         # Proxies: the scatter is colored point by point, its own handle would be green.
         handles = [Line2D([], [], ls="none", marker="o", mfc=rm.RED, mec="black", mew=0.3,
-                          label="P(misclassification) per bit"),
+                          label=r"$P(\mathrm{mis})$ per bit"),
                    Patch(facecolor=BAND_COLOR, alpha=0.45, label="95% Wilson CI")]
     else:
         handles, _ = axes.flat[0].get_legend_handles_labels()

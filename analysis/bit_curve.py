@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 
@@ -115,6 +116,16 @@ def parse_args():
                    help="OpenFHE only: dash-dot line per curve at the mean bit from which the "
                         "SDC detector fires (per coefficient: lowest bit with detected >= "
                         "DETECT_RATE), shaded p10..p90 over the coefficients")
+    p.add_argument("--size", choices=["full", "half"], default=None,
+                   help="full: FIGSIZE, for a \\linewidth figure; half: SPLIT_FIGSIZE, for a "
+                        "0.49\\linewidth subfigure, with the same printed font size. Default: "
+                        "half with --split gap, full otherwise")
+    p.add_argument("--size_step", type=float, default=SIZE_STEP,
+                   help="each earlier curve's dots are this much bigger, so a curve hidden "
+                        "behind another still shows as a ring (default %(default)s)")
+    p.add_argument("--shade", nargs="+", type=float, default=None, metavar="BIT",
+                   help="shade the x range from each BIT to the right edge, darker where they "
+                        "overlap (e.g. the bits above the modulus of each limb)")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -147,6 +158,11 @@ def boot_cutoff_bit(cfg):
     if pos is None or cfg["library"] != "heaan" or "boot" not in after:
         return np.nan
     k = sum(o in MULTS for o in after[:after.index("boot")])
+    # A fault inside a mul / pmul also goes through the rescale of that same operation
+    # (backends/heaan.cpp rescales right after it): first mul of "add; mul; rot 2; mul; add;
+    # boot" -> k = 2, cut 130, as measured.
+    if cfg["stage"] != "rescale" and 0 <= pos < len(ops) and ops[pos] in MULTS:
+        k += 1
     delta = int(cfg["logDelta"])
     return delta + HEAAN_BOOT_EXTRA_BITS + k * delta
 
@@ -237,6 +253,7 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
     if args.labels and len(args.labels) != len(keys):
         sys.exit(f"--labels has {len(args.labels)} entries but there are {len(keys)} curves: "
                  f"{vary} = {keys}")
+    onset_bits = []      # --detect_onset: one per curve, for a single legend entry
     for val, d in groups:
         i = keys.index(val)          # position among ALL curves, not among this panel's
         # A non-finite value (a flip in a high bit can overflow the decode) makes the mean
@@ -258,9 +275,13 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
 
         # First curve biggest and at the back, last one at SCATER_SIZE on top: when two
         # curves coincide, the bigger dot behind still shows as a ring.
-        size = SCATER_SIZE + (len(keys) - 1 - i) * SIZE_STEP
+        size = SCATER_SIZE + (len(keys) - 1 - i) * args.size_step
         over = yv > args.ymax if args.ymax is not None else np.zeros(yv.size, dtype=bool)
         yv = np.where(over, np.nan, yv)            # off-scale points: triangles, below
+        if args.xlim:
+            # The triangles are drawn with clip_on=False (they sit on the top edge), so the
+            # ones outside --xlim would show to the right of the axes.
+            over &= (x >= args.xlim[0]) & (x <= args.xlim[1])
         if args.lines:
             # NaN cuts the line, so it never runs up to an off-scale point.
             ax.plot(x, yv, color=color, lw=1.2, alpha=0.6, zorder=1 + i)
@@ -291,9 +312,11 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
                 # bits would stretch a std band over the whole region.
                 lo, hi = np.percentile(xo, [10, 90])
 
+                # No label here: the legend gets one entry for every curve (after the loop).
                 ax.axvline(x_values(np.array([bit]), d, args.xnorm)[0], color=color, ls="-.",
-                           lw=2, zorder=1, label=f"detector onset: bit {bit}")
+                           lw=2, zorder=1)
                 ax.axvspan(lo, hi, color=color, alpha=0.1, lw=0, zorder=0)
+                onset_bits.append(bit)
                 print(f"  {name}: detector onset bit mean {onset.mean():.2f}, median "
                       f"{np.median(onset):g}, range {onset.min():g}..{onset.max():g}, "
                       f"over {onset.size} cell(s)")
@@ -335,7 +358,13 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
                                          hi=(f"{args.metric}_hi", "max")).reindex(y.index))
             ax.fill_between(x, band["lo"], band["hi"], color=color, alpha=0.2, lw=0,
                             label=None if i else "min-max over coeffs and repetitions")
-        # A reference line is drawn when it falls at the same x for every curve, in the plotted
+    if onset_bits:
+        # One legend entry for the onset lines of every curve. When they all fall on the
+        # same bit, the entry gives it.
+        same = len(set(onset_bits)) == 1
+        ax.plot([], [], color="gray", ls="-.", lw=2,
+                label=f"detector onset: bit {onset_bits[0]}" if same else "detector onset")
+    # A reference line is drawn when it falls at the same x for every curve, in the plotted
     # units: with --xnorm over_q and logDelta = 0.75 logQ, logDelta sits at 0.75 and logQ at 1.
     for col, name in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
         if args.no_refs:
@@ -381,6 +410,16 @@ def plot_curves(ax, data, vary, args, subset_label="", yref=None, legend=True):
             ax.set_ylim(0, top * 3.0 if np.isfinite(top * 3.0) else top)
     if args.xlim:
         ax.set_xlim(*args.xlim)
+    if args.xnorm != "over_q":
+        # Bits are integers: no 202.5 ticks. Steps of 1, 2, 5 or 10 (times a power of 10):
+        # 0, 10, ..., 60 for a 64-bit register, 200, 205, ..., 225 with --xlim 200 225.
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))
+    if args.shade:
+        # From each BIT to the right edge; darker where the ranges overlap.
+        right = ax.get_xlim()[1]
+        for start in args.shade:
+            ax.axvspan(start, right, color="gray", alpha=0.12, lw=0, zorder=0)
+        ax.set_xlim(right=right)
     xlabel = {"none": "Bit index", "minus_delta": r"Bit index $-\ \log\Delta$",
               "over_q": r"Bit index relative to $\log Q$","minus_level": r"Bit index $-\ \log q_\ell$", "top_bit": r"Top bit of the burst ($b + k - 1$)"}[args.xnorm]
     ax.set_xlabel(xlabel, fontsize=FONT)
@@ -428,7 +467,7 @@ def make_figure(data, vary, args, name):
                      f"got {args.order}, the curves are {list(by_name)}")
         args.curve_keys = [by_name[v] for v in args.order]
     if args.split == "none":
-        fig, ax = plt.subplots(figsize=FIGSIZE)
+        fig, ax = plt.subplots(figsize=SPLIT_FIGSIZE if args.size == "half" else FIGSIZE)
         plot_curves(ax, data, vary, args)
         save_figure(fig, name, args)
         return
@@ -437,7 +476,7 @@ def make_figure(data, vary, args, name):
         if part.empty:
             print(f"  {name}_{suffix}: no coefficients in this subset (gap = 1), not saved")
             continue
-        fig, ax = plt.subplots(figsize=SPLIT_FIGSIZE)
+        fig, ax = plt.subplots(figsize=FIGSIZE if args.size == "full" else SPLIT_FIGSIZE)
         # yref=data: both files get the same y scale and limits, computed from ALL the data
         plot_curves(ax, part, vary, args, yref=data, legend=(suffix == "aligned"))
         if suffix == "other":

@@ -20,6 +20,12 @@ Two colorings (--color):
 Combining the coefficients mixes the ones the decode reads with the rest: use
 --gap aligned / --gap other when logSlots < logN - 1.
 
+Rows: one per op_step, labelled with its pattern letter (default); one per group given by
+hand (--rows); or one per pattern found from the data (--collapse), grouped on the aligned
+and the non-aligned coefficients at once so both panels get the same rows. Patterns are
+compared only on the bits both steps were injected in, and a collapsed row fills the bits
+its first step did not sample with the other steps of the group.
+
   python3 step_heatmap.py --title op_mul \\
       --where library=heaan stage=mul pipeline=mul logN=6 logSlots=3 logQ=60 \\
               logDelta=30 bitsPerCoeff=124 --gap aligned
@@ -46,6 +52,7 @@ IMG_DIR = Path(__file__).resolve().parent / "img"
 ERR_CEIL_BITS = np.log2(ERR_CEIL)    # err_bits of an overflowed flip (see utils/results.py)
 ERR_FLOOR_BITS = np.log2(ERR_FLOOR)  # err_bits of a fully masked flip (error exactly 0)
 NOT_FLIPPED = "#dddddd"              # bit not injected at this step
+GROUP_COLS = 8                       # --group: drawn width of a bin, in single-bit columns
 
 
 def parse_args():
@@ -73,14 +80,23 @@ def parse_args():
                    help="one row per group of op_steps instead of one per op_step, e.g. "
                         "'0-9;10,12;11,13;14;15;16-21,24;22,23,25'. Each row draws the first "
                         "step of its group. Use the same groups in every panel so the rows line up")
-    p.add_argument("--title", default="step_heatmap")
-    p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
-    p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
     p.add_argument("--collapse", action="store_true",
                    help="one row per pattern, found from the data: two steps share a row if "
                         "they are the same pattern (--tol) on the aligned AND on the non-aligned "
                         "coefficients, so the --gap aligned / other panels get the same rows. "
                         "Prints the groups as a --rows string, to pin them in the Makefile")
+    p.add_argument("--group", type=int, default=None, metavar="FROM",
+                   help="random campaigns: the sampled bits from FROM up to --group_to go into "
+                        "bins of --group_width bits, one wide column each with the median of "
+                        "the bits sampled in it. Below FROM and from --group_to on, one column "
+                        "per bit")
+    p.add_argument("--group_to", type=int, default=None, metavar="TO",
+                   help="end of the grouped range, excluded (default: logQ of the config)")
+    p.add_argument("--group_width", type=int, default=None, metavar="W",
+                   help="bits per bin (default: the whole range in one bin)")
+    p.add_argument("--title", default="step_heatmap")
+    p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
+    p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.tol is None:
@@ -105,8 +121,10 @@ def gap_of(cfg):
     """Distance between the coefficients the decode reads: (N/2) / slots."""
     return ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
 
+
 def step_curves(camps, results, args, gap_sel=None):
-    """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2)."""
+    """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2).
+    gap_sel: all / aligned / other (default: --gap)."""
     gap_sel = args.gap if gap_sel is None else gap_sel
     rows = {}
     for step, g in camps.groupby("op_step"):
@@ -118,10 +136,6 @@ def step_curves(camps, results, args, gap_sel=None):
         if gap_sel != "all":
             aligned = d["coeff"] % gap_of(cfg) == 0
             d = d[aligned] if gap_sel == "aligned" else d[~aligned]
-        if args.gap != "all":
-            gap = ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
-            aligned = d["coeff"] % gap == 0
-            d = d[aligned] if args.gap == "aligned" else d[~aligned]
         if args.color == "mrep":
             cells = rm.mrep_per_cell(d, args.stat)                           # seeds combined
             rows[int(step)] = cells.groupby("bit")["mrep"].agg(args.coeff_stat)
@@ -158,68 +172,6 @@ def patterns(curves, args):
             groups.append([step])
     return groups
 
-def parse_rows(spec):
-    """'0-9;10,12' -> [("0-9", [0, ..., 9]), ("10,12", [10, 12])]."""
-    groups = []
-    for chunk in spec.split(";"):
-        steps = []
-        for part in chunk.split(","):
-            lo, _, hi = part.strip().partition("-")
-            steps += range(int(lo), int(hi or lo) + 1)
-        groups.append((chunk.strip(), steps))
-    return groups
-
-
-def collapse(curves, spec, args):
-    """One row per group of --rows: the curve of its first step, labelled with the whole
-    group. Warns when a step of a group is not the same pattern as its first step, and
-    when a step of the data is in no group."""
-    rows = {}
-    listed = set()
-    for chunk, steps in parse_rows(spec):
-        steps = [s for s in steps if s in curves.index]
-        listed.update(steps)
-        if not steps:
-            print(f"  WARNING: no data for the steps of group '{chunk}'")
-            continue
-        ref = curves.loc[steps[0]]
-        for s in steps[1:]:
-            if not same_pattern(ref, curves.loc[s], args):
-                print(f"  WARNING: step {s} is not the same pattern as step {steps[0]} (--tol {args.tol})")
-        label = chunk.replace("-", "\u2013").replace(",", ", ")
-        rows[label] = ref
-    missing = sorted(set(curves.index) - listed)
-    if missing:
-        print(f"  WARNING: steps in no group of --rows (not drawn): {missing}")
-    return pd.DataFrame(rows).T
-
-def visible_ranges(curves):
-    """Per row: first and last bit whose MREP is above the Masked threshold, and how many
-    bits that is (if count != last - first + 1 the range has holes)."""
-    out = []
-    for label, row in curves.iterrows():
-        vis = row[row > rm.MASKED_PCT].index
-        first, last = (int(vis.min()), int(vis.max())) if len(vis) else (None, None)
-        out.append({"row": label, "first": first, "last": last, "count": len(vis)})
-    # Nullable integers: a row with no visible bit must not turn the columns into floats.
-    return pd.DataFrame(out).astype({"first": "Int64", "last": "Int64"})
-
-
-def report_ranges(curves, name):
-    """Print the visible bit range of every row and save it next to the figure."""
-    ranges = visible_ranges(curves)
-    print(f"  bits with MREP > {rm.MASKED_PCT:g}%:")
-    for r in ranges.itertuples():
-        if r.count == 0:
-            print(f"    {r.row:>12}: none")
-            continue
-        holes = "" if r.count == r.last - r.first + 1 else f"  (not contiguous: {r.count} bits)"
-        print(f"    {r.row:>12}: {r.first}-{r.last}{holes}")
-    IMG_DIR.mkdir(exist_ok=True)
-    out = IMG_DIR / f"{name}_ranges.csv"
-    ranges.to_csv(out, index=False)
-    print(f"  -> {out}")
-
 def joint_patterns(panels, args):
     """Like patterns(), but over several panels of the same steps (aligned and non-aligned
     coefficients): a step joins a pattern only if it matches the representative in every
@@ -235,7 +187,7 @@ def joint_patterns(panels, args):
     return groups
 
 
-def fmt_steps(steps, sep=", ", dash="\u2013"):
+def fmt_steps(steps, sep=", ", dash="–"):
     """[0, 8, 9, 10, 22, 23] -> '0, 8–10, 22, 23': runs of three or more steps with a dash,
     as in the tables of the thesis. With sep=',' and dash='-' it is a --rows group."""
     runs = []
@@ -277,6 +229,64 @@ def collapse_patterns(camps, curves, args):
         print(f"    {fmt_steps(g)}")
     print(f"  as --rows: \"{';'.join(fmt_steps(g, sep=',', dash='-') for g in groups)}\"")
     return groups
+
+
+def parse_rows(spec):
+    """'0-9;10,12' -> [("0-9", [0, ..., 9]), ("10,12", [10, 12])]."""
+    groups = []
+    for chunk in spec.split(";"):
+        steps = []
+        for part in chunk.split(","):
+            lo, _, hi = part.strip().partition("-")
+            steps += range(int(lo), int(hi or lo) + 1)
+        groups.append((chunk.strip(), steps))
+    return groups
+
+
+def collapse(curves, spec, args):
+    """One row per group of --rows (see merge_groups). Warns when a step of a group is not
+    the same pattern as its first step, and when a step of the data is in no group."""
+    groups = []
+    for chunk, steps in parse_rows(spec):
+        steps = [s for s in steps if s in curves.index]
+        if not steps:
+            print(f"  WARNING: no data for the steps of group '{chunk}'")
+            continue
+        for s in steps[1:]:
+            if not same_pattern(curves.loc[steps[0]], curves.loc[s], args):
+                print(f"  WARNING: step {s} is not the same pattern as step {steps[0]} (--tol {args.tol})")
+        groups.append(steps)
+    missing = sorted(set(curves.index) - {s for g in groups for s in g})
+    if missing:
+        print(f"  WARNING: steps in no group of --rows (not drawn): {missing}")
+    return merge_groups(curves, groups)
+
+def visible_ranges(curves):
+    """Per row: first and last bit whose MREP is above the Masked threshold, and how many
+    bits that is (if count != last - first + 1 the range has holes)."""
+    out = []
+    for label, row in curves.iterrows():
+        vis = row[row > rm.MASKED_PCT].index
+        first, last = (int(vis.min()), int(vis.max())) if len(vis) else (None, None)
+        out.append({"row": label, "first": first, "last": last, "count": len(vis)})
+    # Nullable integers: a row with no visible bit must not turn the columns into floats.
+    return pd.DataFrame(out).astype({"first": "Int64", "last": "Int64"})
+
+
+def report_ranges(curves, name):
+    """Print the visible bit range of every row and save it next to the figure."""
+    ranges = visible_ranges(curves)
+    print(f"  bits with MREP > {rm.MASKED_PCT:g}%:")
+    for r in ranges.itertuples():
+        if r.count == 0:
+            print(f"    {r.row:>12}: none")
+            continue
+        holes = "" if r.count == r.last - r.first + 1 else f"  (not contiguous: {r.count} bits)"
+        print(f"    {r.row:>12}: {r.first}-{r.last}{holes}")
+    IMG_DIR.mkdir(exist_ok=True)
+    out = IMG_DIR / f"{name}_ranges.csv"
+    ranges.to_csv(out, index=False)
+    print(f"  -> {out}")
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
@@ -289,16 +299,17 @@ def draw_mrep(fig, ax, values, args):
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
 
     if not args.no_legend:
-        handles = [
-            Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
-            for color, label in [
-                (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
-                (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
-                (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
-                (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
-                (NOT_FLIPPED, "not injected"),
-            ]
+        entries = [
+            (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
+            (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
+            (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+            (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
         ]
+        # Only when the figure has a cell that was not injected: an exhaustive map has none.
+        if np.isnan(flat).any():
+            entries.append((NOT_FLIPPED, "not injected"))
+        handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
+                   for color, label in entries]
 
         ax.legend(
             handles=handles,
@@ -329,17 +340,52 @@ def draw_log2(fig, ax, values, floor):
     cb.ax.tick_params(labelsize=TICK_FONT)
 
 
+def group_bits(curves, lo, hi, width):
+    """Plot columns for --group: one per bit below lo and from hi on, and one per bin of
+    `width` bits in [lo, hi) with the median over the bits of the bin that were sampled
+    (NaN, not injected, when the row sampled none). Returns the values (rows x columns),
+    the label and the first bit of each column, and which columns are bins."""
+    bits = curves.columns.to_numpy()
+    width = width or (hi - lo)
+    cols, labels, starts, binned = [], [], [], []
+    for b in bits[bits < lo]:
+        cols.append(curves[b]); labels.append(str(b)); starts.append(b); binned.append(False)
+    for a in range(lo, hi, width):
+        z = min(a + width, hi)
+        inside = bits[(bits >= a) & (bits < z)]
+        cols.append(curves[inside].median(axis=1) if len(inside)
+                    else pd.Series(np.nan, index=curves.index))
+        labels.append(f"{a}–{z - 1}"); starts.append(a); binned.append(True)
+    for b in bits[bits >= hi]:
+        cols.append(curves[b]); labels.append(str(b)); starts.append(b); binned.append(False)
+    values = pd.concat(cols, axis=1).to_numpy(dtype=float)
+    return values, labels, np.array(starts), np.array(binned)
+
+
 def plot(curves, groups, cfg, name, args):
     # Columns are only the bits that were flipped, so a random campaign (a subset of the
-    # bits) does not leave empty stripes.
+    # bits) does not leave empty stripes. With --group, the bins are GROUP_COLS columns wide.
     bits = curves.columns.to_numpy()
+    if args.group is not None:
+        hi = int(cfg["logQ"]) if args.group_to is None else args.group_to
+        values, labels, starts, binned = group_bits(curves, args.group, hi, args.group_width)
+        reps = np.where(binned, GROUP_COLS, 1)
+    else:
+        values = curves.to_numpy(dtype=float)
+        labels, starts, binned = [str(b) for b in bits], bits, np.zeros(len(bits), dtype=bool)
+        reps = np.ones(len(bits), dtype=int)
+    values = np.repeat(values, reps, axis=1)
+    col_bits = np.repeat(starts, reps)        # first bit of every drawn column
+    left = np.concatenate([[0], np.cumsum(reps)[:-1]])
+    center = left + (reps - 1) / 2
+
     fig, ax = plt.subplots(figsize=(14, 0.35 * len(curves) + 2.5))
-    values = curves.to_numpy(dtype=float)
     if args.color == "mrep":
         draw_mrep(fig, ax, values, args)
     else:
         draw_log2(fig, ax, values, args.floor)
-    # Row labels: the op_steps of each row (--rows), or each op_step and its pattern letter.
+    # Row labels: the op_steps of each row (--rows / --collapse), or each op_step and its
+    # pattern letter.
     ax.set_yticks(range(len(curves)))
     if args.rows or args.collapse:
         ax.set_yticklabels(list(curves.index), fontsize=TICK_FONT)
@@ -349,14 +395,25 @@ def plot(curves, groups, cfg, name, args):
         ax.set_yticklabels([f"{s} ({letter[s]})" for s in curves.index], fontsize=TICK_FONT - 2)
         ax.set_ylabel("op_step (pattern)", fontsize=FONT)
 
-    step = max(1, len(bits) // 16)
-    ax.set_xticks(range(0, len(bits), step))
-    ax.set_xticklabels(bits[::step], fontsize=TICK_FONT)
+    # x ticks: every step-th single-bit column, and every bin at its center. A single-bit
+    # tick closer than `step` columns to a bin tick is dropped so the labels do not overlap.
+    single = np.flatnonzero(~binned)
+    step = max(1, len(single) // 16)
+    ticks = [(center[i], labels[i]) for i in single[::step]]
+    for i in np.flatnonzero(binned):
+        ticks = [t for t in ticks if abs(t[0] - center[i]) >= step + GROUP_COLS / 2]
+        ticks.append((center[i], labels[i]))
+        # thin white lines at the edges of the bin
+        for edge in (left[i] - 0.5, left[i] + reps[i] - 0.5):
+            ax.axvline(edge, color="white", lw=1.5)
+    ticks.sort()
+    ax.set_xticks([t[0] for t in ticks])
+    ax.set_xticklabels([t[1] for t in ticks], fontsize=TICK_FONT)
     ax.set_xlabel("Bit index", fontsize=FONT)
 
     for col, label in [("logDelta", r"$\log\Delta$"), ("logQ", r"$\log Q$")]:
-        pos = np.searchsorted(bits, cfg[col])
-        if 0 < pos < len(bits):
+        pos = np.searchsorted(col_bits, cfg[col])
+        if 0 < pos < len(col_bits):
             ax.axvline(pos - 0.5, color="black", ls="--", lw=1)
             ax.text(pos - 0.5, 1.01, label, transform=ax.get_xaxis_transform(),
                     ha="center", va="bottom", fontsize=TICK_FONT)

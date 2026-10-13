@@ -202,11 +202,12 @@ _c1_fig13:
 	$(CURVE) --title c1_fig13_pmul_c1 --where $(CLIENT_MUL) stage=encrypt_c1 \
 	    --query 'pipeline in ["mul", "pmul", "mul x3", "pmul x3"]' --vary pipeline --split gap $(YL)
 
-# 4 muls, with and without bootstrapping at the end.
+# 4 muls, with and without bootstrapping at the end. --size_step: the curve without boot
+# is drawn behind with bigger dots, so it shows as a ring where the two coincide.
 _c1_fig14:
 	$(CURVE) --title c1_fig14_boot --where $(BOOTP) \
 	    --query 'pipeline in ["mul x4", "mul x4; boot"] and $(ENC)' \
-	    --vary pipeline --per stage --labels '4 mul' '4 mul + boot' \
+	    --vary pipeline --per stage --labels '4 mul' '4 mul + boot' --size_step 60 \
 	    --xlim 0 300 --ymax 1e6 --lines --boot_cutoff $(YL)
 
 # 1 to 5 muls before the boot (boot_sweep + the "mul x4; boot" of the boot group).
@@ -231,10 +232,11 @@ _c1_fig17:
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage \
 	    --detect_onset --drop_coeffs 0 $(YL)
 
-# NTT, one limb, "add; rot 3".
+# NTT, one limb, "add; rot 3". c0 and c1 go side by side: half-width panels.
 _c1_fig18:
 	$(CURVE) --title c1_fig18_ntt \
-	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) --per stage $(YL)
+	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) --per stage \
+	    --size half $(YL)
 
 # ======================================================================================
 # Chapter 6, multi-bit faults (mb_, burst_* groups). A burst of k = amountBits bits from
@@ -256,10 +258,11 @@ _mb_fig02_boot_top:
 	$(CURVE) --title mb_fig02_boot_top --where $(BOOTP) "pipeline=mul x4; boot" stage=encrypt_c1 \
 	    --vary amountBits --xnorm top_bit --xlim 200 225 --boot_cutoff --lines --split gap $(KLABELS) $(YL)
 
-# Same data, x = first bit b of the burst: every k drops at the same bit, the cut.
+# Same data, x = first bit b of the burst: every k drops at the same bit, the cut. Same
+# x range as mb_fig02_boot_top, so the two panels go side by side.
 _mb_fig02_boot_cut:
 	$(CURVE) --title mb_fig02_boot_cut --where $(BOOTP) "pipeline=mul x4; boot" stage=encrypt_c1 \
-	    --vary amountBits --xlim 200 220 --boot_cutoff --lines --split gap $(KLABELS) $(YL)
+	    --vary amountBits --xlim 200 225 --boot_cutoff --lines --split gap $(KLABELS) $(YL)
 
 # ======================================================================================
 # Chapter 7, server side (c2_). Each operation: heatmap op_step x bit with one row per
@@ -299,18 +302,24 @@ _c2_fig05:
 	$(CURVE) --title c2_fig05_rot --where $(OP_rot) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
 
 # Mixed pipeline with and without the final boot, one figure per op_step of the mul
-# number MIX_DEPTH.
+# number MIX_DEPTH. The thesis puts two steps side by side: half-width panels. Without the
+# boot the error reaches 1e216: above 1e6 it is drawn as triangles, as in c1_fig14.
 _c2_fig06:
 	$(call HEAT3,c2_fig06_mix_boot,--where $(OP_mix_boot) --per op_depth)
 	$(CURVE) --title c2_fig06_mix_boot --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
-	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step $(YL)
+	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step \
+	    --labels 'without boot' 'with boot' --size_step 60 --ymax 1e6 --boot_cutoff \
+	    --size half $(YL)
 	$(CURVE) --title c2_fig06_mix_boot_gap --where $(MIXP) stage=mul op_depth=$(MIX_DEPTH) \
 	    --query 'pipeline in ["$(MIX)", "$(MIX); boot"]' --vary pipeline --per op_step --split gap $(YL)
 
-# Inside the boot: between its stages, and inside EvalExp (logSlots = 2).
+# Inside the boot: between its stages, and inside EvalExp (logSlots = 2). Random campaigns:
+# above the dense window around the boot cut (logq_boot + 4 logDelta = 210, +-8 bits) the
+# bits are sparse, so from BOOT_GROUP up to logQ they go into one column (--group).
+BOOT_GROUP ?= 240
 _c2_fig07:
-	$(call HEAT3,c2_fig07_boot,--where $(OP_boot))
-	$(call HEAT3,c2_fig07_boot_eval,--where $(OP_boot_eval))
+	$(call HEAT3,c2_fig07_boot,--where $(OP_boot) --group $(BOOT_GROUP))
+	$(call HEAT3,c2_fig07_boot_eval,--where $(OP_boot_eval) --group $(BOOT_GROUP))
 
 # ======================================================================================
 # Chapter 8, neural network (nn_): probability that a flip changes the class, per bit of
