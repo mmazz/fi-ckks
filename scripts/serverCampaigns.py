@@ -47,7 +47,7 @@ BOOT_EVAL_STEPS = 16       # boot_eval (evalExpAndEqualBitFlip)
 #   mul  10       d2, read by the two key-switch products (u1, u0)
 PMUL_STEPS_NONTRANSIENT = [1]
 MUL_STEPS_NONTRANSIENT = [0, 1, 2, 3, 10, 12, 19]
-ROT_STEPS_NONTRANSIENT = [2, 3, 4, 7]
+ROT_STEPS_NONTRANSIENT = [2]
 # One representative op_step per pattern of mul. FIRST GUESS from reading
 # multBitFlipNonTransient; replace it with one step per band of the op_mul heatmap:
 #   0, 1   input ciphertext (ax, bx)
