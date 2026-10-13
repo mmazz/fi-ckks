@@ -71,7 +71,10 @@ def configs():
                 60, rms_pow(3), 0, 31, 70))
     out.append(("server, mul and rescale", "server", "stage=='rescale' and op_depth==1 and op_step==3",
                 30, rms_pow(3), 0, 0, 40))
-    out.append(("server, mul and rescale", "server", "stage=='pmul' and pipeline=='pmul x2' and op_step==5",
+    # The pmul of the thesis: second pmul of "pmul x2" with logQ=120 (level 90). The release
+    # also has pmul x2 with logQ=100 and with bitsPerCoeff=140: pin both.
+    out.append(("server, mul and rescale", "server",
+                "stage=='pmul' and pipeline=='pmul x2' and logQ==120 and bitsPerCoeff==124 and op_step==5",
                 60, rms_pow(3), 0, 31, 90))
     return out
 

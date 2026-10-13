@@ -325,8 +325,8 @@ _nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN 
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
-EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_logDelta_c1 ev_logQ_c1 \
-            ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb
+EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
+            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb
 EV_SERVER = ev_mul_depth ev_mix
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
@@ -362,7 +362,14 @@ _ev_mul_rns:
 # over the coefficients shaded). Single limb, so the onset is not trivially bit 0.
 _ev_detector:
 	$(CURVE) --title ev_detector --where library=openfhe logN=6 logSlots=5 logQ=60 logDelta=40 \
-	    bitsPerCoeff=64 mult_depth=0 withNTT=0 stage=encode pipeline= --detect_onset $(YL)
+	    bitsPerCoeff=64 mult_depth=0 withNTT=0 attackModeSKA=1 stage=encode pipeline= --detect_onset $(YL)
+
+# OpenFHE encode without its decoding noise (plain_cmp_nonoise, attackModeSKA=0) should
+# coincide with HEAAN: the factor 1.37 of c1_fig01 is that noise.
+_ev_encode_ska:
+	$(SHIFT) --title ev_encode_ska --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
+	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
+	    --vary library attackModeSKA --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE, no decode noise' 'OpenFHE' $(YL)
 
 # c1 versions of c1_fig06 and c1_fig07.
 _ev_logDelta_c1:
