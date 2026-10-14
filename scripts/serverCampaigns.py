@@ -33,6 +33,7 @@ NUM_SAMPLES = 50
 ADD_STEPS = 6
 PMUL_STEPS = 6
 MUL_STEPS = 26
+MUL_STEPS_OPENFHE = 11
 RESCALE_STEPS = 4
 ROT_STEPS = 12
 BOOT_STEPS = 8             # boot      (bootstrapAndEqualBitFlip)
@@ -74,6 +75,9 @@ def keyswitch_bits(logQ):
 # Server operations, exhaustive. logSlots=3 (gap = 4) as in chapter 1.
 SERVER = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
+SERVER_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
+              logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64, attackModeSKA=1, withNTT=0, mult_depth=0)
+
 # mul and rot have key-switching steps (mod qQ).
 SERVER_KS = dict(SERVER, bitsPerCoeff=keyswitch_bits(60))
 # pmul of the thesis: the second pmul of "pmul x2", at level 90.
@@ -105,9 +109,13 @@ GROUPS = {
     # ---- Single operations: heatmap op_step x bit, then one curve per pattern ----------
     # FIG 1 (add). Expected 2 patterns: steps {0, 1, 4} behave as c1, {2, 3, 5} as c0.
     "op_add": steps(dict(SERVER, stage="add", pipeline="add x2", op_depth=1), ADD_STEPS),
+    "op_add_openfhe_plain": steps(dict(SERVER_OPENFHE, stage="add", pipeline="add x2", op_depth=1), ADD_STEPS),
+    "op_add_openfhe_rns": steps(dict(SERVER_OPENFHE, stage="add", pipeline="add x2", op_depth=1, mult_depth=3), ADD_STEPS),
 
     # FIG 2 (mul, the 26 steps). Run this first: its heatmap fixes MUL_REPR.
     "op_mul": steps(dict(SERVER_KS, stage="mul", pipeline="mul"), MUL_STEPS,
+                    seeds=SEEDS_MUL, inputs=SEEDS_MUL),
+    "op_mul_openfhe_rns": steps(dict(SERVER_OPENFHE, stage="mul", pipeline="mul x2", op_depth=1, mult_depth=3), MUL_STEPS_OPENFHE,
                     seeds=SEEDS_MUL, inputs=SEEDS_MUL),
     # Same mul with the persistent fault, only in the steps read more than once.
     "op_mul_nonTransient": steps(dict(SERVER_KS, stage="mul_non_transient", pipeline="mul"),
