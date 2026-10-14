@@ -9,7 +9,9 @@ threshold on the per-slot relative error (--threshold 1 or 10 %):
   all    every slot above it
 
 One panel per group (--vary), x = flipped bit, y = stacked fraction of the injections
-in each class. A thin "some" band means the slots break together. The table gives, per
+in each class. A thin "some" band means the slots break together. A dotted line marks the
+first visible bit b_vis of the E_L2 curve (see visible_bit), to compare the per-slot
+classes with the norm. The table gives, per
 panel, how the VISIBLE faults (some + all) split, and the crest factor of the absolute
 error: max / rms over the slots, ~1.4 when every slot gets the same error, sqrt(n_slots)
 when it all sits in one slot.
@@ -37,7 +39,9 @@ import register_map as rm                                  # noqa: E402
 from utils.results import load_data                        # noqa: E402
 
 FONT = 16
-
+# First visible bit: the E_L2 curve (median over the repetitions, then over the aligned
+# coefficients) above this. Same definition as thesis_numbers.py and the thesis text.
+TAU = 1e-2
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
@@ -68,8 +72,10 @@ def load(args):
     cols = list(dict.fromkeys(["logN", "logSlots", "logQ", "logDelta"] + args.vary))
     data = data.merge(camps[["config_id"] + cols].drop_duplicates("config_id"), on="config_id")
     gap = 2 ** (data["logN"].astype(int) - 1 - data["logSlots"].astype(int))   # (N/2) / slots
+    # Kept as a column: visible_bit() reads only the coefficients the decode reads.
+    data["aligned"] = data["coeff"] % gap == 0
     if args.gap != "all":
-        data = data[(data["coeff"] % gap == 0) == (args.gap == "aligned")]
+        data = data[data["aligned"] == (args.gap == "aligned")]
     if data.empty:
         sys.exit(f"ERROR: nothing left after --gap {args.gap}")
     data["w"] = data["n_seeds"] if "n_seeds" in data.columns else 1.0
@@ -89,6 +95,23 @@ def per_bit(d):
     w = d[cls].mul(d["w"], axis=0).assign(bit=d["bit"], w=d["w"]).groupby("bit").sum()
     return w[cls].div(w["w"], axis=0)
 
+def visible_bit(d):
+    """First bit where the E_L2 curve of the panel is above TAU, or None.
+
+    Per (limb, coeff, bit) cell, the median of l2_rel over the repetitions (precomputed as
+    l2_rel_median in a collapsed dir); per bit, the median over the aligned coefficients.
+    None when the panel kept no aligned coefficient (--gap other) or nothing is visible."""
+    d = d[d["aligned"]]
+    if d.empty:
+        return None
+    if "l2_rel_median" in d.columns:
+        cells, col = d, "l2_rel_median"
+    else:
+        cells = d.groupby(["config_id", "limb", "coeff", "bit"], as_index=False)["l2_rel"].median()
+        col = "l2_rel"
+    curve = cells.groupby("bit")[col].median()
+    hit = curve.index[curve > TAU]          # inf counts as visible, NaN does not
+    return int(hit.min()) if len(hit) else None
 
 def summary(data):
     rows = []
@@ -103,6 +126,7 @@ def summary(data):
                      "pct_some_of_visible": 100 * n_some / visible if visible else np.nan,
                      "crest_median": crest.median() if len(crest) else np.nan,
                      "sqrt_n_slots": float((2.0 ** (d["logSlots"].astype(int) / 2)).median()),
+                     "b_vis": visible_bit(d),
                      "n_inj": int(n)})
     return pd.DataFrame(rows).set_index("panel")
 
@@ -127,6 +151,12 @@ def plot(data, args):
                 ax.axvline(v, color="black", ls="--", lw=0.8)
                 ax.text(v, 1.02, name, transform=ax.get_xaxis_transform(), ha="center",
                         va="bottom", fontsize=FONT - 5)
+        # Where the E_L2 curve becomes visible: dotted, so it does not read as a parameter.
+        b = visible_bit(d)
+        if b is not None:
+            ax.axvline(b, color="black", ls=":", lw=1.2)
+            ax.text(b, 1.02, r"$b_{\mathrm{vis}}$", transform=ax.get_xaxis_transform(),
+                    ha="center", va="bottom", fontsize=FONT - 5)
         ax.set_title(panel, fontsize=FONT - 4, pad=18)
         ax.set_xlim(f.index.min(), f.index.max())
         ax.set_ylim(0, 1)
