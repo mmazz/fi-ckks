@@ -101,7 +101,19 @@ STEP_LABELS = {
 }
 STEP_LABELS["pmul_non_transient"] = STEP_LABELS["pmul"]
 STEP_LABELS["rot_non_transient"] = STEP_LABELS["rot"]
-
+# OpenFHE server (SERVER_OPENFHE in scripts/serverCampaigns.py): the second add of "add x2"
+# with one limb and no NTT or in RNS (4 limbs), and the second mul of "mul x2" in RNS (3 limbs
+# after the first rescale). Steps read in fault-hook.h of the OpenFHE fork: the add numbers
+# them as HEAAN; the mul has its own numbering. Each site flips the value that the rest of
+# the operation uses (no restore after a read).
+OFHE_SRV = OFHE | dict(logSlots=3, withNTT=0, attackModeSKA=1)
+OP_ADD_OFHE = OFHE_SRV | dict(mult_depth=0, stage="add", pipeline="add x2", op_depth=1)
+OP_ADD_OFHE_RNS = OFHE_SRV | dict(mult_depth=3, stage="add", pipeline="add x2", op_depth=1)
+OP_MUL_OFHE_RNS = OFHE_SRV | dict(mult_depth=3, stage="mul", pipeline="mul x2", op_depth=1)
+OFHE_MUL_LABELS = ["c0 of operand 1", "c1 of operand 1", "c0 of operand 2", "c1 of operand 2",
+                   "d0 = c0 c0'", "d1 = c0 c1' + c1 c0'", "d2 = c1 c1' (to key switching)",
+                   "key switching output for d0", "key switching output for d1",
+                   "output c0", "output c1"]
 
 # ======================================================================================
 # Formatting
@@ -1519,7 +1531,48 @@ def ch7_boot_rule(rel, rep, args):
     rep.num(str(int((df["diff"].abs() <= 1).sum())), "with |diff| <= 1")
     rep.num(str(int((df["diff"] == 0).sum())), "with diff = 0")
 
-
+@section(7)
+def ch7_openfhe(rel, rep, args):
+    rep.section("7.12", "add and mul in OpenFHE (ev_mul_openfhe)")
+    rep.how("One row per op_step. limbs = bits of the prime of each limb at the injection "
+            "point. P = P(SDC) over the bits of the module of every limb (weighted by bits): "
+            "all, aligned, non-aligned; P above = over the bits above it (up to 63). Visible = "
+            "E_L2 curve of limb 0 (median-median) > 1e-2, aligned / non-aligned. OOR = fraction "
+            "of flips that left the residue >= its prime. Undetected = SDC the detector did not "
+            "flag, over the bits of the module. E al = median E_L2 (median over reps) of the "
+            "aligned cells inside the module.")
+    for name, f in (("add, one limb, no NTT", OP_ADD_OFHE), ("add, RNS", OP_ADD_OFHE_RNS),
+                    ("mul, RNS", OP_MUL_OFHE_RNS)):
+        exps = rel.find("server", **f)
+        if exps.empty:
+            rep.missing(f"server: {fdict(f)}")
+            continue
+        rep.how(f"{name}: " + describe(exps.iloc[0], ("mult_depth", "op_depth")))
+        labels = OFHE_MUL_LABELS if f["stage"] == "mul" else STEP_LABELS["add"]
+        rows, exact, und, und0 = [], [], 0.0, 0.0
+        for _, e in exps.sort_values("op_step").iterrows():
+            d = rel.cells("server", e)
+            ws = limb_widths(e, d)
+            inside = d[d["bit"] < d["limb"].map(ws)]
+            limb0 = d[d["limb"] == 0]
+            s = int(e["op_step"])
+            if (d.loc[~d["aligned"], "l2_rel_median"] == 0).all():
+                exact.append(s)
+            u = inside["sdc_undetected"] * inside["n_seeds"]
+            und, und0 = und + u.sum(), und0 + u[inside["coeff"] == 0].sum()
+            rows.append([s, labels[s], "/".join(str(w) for w in ws.values()),
+                         fnum(p_limbs(d, ws)), fnum(p_limbs(d, ws, "al")),
+                         fnum(p_limbs(d, ws, "other")), fnum(p_limbs(d, ws, above=True)),
+                         frange(first_last(curve(limb0, "al"))),
+                         frange(first_last(curve(limb0, "other"))),
+                         fnum(d["out_of_range"].mean(), 3), fnum(inside["sdc_undetected"].mean(), 3),
+                         fsci(inside.loc[inside["aligned"], "l2_rel_median"].median())])
+        rep.table(["step", "flips", "limbs", "P", "P al", "P other", "P above", "visible al",
+                   "visible other", "OOR", "undetected", "E al"], rows)
+        rep.num(", ".join(map(str, exact)) or "none",
+                f"{name}: steps with E_L2 exactly 0 in every non-aligned cell (every bit)")
+        rep.num(fnum(und0 / und) if und else "-",
+                f"{name}: fraction of the undetected SDC (module bits, every step) in coefficient 0")
 # --------------------------------------------------------------------------------------
 # Chapter 8
 # --------------------------------------------------------------------------------------

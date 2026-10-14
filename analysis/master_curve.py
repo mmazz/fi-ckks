@@ -55,28 +55,28 @@ def configs():
         out.append(("client, with operations", "client", q, 30, 2 * rms_pow(1), 0, 0, 60))
     q = "library=='heaan' and pipeline=='add; rot 3' and stage=='encrypt_c1' and logSlots==5"
     out.append(("client, with operations", "client", q, 30, 2 * rms_pow(1), 1, 0, 60))
-    for st in ("decrypt_c0", "decode"):
-        q = f"library=='heaan' and pipeline=='mul x3' and stage=='{st}'"
-        out.append(("client, with operations", "client", q, 30, rms_pow(4), 0, 0, 60))
+    # The server releases also have the add of OpenFHE (same stage, pipeline and op_depth):
+    # every server query pins the library.
     for s in (2, 3, 5):
-        out.append(("server, add and rot", "server", f"stage=='add' and op_depth==1 and op_step=={s}",
+        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='add' and op_depth==1 and op_step=={s}",
                     30, 3 * rms_pow(1), 0, 0, 60))
     for s in (0, 8, 9, 10):
-        out.append(("server, add and rot", "server", f"stage=='rot' and op_step=={s}", 30, rms_pow(1), 0, 0, 60))
+        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='rot' and op_step=={s}", 30, rms_pow(1), 0, 0, 60))
     # registers followed by a rescale: below log Delta the change rounds to 0 or 1 (Lemma lem:rescale)
     for s in (22, 23, 25):
-        out.append(("server, mul and rescale", "server", f"stage=='mul' and pipeline=='mul' and op_step=={s}",
+        out.append(("server, mul and rescale", "server", f"library=='heaan' and stage=='mul' and pipeline=='mul' and op_step=={s}",
                     60, rms_pow(2), 0, 31, 60))
-    out.append(("server, mul and rescale", "server", "stage=='rescale' and op_depth==1 and op_step==1",
+    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==1",
                 60, rms_pow(3), 0, 31, 70))
-    out.append(("server, mul and rescale", "server", "stage=='rescale' and op_depth==1 and op_step==3",
+    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==3",
                 30, rms_pow(3), 0, 0, 40))
     # The pmul of the thesis: second pmul of "pmul x2" with logQ=120 (level 90). The release
     # also has pmul x2 with logQ=100 and with bitsPerCoeff=140: pin both.
     out.append(("server, mul and rescale", "server",
-                "stage=='pmul' and pipeline=='pmul x2' and logQ==120 and bitsPerCoeff==124 and op_step==5",
+                "library=='heaan' and stage=='pmul' and pipeline=='pmul x2' and logQ==120 and bitsPerCoeff==124 and op_step==5",
                 60, rms_pow(3), 0, 31, 90))
     return out
+
 
 
 def main():

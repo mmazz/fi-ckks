@@ -85,6 +85,13 @@ OP_rot       = $(SERVER) bitsPerCoeff=124 stage=rot "pipeline=rot 2"
 OP_pmul_nt   = $(subst logQ=60,logQ=120,$(SERVER)) bitsPerCoeff=124 stage=pmul_non_transient "pipeline=pmul x2" op_depth=1
 OP_mul_nt    = $(SERVER) bitsPerCoeff=124 stage=mul_non_transient pipeline=mul
 OP_rot_nt    = $(SERVER) bitsPerCoeff=124 stage=rot_non_transient "pipeline=rot 2"
+# OpenFHE (SERVER_OPENFHE in scripts/serverCampaigns.py): the second add of "add x2" with one
+# limb and no NTT (mult_depth=0) or in RNS (mult_depth=3, 4 limbs), and the second mul of
+# "mul x2" in RNS (3 limbs left after the first rescale). A mul always needs RNS in OpenFHE.
+OFHE_SRV        = $(OFHE) logSlots=3 withNTT=0 attackModeSKA=1
+OP_add_ofhe     = $(OFHE_SRV) mult_depth=0 stage=add "pipeline=add x2" op_depth=1
+OP_add_ofhe_rns = $(OFHE_SRV) mult_depth=3 stage=add "pipeline=add x2" op_depth=1
+OP_mul_ofhe_rns = $(OFHE_SRV) mult_depth=3 stage=mul "pipeline=mul x2" op_depth=1
 
 OP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3"
 OP_mix       = $(MIXP) stage=mul "pipeline=$(MIX)"
@@ -354,7 +361,7 @@ _nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN 
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb
-EV_SERVER = ev_mul_depth ev_mix
+EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
 ev: $(EV)
@@ -435,6 +442,12 @@ _ev_mix:
 	$(call HEAT3,ev_mix,--where $(OP_mix) --per op_depth)
 	$(CURVE) --title ev_mix --where $(OP_mix) --vary op_depth --per op_step \
 	    --xnorm minus_level --split gap $(YL)
+# The mul of OpenFHE (RNS): every bit of every limb destroys the output, so the rows only
+# split by where the fault lands. Added to c0 after the tensor product (d0, key switching
+# output added to d0, output c0: steps 4, 7, 9) it stays in its coefficient and the gap
+# protects the non-aligned ones; everywhere else it reaches every coefficient.
+_ev_mul_openfhe:
+	$(call HEAT3,ev_mul_openfhe,--where $(OP_mul_ofhe_rns))
 
 # Bursts, x = first bit: each curve is the k = 1 one shifted left by k - 1.
 _ev_mb_enc_shift:
