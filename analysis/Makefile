@@ -350,11 +350,31 @@ _c2_fig07:
 # Chapter 8, neural network (nn_): probability that a flip changes the class, per bit of
 # the client objects (scripts/NNCampaigns.py).
 # ======================================================================================
-NNF = nn_client nn_client_stack
-nn: $(NNF)
 
-_nn_client:       ; $(NN) --title nn_client_heaan       --where library=heaanNN
-_nn_client_stack: ; $(NN) --title nn_client_heaan_stack --where library=heaanNN --mode stack
+NN_HEAAN = library=heaanNN
+NNF  = nn_client nn_internal nn_profile
+NN_B = nn_l2 nn_tolerance
+nn: $(NNF)
+nn_b: nn_client $(NN_B)
+# bit_curve.py ($(CURVE)) reads $(RES)
+$(addprefix _,$(NNF) $(NN_B)): RES = $(RES_NN)
+
+_nn_client:
+	$(NN) --title nn_client_heaan --where $(NN_HEAAN) --split gap
+_nn_internal:
+	$(NN) --title nn_internal_heaan --where $(NN_HEAAN) --mode map --stages hidden_layer cheby_tanh3
+_nn_profile:
+	$(NNP) --title nn_profile_heaan --where $(NN_HEAAN)
+_nn_l2:
+	$(CURVE) --title nn_l2_heaan --where $(NN_HEAAN) \
+	    --query 'stage in ["encrypt_c0", "encrypt_c1", "decrypt_c0"]' --vary stage \
+	    --order encrypt_c0 encrypt_c1 decrypt_c0 \
+	    --labels '$$c_0$$ (encrypt)' '$$c_1$$ (encrypt)' '$$c_0$$ (before decrypt)' \
+	    --split gap --stat median --yscale log --xlim 0 60 \
+	    --ylabel 'median $$E_{L_2}$$ of the logits'
+_nn_tolerance:
+	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
+
 
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
