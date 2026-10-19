@@ -27,6 +27,8 @@ skip() { echo "  SKIP  $1  ($2)"; SKIP=$((SKIP+1)); }
 HEAAN_S="--logN 4 --logQ 60  --logDelta 30 --logSlots 3 --bitsPerCoeff 64  --seed 1 --seed_input 1"
 HEAAN_L="--logN 4 --logQ 120 --logDelta 30 --logSlots 3 --bitsPerCoeff 128 --seed 1 --seed_input 1"
 OFHE_S="--logN 4 --logQ 60 --logDelta 40 --logSlots 3 --bitsPerCoeff 64 --mult_depth 1 --seed 1 --seed_input 1"
+   # Boot: logQ - logDelta <= 9, and mult_depth = levels left after each boot.
+OFHE_B="--logN 4 --logQ 60 --logDelta 52 --logSlots 3 --bitsPerCoeff 64 --mult_depth 2 --seed 1 --seed_input 1"
 # NN with numSamples 0: runs baseline + probe + transient check, no injections (one run is slow),
 # so the reference CSV only has the header. Real network injections are in --slow.
 NN_H="--isExhaustive 0 --numSamples 0 --logN 11 --logQ 220 --logDelta 30 --logSlots 10 --bitsPerCoeff 250 --seed 1 --seed_input 0"
@@ -47,6 +49,7 @@ CASES=(
   "openfhe_random      | fi_openfhe    | --isExhaustive 0 --numSamples 5 --stage encrypt_c1 $OFHE_S"
   "openfhe_add_inside  | fi_openfhe    | --isExhaustive 1 --stage add --op_step 1 --pipeline 'add' $OFHE_S"
   "openfhe_mul_inside  | fi_openfhe    | --isExhaustive 1 --stage mul --op_step 6 --pipeline 'mul' $OFHE_S"
+  "openfhe_boot_random | fi_openfhe    | --isExhaustive 0 --numSamples 5 --stage encrypt_c0 --pipeline 'mul; boot; mul' $OFHE_B"
   "heaannn_hidden      | fi_heaan_nn   | --stage hidden_layer --op_step 4 $NN_H"
   "heaannn_mul         | fi_heaan_nn   | --stage mul --op_step 25 $NN_H"
   "openfhenn_cheby     | fi_openfhe_nn | --stage cheby_tanh3 --op_step 9 $NN_O"
@@ -74,7 +77,8 @@ MUST_FAIL=(
   "heaan_boot_short    | fi_heaan      | --isExhaustive 0 --numSamples 1 --stage encrypt_c0 --pipeline 'mul; boot' --logN 4 --logQ 600 --logDelta 30 --logSlots 3 --bitsPerCoeff 610 --seed 1 --seed_input 1 | needs logQ >"
   "openfhe_decode      | fi_openfhe    | --isExhaustive 1 --stage decode $OFHE_S                                | is not implemented"
   "openfhe_step_out    | fi_openfhe    | --isExhaustive 1 --stage mul --op_step 11 --pipeline 'mul' $OFHE_S     | op_step 0..10"
-  "openfhe_boot        | fi_openfhe    | --isExhaustive 1 --stage encode --pipeline 'boot' $OFHE_S              | hasn't been implemented yet"
+  "openfhe_boot_gap    | fi_openfhe    | --isExhaustive 1 --stage encode --pipeline 'boot' $OFHE_S              | needs logQ - logDelta <="
+  "openfhe_boot_levels | fi_openfhe    | --isExhaustive 1 --stage encode --pipeline 'boot; mul x3' $OFHE_B      | between boots"
   "heaannn_step_out    | fi_heaan_nn   | --stage mul --op_step 26 $NN_H                                         | has op_step 0..25"
   "heaannn_no_levels   | fi_heaan_nn   | --stage encode $NN_H --logQ 140                                        | needs logQ > 5*logDelta"
   "heaannn_pipeline    | fi_heaan_nn   | --stage encode --pipeline 'mul' $NN_H                                  | --pipeline must be left empty"

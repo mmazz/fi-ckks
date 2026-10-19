@@ -30,6 +30,10 @@ enable_testing()
 add_executable(test_pipeline apps/tools/test_pipeline.cpp)
 target_link_libraries(test_pipeline PRIVATE fi_core)
 add_test(NAME pipeline COMMAND test_pipeline)
+    # Same contract with a boot first: the add/mul fault sites run on a bootstrapped ciphertext.
+    add_test(NAME openfhe_backend_boot COMMAND fi_test_openfhe
+             --logN 4 --logQ 60 --logDelta 52 --logSlots 2 --bitsPerCoeff 64
+             --mult_depth 2 --withNTT 1 --pipeline "boot$<SEMICOLON> add$<SEMICOLON> mul" --seed 7 --seed_input 3)
 
 # Tests: header de asserts propio (tests/check.h), sin dependencias externas.
 add_library(fi_test_support INTERFACE)

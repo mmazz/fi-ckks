@@ -90,7 +90,10 @@ SERVER_RESCALE = dict(SERVER, logQ=100, bitsPerCoeff=110)
 # Bootstrapping: random, large logQ.
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
-
+BOOT_OPEN = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
+            logN=6, logSlots=3, logQ=60, logDelta=59, bitsPerCoeff=64, withNTT=1, mult_depth=15)
+BOOT_OPENFHE = dict(SERVER_OPENFHE, isExhaustive=0, numSamples=NUM_SAMPLES,
+                    logQ=60, logDelta=52, mult_depth=2)
 # Mixed pipeline: ops before and after each mul. Run with and without the final boot on
 # the SAME config, so the only difference between the two groups is the boot.
 MIX_PIPELINE = "add; mul; rot 2; mul; add"
@@ -184,6 +187,15 @@ GROUPS = {
                                      "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
                            stage=["encrypt_c0", "encrypt_c1"], logSlots=[1, 2, 3],
                            seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
+    "boot_open": grid(dict(BOOT_OPEN), pipeline=["boot"],
+                     stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
+        # FIG 6 in OpenFHE: same pair, with and without the final boot. Here the boot adds its
+    # own levels, so the boot variant has more limbs (21 vs 3): compare limbs 0-1 or bit curves.
+    "mix_mul_openfhe": steps(dict(BOOT_OPENFHE, stage="mul", pipeline=MIX_PIPELINE),
+                             MUL_STEPS_OPENFHE, seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
+    "mix_mul_boot_openfhe": steps(dict(BOOT_OPENFHE, stage="mul", pipeline=MIX_PIPELINE + "; boot"),
+                                  MUL_STEPS_OPENFHE, seeds=SEEDS_BOOT, inputs=INPUTS, op_depth=[0, 1]),
+
     # ---- Exploration: every op_step, one repetition --------------------------------------
     # To look at every step before choosing MUL_REPR. The seeds are a subset of the full
     # groups, so the campaigns shared with them are not run twice.

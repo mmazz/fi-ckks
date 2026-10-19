@@ -91,12 +91,19 @@ The server-side workload is a string, run left to right:
 | `pmul`     | ct * plaintext, then rescale                |
 | `scalar k` | ct * k, then rescale                        |
 | `rot k`    | left rotation by k slots, 1 <= k < slots    |
-| `boot`     | bootstrapping (HEAAN only)                  |
+| `boot`     | bootstrapping (no faults inside it in OpenFHE)                  |
 
 `x N` repeats an op. The string is stored in canonical form (`"mul; mul"` becomes
 `"mul x2"`), so two spellings of the same pipeline are the same campaign. `--op_depth`
 picks which occurrence of the target op gets the fault (0 = the first). For `rescale` it
 counts rescales, and there is one after every `mul`, `pmul` and `scalar`.
+`boot` in OpenFHE is a plain `EvalBootstrap`, only used (no `--stage boot*`), with any
+`--scaleTech`. It needs `logQ - logDelta <= 9`; use `--logQ 60` with
+`--logDelta` 51..59 (14-18 bits of precision; a smaller logQ loses it fast and the baseline
+check rejects the config). There `--mult_depth` (>= 1) is the number of levels each boot
+gives back; the boot's own levels (level budget 2) are added on top. Before each boot the
+ciphertext is dropped to 2 limbs, as in OpenFHE's examples, so a fault that is still in
+limb 2 or higher when the boot starts is gone: the RNS version of HEAAN's mod-down.
 
 ### Stages
 
@@ -345,8 +352,8 @@ The flip itself is `inject()`, so the checks above (one coefficient, `amountBits
 
 ## Known gaps
 
-- OpenFHE has no `boot`, no faults inside `pmul`, `scalar`, `rescale` or `rot`, and none
-  at `decode`. Its flips are limited to 64-bit words (`bitsPerCoeff <= 64`).
+- OpenFHE runs `boot` but has no faults inside it, nor inside `pmul`, `scalar`, `rescale`
+or `rot`, and none at `decode`. Its flips are limited to 64-bit words (`bitsPerCoeff <= 64`).
 - In HEAAN, `encode` coefficients can be negative and NTL stores them as sign and
   magnitude, so a flip there changes the magnitude.
 - Random campaigns sample different coefficients for each seed. That's fine for
