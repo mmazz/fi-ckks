@@ -99,7 +99,10 @@ std::vector<Op> parse_pipeline(const std::string& s) {
             throw std::invalid_argument("pipeline: '" + name + "' does not accept a value");
         if (oi->type == OpType::Rot && (param < 1 || param != double(long(param))))
             throw std::invalid_argument("pipeline: rot requires an integer >= 1");
-
+        // scalar 0 wipes the ciphertext: the golden is all zeros and every relative
+        // error is 0/0. It is not a computation worth injecting into.
+        if (oi->type == OpType::Scalar && param == 0)
+            throw std::invalid_argument("pipeline: scalar requires a non-zero value");
         for (long i = 0; i < reps; ++i) out.push_back({oi->type, param});
     }
     return out;
