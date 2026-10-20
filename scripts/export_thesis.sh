@@ -24,7 +24,7 @@ TAG="${2:-}"
 # export left behind; P protects the figures and the data pin.
 KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py
       nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py slot_share.py
-      master_curve.py thesis_numbers.py analytic_baseline.py theory_check.py nn_table.py)
+      master_curve.py thesis_numbers.py analytic_baseline.py theory_check.py nn_table.py nn_profile.py)
 filters=(--filter='P /img/' --filter='P /data.mk' --filter='P /numbers.txt' --include='/utils/')
 for f in "${KEEP[@]}"; do filters+=(--include="/$f"); done
 rsync -a --delete-excluded "${filters[@]}" --exclude='*' "$ROOT/analysis/" "$DEST/figures/"

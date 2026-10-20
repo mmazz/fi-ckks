@@ -53,12 +53,12 @@ from utils.results import (load_campaigns, load_data, select, require_single_con
                            assign_config_id, parse_value)
 
 CLIENT_STAGES = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"]
-# Panel titles: number of the injection point in the thesis figure of the client pipeline
-# (1 to 6, in pipeline order) + register.
-STAGE_LABEL = {"encode": "1: plaintext (encode)", "encrypt_c0": "2: $c_0$ (encrypt)",
-               "encrypt_c1": "3: $c_1$ (encrypt)", "decrypt_c0": "4: $c_0$ (before decrypt)",
-               "decrypt_c1": "5: $c_1$ (before decrypt)", "decode": "6: plaintext (decode)"}
 
+# Panel titles: number of the injection point in the client diagram of the thesis
+# (Fig. NN_diag, the one of the DSN paper: 1, 3, 4, 7, 8, 9) + register.
+STAGE_LABEL = {"encode": "1: plaintext (encode)", "encrypt_c0": "3: $c_0$ (encrypt)",
+               "encrypt_c1": "4: $c_1$ (encrypt)", "decrypt_c0": "7: $c_0$ (before decrypt)",
+               "decrypt_c1": "8: $c_1$ (before decrypt)", "decode": "9: plaintext (decode)"}
 
 def comma(v, digits=2):
     """Decimal comma, as in the text of the thesis: 0.37 -> '0,37'."""
@@ -255,7 +255,7 @@ def mark_params(ax, cfg):
     # On the HEAAN encode panel both references move up by logQ (see encode_shift).
     s = encode_shift(cfg)
     for val, name in [(cfg["logDelta"] + s, r"$\log\Delta$"),
-                      (register_width(cfg), r"$\log q_\ell$")]:
+                      (register_width(cfg), r"$W$")]:
         ax.axvline(val, color="black", lw=0.8, ls="--", alpha=0.7, zorder=4)
         ax.text(val, 1.02, name, transform=ax.get_xaxis_transform(),
                 ha="center", va="bottom", fontsize=FONT - 5)

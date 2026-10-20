@@ -347,24 +347,29 @@ _c2_fig07:
 	$(call HEAT3,c2_fig07_boot_eval,--where $(OP_boot_eval) --group $(BOOT_GROUP))
 
 # ======================================================================================
-# Chapter 8, neural network (nn_): probability that a flip changes the class, per bit of
-# the client objects (scripts/NNCampaigns.py).
+# Neural network chapter (chap:app, nn_): probability that a flip changes the class
+# (scripts/NNCampaigns.py). In the thesis: the client stages, the vulnerable bits of every
+# injection site in execution order, and P(mis) against E_L2 of the logits.
 # ======================================================================================
-
-NN_HEAAN = library=heaanNN
-NNF  = nn_client nn_internal nn_profile
-NN_B = nn_l2 nn_tolerance
+NNP        = python3 nn_profile.py --results $(RES_NN) $(SHOW)
+NN_HEAAN   = library=heaanNN
+NN_OPENFHE = library=openfheNN
+NNF  = nn_client nn_profile nn_tolerance
+# Not in the thesis: op_step x bit map of the internal stages, median E_L2 of the logits
+# per bit, and the OpenFHE client stages (once their campaigns are in RES_NN).
+NN_X = nn_internal nn_l2 nn_client_openfhe
 nn: $(NNF)
-nn_b: nn_client $(NN_B)
 # bit_curve.py ($(CURVE)) reads $(RES)
-$(addprefix _,$(NNF) $(NN_B)): RES = $(RES_NN)
-
+$(addprefix _,$(NNF) $(NN_X)): RES = $(RES_NN)
+ 
 _nn_client:
 	$(NN) --title nn_client_heaan --where $(NN_HEAAN) --split gap
-_nn_internal:
-	$(NN) --title nn_internal_heaan --where $(NN_HEAAN) --mode map --stages hidden_layer cheby_tanh3
 _nn_profile:
 	$(NNP) --title nn_profile_heaan --where $(NN_HEAAN)
+_nn_tolerance:
+	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
+_nn_internal:
+	$(NN) --title nn_internal_heaan --where $(NN_HEAAN) --mode map --stages hidden_layer cheby_tanh3
 _nn_l2:
 	$(CURVE) --title nn_l2_heaan --where $(NN_HEAAN) \
 	    --query 'stage in ["encrypt_c0", "encrypt_c1", "decrypt_c0"]' --vary stage \
@@ -372,10 +377,9 @@ _nn_l2:
 	    --labels '$$c_0$$ (encrypt)' '$$c_1$$ (encrypt)' '$$c_0$$ (before decrypt)' \
 	    --split gap --stat median --yscale log --xlim 0 60 \
 	    --ylabel 'median $$E_{L_2}$$ of the logits'
-_nn_tolerance:
-	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
-
-
+_nn_client_openfhe:
+	$(NN) --title nn_client_openfhe --where $(NN_OPENFHE)
+ 
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
@@ -498,7 +502,7 @@ _ev_mb_op_mul:
 FIG_DEPS = Makefile $(wildcard *.py utils/*.py) \
            $(wildcard $(RES1)/campaigns_*.csv $(RES2)/campaigns_*.csv $(RES_NN)/campaigns_*.csv $(RES_BURST)/campaigns_*.csv)
 THESIS_FIGS = teo $(CH1) $(MB) $(CH2) $(NNF)
-FIGS = $(THESIS_FIGS) $(EV)
+FIGS = $(THESIS_FIGS) $(EV) $(NN_X)
 .PHONY: $(FIGS)
 # Touched only when a figure of the thesis was replotted: the thesis Makefile depends on it,
 # so the PDF is recompiled when a figure changes and not otherwise.
