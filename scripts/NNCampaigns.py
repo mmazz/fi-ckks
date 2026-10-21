@@ -17,7 +17,7 @@ HEAAN = dict(binary="fi_heaan_nn", results_dir=RESULTS, isExhaustive=0, numSampl
              logN=12, logQ=220, logDelta=30, logSlots=10, bitsPerCoeff=250)
 OPENFHE = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=30, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=1)
-OPENFHE_NON_RNS = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
+OPENFHE_NON_NTT = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=0)
 
 
@@ -62,9 +62,9 @@ GROUPS = {
     **{f"heaan_{st}": internal(HEAAN_KS if st in ("mul", "rot") else HEAAN, st, n)
        for st, n in HEAAN_INTERNAL.items()},
     "openfhe_client": client(OPENFHE, OPENFHE_CLIENT),
-    "openfhe_client_nonRNS": client(OPENFHE_NON_RNS, OPENFHE_CLIENT),
+    "openfhe_client_nonNTT": client(OPENFHE_NON_NTT, OPENFHE_CLIENT),
     **{f"openfhe_{st}": internal(OPENFHE, st, n) for st, n in OPENFHE_INTERNAL.items()},
-    **{f"openfhe_{st}_nonRNS": internal(OPENFHE_NON_RNS, st, n) for st, n in OPENFHE_INTERNAL.items()},
+    **{f"openfhe_{st}_nonNTT": internal(OPENFHE_NON_NTT, st, n) for st, n in OPENFHE_INTERNAL.items()},
     "openfhe_client_test": client(OPENFHE_TEST, OPENFHE_CLIENT_TEST),
     "heaan_metrics":   metrics(HEAAN, "fi_nn_metrics_heaan"),
     "openfhe_metrics": metrics(OPENFHE, "fi_nn_metrics_openfhe"),

@@ -345,6 +345,7 @@ BOOT_GROUP ?= 240
 _c2_fig07:
 	$(call HEAT3,c2_fig07_boot,--where $(OP_boot) --group $(BOOT_GROUP))
 	$(call HEAT3,c2_fig07_boot_eval,--where $(OP_boot_eval) --group $(BOOT_GROUP))
+
 # ======================================================================================
 # Neural network chapter (chap:app, nn_): probability that a flip changes the class
 # (scripts/NNCampaigns.py). One figure per stage:
@@ -354,21 +355,32 @@ _c2_fig07:
 #   nn_tolerance P(mis) against E_L2 of the logits
 # ======================================================================================
 NNP        = python3 nn_profile.py --results $(RES_NN) $(SHOW)
-NN_HEAAN   = library=heaanNN
-NN_OPENFHE = library=openfheNN
-NN_CLIENT_HEAAN   = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1 decode
-# OpenFHE has no decode stage (workloads/nn/openfhe_nn.cpp)
-NN_CLIENT_OPENFHE = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1
-NN_INTERNAL       = hidden_layer cheby_tanh3 mul add rot rescale
-NNF  = nn_client nn_internal nn_tolerance
-# Not in the thesis: vulnerable bits of every site in execution order, and the OpenFHE
-# client stages (once their campaigns are in RES_NN).
-NN_X = nn_profile nn_client_openfhe
-nn: $(NNF)
+# No bitsPerCoeff here: in HEAAN encode, mul and rot have 444 bits (registers mod qQ) and
+# the other stages 250. nn_sdc_curve.py accepts that difference between stages, but a
+# bitsPerCoeff filter drops those three.
+NN_HEAAN       = library=heaanNN logN=12 logSlots=10 logQ=220 logDelta=30
+# OpenFHE: fault in coefficient form (withNTT=0) and in NTT form (withNTT=1)
+NN_OPENFHE     = library=openfheNN logN=12 logSlots=10 logQ=60 logDelta=50 mult_depth=5 withNTT=0
+NN_OPENFHE_NTT = library=openfheNN logN=12 logSlots=10 logQ=60 logDelta=50 mult_depth=5 withNTT=1
+NN_CLIENT_HEAAN     = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1 decode
+NN_INTERNAL_HEAAN   = hidden_layer cheby_tanh3 mul add rot rescale
+# OpenFHE has no decode stage and only two internal stages (workloads/nn/openfhe_nn.cpp)
+NN_CLIENT_OPENFHE   = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1
+NN_INTERNAL_OPENFHE = hidden_layer cheby_tanh3
 
-# The six panels go side by side in the thesis (subfigures): each one without a legend,
-# and the shared legend as an image of its own (nn_client_legend).
-_nn_client:
+# Every name in these lists needs its _name recipe below (see "Incremental build").
+NNF     = nn_client_heaan nn_internal_heaan nn_tolerance
+# OpenFHE: not in any release yet. Move them to NNF once they are.
+NN_OFHE = nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe
+# Not in the thesis: vulnerable bits of every site in execution order.
+NN_X    = nn_profile $(NN_OFHE)
+.PHONY: nn_openfhe
+nn: $(NNF)
+nn_openfhe: $(NN_OFHE)
+
+# The panels go side by side in the thesis (subfigures): each one without a legend, and
+# the shared legend as an image of its own (nn_client_legend, used by OpenFHE too).
+_nn_client_heaan:
 	for s in $(NN_CLIENT_HEAAN); do \
 	    $(NN) --title nn_client_heaan_$$s --where $(NN_HEAAN) --stages $$s --split gap \
 	        --legend none || exit 1; \
@@ -377,17 +389,35 @@ _nn_client:
 
 _nn_client_openfhe:
 	for s in $(NN_CLIENT_OPENFHE); do \
-	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) --stages $$s --split gap || exit 1; \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) --stages $$s --split gap \
+	        --legend none || exit 1; \
 	done
-_nn_internal:
-	for s in $(NN_INTERNAL); do \
+
+_nn_client_openfheNTT:
+	for s in $(NN_CLIENT_OPENFHE); do \
+	    $(NN) --title nn_client_openfheNTT_$$s --where $(NN_OPENFHE_NTT) --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
+
+_nn_internal_heaan:
+	for s in $(NN_INTERNAL_HEAAN); do \
 	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s || exit 1; \
 	done
+
+_nn_internal_openfhe:
+	for s in $(NN_INTERNAL_OPENFHE); do \
+	    $(NN) --title nn_internal_openfhe_$$s --where $(NN_OPENFHE) --mode map --stages $$s || exit 1; \
+	done
+
+_nn_internal_openfheNTT:
+	for s in $(NN_INTERNAL_OPENFHE); do \
+	    $(NN) --title nn_internal_openfheNTT_$$s --where $(NN_OPENFHE_NTT) --mode map --stages $$s || exit 1; \
+	done
+
 _nn_tolerance:
 	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
 _nn_profile:
 	$(NNP) --title nn_profile_heaan --where $(NN_HEAAN)
-	
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
