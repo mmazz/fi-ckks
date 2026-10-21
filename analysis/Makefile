@@ -363,7 +363,8 @@ NN_HEAAN       = library=heaanNN logN=12 logSlots=10 logQ=220 logDelta=30
 NN_OPENFHE     = library=openfheNN logN=12 logSlots=10 logQ=60 logDelta=50 mult_depth=5 withNTT=0
 NN_OPENFHE_NTT = library=openfheNN logN=12 logSlots=10 logQ=60 logDelta=50 mult_depth=5 withNTT=1
 NN_CLIENT_HEAAN     = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1 decode
-NN_INTERNAL_HEAAN   = hidden_layer cheby_tanh3 mul add rot rescale
+NN_INTERNAL_HEAAN   = hidden_layer cheby_tanh3
+NN_INTERNAL_HEAAN_OPS   = mul add rot rescale
 # OpenFHE has no decode stage and only two internal stages (workloads/nn/openfhe_nn.cpp)
 NN_CLIENT_OPENFHE   = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1
 NN_INTERNAL_OPENFHE = hidden_layer cheby_tanh3
@@ -399,10 +400,16 @@ _nn_client_openfheNTT:
 	        --legend none || exit 1; \
 	done
 
+
 _nn_internal_heaan:
 	for s in $(NN_INTERNAL_HEAAN); do \
-	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s || exit 1; \
+	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s   --split gap --separate || exit 1; \
 	done
+	for s in $(NN_INTERNAL_HEAAN_OPS); do \
+	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s   --split gap\
+	        --collapse --separate || exit 1; \
+	done
+ 
 
 _nn_internal_openfhe:
 	for s in $(NN_INTERNAL_OPENFHE); do \

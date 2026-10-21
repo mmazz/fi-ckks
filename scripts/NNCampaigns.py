@@ -11,7 +11,7 @@ from campaigns import ROOT, grid, main
 RESULTS = str(ROOT / "results_NN")
 IMAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]     # --seed_input: index of the image in mnist_test.csv
 NUM_SAMPLES = 20             
-SEEDS = [1]             
+SEEDS = [2]             
 
 HEAAN = dict(binary="fi_heaan_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
              logN=12, logQ=220, logDelta=30, logSlots=10, bitsPerCoeff=250)

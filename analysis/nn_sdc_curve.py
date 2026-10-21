@@ -13,6 +13,15 @@ before sending to the server, bottom row after receiving from it.
   --mode map     op_step x bit map of P(SDC), one row per experiment of the --stages (the
                  internal ones: hidden_layer, cheby_tanh3, ...), one column for the aligned
                  coefficients and one for the other ones. Gray: bits not injected.
+  --collapse     (map mode) one row per pattern instead of one per op_step: two op_steps
+                 of a stage share a row if their P(SDC) differs by more than SAME_P in at
+                 most --tol bits (default: none), on the aligned AND on the other
+                 coefficients, as in step_heatmap.py --collapse. The row pools the
+                 injections of its steps.
+  --separate     (map mode with --split gap) the aligned and the other panel as two
+                 figures, <title>_aligned and <title>_other, with the same rows, to go
+                 side by side: row names only on the aligned one, color bar only on the
+                 other one.
   --mode tolerance  P(SDC) as a function of E_L2 of the 10 logits instead of the bit, one
                  curve per stage: faults before the network in one panel, faults in the
                  logits (decrypt_*, decode) in the other.
@@ -46,6 +55,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
+from step_heatmap import fmt_steps                                     # noqa: E402
 
 sys.path.append(str(Path(__file__).resolve().parent))
 import register_map as rm                                              # noqa: E402
@@ -97,6 +107,14 @@ STAGE_SHORT = {"hidden_layer": "hidden", "cheby_tanh3": "act."}
 CELL_HALF = 3
 MAP_CMAP = plt.get_cmap("Reds").copy()
 MAP_CMAP.set_bad("#e8e8e6")
+
+# --collapse: a bit differs between two steps when their P(SDC) differs by more than this.
+# With ~100 injections per bit and group, two equal steps differ by ~0.07 (one sigma), so
+# 0.3 is about 4 sigma. With TAG_V15 the rows of mul, add, rot and rescale are the same
+# for SAME_P 0.2-0.3 and --tol 0-3, except mul 11 / 13 (edges 114 and 128), split at tol 0.
+SAME_P = 0.3
+
+
 # --mode tolerance: bins of log10 E_L2 of the logits, the range they cover (values outside
 # go to the end bins) and the fewest injections a bin needs to be drawn.
 TOL_BIN = 0.5
@@ -121,11 +139,21 @@ def parse_args():
     p.add_argument("--legend", choices=["top", "none", "only"], default="top",
                    help="rate mode: legend on top of the figure, no legend, or an image with "
                         "only the legend (for figures of one panel that share it)")
+    p.add_argument("--collapse", action="store_true",
+                   help="map mode: one row per pattern of op_steps (see SAME_P and --tol)")
+    p.add_argument("--tol", type=int, default=0,
+                   help="--collapse: bits allowed to differ by more than SAME_P (default 0)")
+    p.add_argument("--separate", action="store_true",
+                   help="map mode with --split gap: <title>_aligned and <title>_other")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.split == "gap" and args.mode not in ("rate", "map"):
         p.error("--split gap only applies to --mode rate and --mode map")
+    if args.collapse and args.mode != "map":
+        p.error("--collapse only applies to --mode map")
+    if args.separate and (args.mode != "map" or args.split != "gap"):
+        p.error("--separate only applies to --mode map --split gap")
     if args.legend != "top" and args.mode != "rate":
         p.error("--legend none / only only apply to --mode rate")
     return args
@@ -408,14 +436,22 @@ def plot(stages, args):
 # ------------------------------------------------------------------ #
 # --mode map
 # ------------------------------------------------------------------ #
+def step_text(step):
+    """4 -> '4'; a collapsed row (4, 6, 7, 8) -> '4, 6–8'."""
+    return fmt_steps(list(step)) if isinstance(step, tuple) else str(step)
+
 def row_label(stage, step):
-    """'hidden 4: copy to rotate ($c_0$)'; stages without STEP_LABEL get 'mul 4'."""
+    """'hidden 4: copy to rotate ($c_0$)'; stages without STEP_LABEL get 'mul 4'.
+    A collapsed row (a tuple of steps) gets 'mul 4, 6–8', or its only step's label."""
+    if isinstance(step, tuple):
+        if len(step) == 1:
+            return row_label(stage, step[0])
+        return f"{STAGE_SHORT.get(stage, stage)} {step_text(step)}"
     names = STEP_LABEL.get(stage, [])
     short = STAGE_SHORT.get(stage, stage)
     if step >= len(names):
         return f"{short} {step}"
     return f"{short} {step}: {names[step]} ({'$c_1$' if step % 2 else '$c_0$'})"
-
 
 def bit_cells(curve, width):
     """One row of the map: P(SDC) per bit in [0, width), NaN where nothing was injected.
@@ -444,12 +480,65 @@ def edges(curve):
     inside = curve[(curve["bit"] >= first) & (curve["bit"] <= last)]
     return first, last, float(inside["rate"].median()), int((inside["rate"] < 0.05).sum())
 
-def plot_map(steps, split):
+def pattern_curves(cfg, data):
+    """P(SDC) per bit of one step (Series indexed by bit): [aligned, other], or [all]
+    when every coefficient is aligned (gap = 1)."""
+    split = "gap" if gap_of(cfg) > 1 else "none"
+    return [per_bit(d).set_index("bit")["rate"] for d in coeff_groups(data, cfg, split).values()]
+
+
+def same_pattern(ref, cur, tol):
+    """True if, in every group of coefficients, at most `tol` bits differ by more than
+    SAME_P. Each step samples its own bits (dense near its own edges), so both curves are
+    interpolated on the union of their sampled bits, inside the range both cover."""
+    for a, b in zip(ref, cur):
+        lo, hi = max(a.index.min(), b.index.min()), min(a.index.max(), b.index.max())
+        bits = a.index.union(b.index)
+        bits = bits[(bits >= lo) & (bits <= hi)].to_numpy(float)
+        ya = np.interp(bits, a.index.to_numpy(float), a.to_numpy(float))
+        yb = np.interp(bits, b.index.to_numpy(float), b.to_numpy(float))
+        if int((np.abs(ya - yb) > SAME_P).sum()) > tol:
+            return False
+    return True
+
+
+def collapse_steps(steps, tol):
+    """--collapse: one entry per pattern instead of one per op_step. Greedy, as in
+    step_heatmap.py: in op_step order each step joins the first row of its stage whose
+    first step is the same pattern (same_pattern), or opens a new row. The key of a row
+    is (stage, tuple of its steps) and its data pools the injections of those steps."""
+    rows = []
+    for (stage, step), cfg, data in steps:
+        curves = pattern_curves(cfg, data)
+        for row in rows:
+            if row["stage"] == stage and same_pattern(row["curves"], curves, tol):
+                row["steps"].append(step)
+                row["data"].append(data)
+                break
+        else:
+            rows.append({"stage": stage, "steps": [step], "cfg": cfg, "data": [data],
+                         "curves": curves})
+    for stage in dict.fromkeys(r["stage"] for r in rows):
+        mine = [r for r in rows if r["stage"] == stage]
+        n_steps = sum(len(r["steps"]) for r in mine)
+        print(f"  {stage}: {n_steps} op_steps -> {len(mine)} rows "
+              f"(SAME_P = {SAME_P}, tol = {tol} bits)")
+        for r in mine:
+            print(f"    {fmt_steps(r['steps'])}")
+    return [((r["stage"], tuple(r["steps"])), r["cfg"], pd.concat(r["data"], ignore_index=True))
+            for r in rows]
+
+def plot_map(steps, split, only=None, row_labels=True, colorbar=True):
     """Map op_step x bit: one row per (stage, op_step). One panel over every coefficient
-    (--split none) or one per group, aligned | other (--split gap)."""
+    (--split none) or one per group, aligned | other (--split gap). only: draw just that
+    group ("aligned" or "other"), for --separate; row_labels / colorbar: whether to draw
+    the names of the rows and the P(SDC) color bar."""
     width = max(int(cfg["bitsPerCoeff"]) for _, cfg, _ in steps)
     n = len(steps)
-    groups = ("all",) if split == "none" else ("aligned", "other")
+    if split == "none":
+        groups = ("all",)
+    else:
+        groups = ("aligned", "other") if only is None else (only,)
     fig, axes = plt.subplots(1, len(groups), figsize=(6.5 * len(groups), 1.6 + 0.34 * n),
                              sharey=True, squeeze=False)
     axes = axes[0]
@@ -478,13 +567,18 @@ def plot_map(steps, split):
         ax.tick_params(labelsize=FONT - 5)
     axes[0].set_ylim(n, 0)
     axes[0].set_yticks(np.arange(n) + 0.5)
-    axes[0].set_yticklabels([row_label(*key) for key, _, _ in steps], fontsize=FONT - 6)
-    cbar = fig.colorbar(mesh, ax=axes, fraction=0.025, pad=0.02)
-    cbar.set_label(r"$P(\mathrm{mis})$", fontsize=FONT - 3)
-    cbar.set_ticks([0, 0.5, RANDOM_CLASS, 1])
-    cbar.set_ticklabels(["0", "0,5", "0,9", "1"])
-    cbar.ax.tick_params(labelsize=FONT - 5)
+    if row_labels:
+        axes[0].set_yticklabels([row_label(*key) for key, _, _ in steps], fontsize=FONT - 6)
+    else:
+        axes[0].tick_params(labelleft=False)
+    if colorbar:
+        cbar = fig.colorbar(mesh, ax=axes, fraction=0.025, pad=0.02)
+        cbar.set_label(r"$P(\mathrm{mis})$", fontsize=FONT - 3)
+        cbar.set_ticks([0, 0.5, RANDOM_CLASS, 1])
+        cbar.set_ticklabels(["0", "0,5", "0,9", "1"])
+        cbar.ax.tick_params(labelsize=FONT - 5)
     return fig, summary
+
 
 
 def print_map_summary(summary):
@@ -495,10 +589,10 @@ def print_map_summary(summary):
             return f"{'-':>5s} {'-':>5s} {0.0:5.2f} {'':>5s}"
         return f"{first:5d} {last:5d} {plateau:5.2f} {holes if holes else '':>5}"
     groups = [g for g in ("all", "aligned", "other") if g in next(iter(summary.values()))]
-    print(f"  {'':16s} " + "  ".join(f"{g + ': first  last     P holes':>31s}" for g in groups)
+    print(f"  {'':22s} " + "  ".join(f"{g + ': first  last     P holes':>31s}" for g in groups)
           + "  min n/bit")
     for (stage, step), s in summary.items():
-        print(f"  {stage:13s} {step:2d}   " + "  ".join(f"      {fmt(s[g])}" for g in groups)
+        print(f"  {stage:13s} {step_text(step):>8s}   " + "  ".join(f"      {fmt(s[g])}" for g in groups)
               + f"  {s['n']:5d}")
 
 # ------------------------------------------------------------------ #
@@ -578,13 +672,41 @@ def print_tolerance(curves):
         hi = c.loc[over[0], "center"] - TOL_BIN / 2
         print(f"  {stage:12s} class starts to change between E_L2 = 10^{lo:.1f} and 10^{hi:.1f}")
 
+def save_figure(fig, title, show):
+    rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
+    out = rm.IMG_DIR / title
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
+    print(f"-> {out}.png / .pdf")
+    if show:
+        plt.show()
+    plt.close(fig)
+
 
 def main():
     args = parse_args()
     if args.legend == "only":
         fig = plot_legend(args)          # no data needed
     elif args.mode == "map":
-        fig, summary = plot_map(load_steps(args), args.split)
+        steps = load_steps(args)
+        if args.collapse:
+            steps = collapse_steps(steps, args.tol)
+        if args.separate:
+            # One figure per group, to go side by side: the row names only on the aligned
+            # one (left), the color bar only on the other one (right). The summary of both
+            # is printed once, as without --separate.
+            summary = {}
+            for group, labels, cbar in (("aligned", True, False), ("other", False, True)):
+                fig, part = plot_map(steps, args.split, only=group, row_labels=labels,
+                                     colorbar=cbar)
+                for key, row in part.items():
+                    merged = summary.setdefault(key, {"n": row["n"]})
+                    merged["n"] = min(merged["n"], row["n"])
+                    merged[group] = row[group]
+                save_figure(fig, f"{args.title}_{group}", args.show)
+            print_map_summary(summary)
+            return
+        fig, summary = plot_map(steps, args.split)
         print_map_summary(summary)
     elif args.mode == "tolerance":
         fig, curves = plot_tolerance(load_stages(args))
@@ -594,15 +716,7 @@ def main():
         print(f"  {'stage':12s} {'min n/bit':>10s} {'P(SDC|reg)':>11s}")
         for stage, n in n_min.items():
             print(f"  {stage:12s} {n:10d} {p_reg[stage]:11.3f}")
-
-    rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
-    out = rm.IMG_DIR / args.title
-    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
-    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
-    print(f"-> {out}.png / .pdf")
-    if args.show:
-        plt.show()
-    plt.close(fig)
+    save_figure(fig, args.title, args.show)
 
 
 if __name__ == "__main__":
