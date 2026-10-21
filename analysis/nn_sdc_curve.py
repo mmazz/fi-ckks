@@ -118,11 +118,16 @@ def parse_args():
     p.add_argument("--mode", choices=["rate", "stack", "map", "tolerance"], default="rate")
     p.add_argument("--split", choices=["none", "gap"], default="none",
                    help="rate and map modes: aligned vs other coefficients (gap = (N/2) / slots)")
+    p.add_argument("--legend", choices=["top", "none", "only"], default="top",
+                   help="rate mode: legend on top of the figure, no legend, or an image with "
+                        "only the legend (for figures of one panel that share it)")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.split == "gap" and args.mode not in ("rate", "map"):
         p.error("--split gap only applies to --mode rate and --mode map")
+    if args.legend != "top" and args.mode != "rate":
+        p.error("--legend none / only only apply to --mode rate")
     return args
 
 
@@ -324,6 +329,28 @@ def draw_stack(ax, curve):
     ax.set_ylim(0, 1)
     ax.set_yticks([0, 0.5, 1])
 
+def legend_handles(args):
+    """Handles of the rate-mode legend. All of them are proxies, so they do not depend on
+    the data and the legend can also be drawn on its own (--legend only)."""
+    if args.split == "gap":
+        handles = [Line2D([], [], color=GROUP_COLOR[g], marker=GROUP_MARKER[g], lw=1.8, ms=4.5,
+                          label=GROUP_LABEL[g]) for g in ("aligned", "other")]
+        handles.append(Line2D([], [], color=MOVED_COLOR, ls="--", lw=1.4,
+                              label="some logit moves > 0.1 % (aligned)"))
+        return handles
+    # Proxies: the scatter is colored point by point, its own handle would be green.
+    return [Line2D([], [], ls="none", marker="o", mfc=rm.RED, mec="black", mew=0.3,
+                   label=r"$P(\mathrm{mis})$ per bit"),
+            Patch(facecolor=BAND_COLOR, alpha=0.45, label="95% Wilson CI")]
+
+
+def plot_legend(args):
+    """--legend only: an image with nothing but the legend, in one row."""
+    handles = legend_handles(args)
+    fig = plt.figure(figsize=(0.1, 0.1))
+    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False,
+               fontsize=FONT - 4)
+    return fig
 
 def plot(stages, args):
     n = len(stages)
@@ -366,16 +393,15 @@ def plot(stages, args):
                           label=GROUP_LABEL[g]) for g in ("aligned", "other")]
         handles.append(Line2D([], [], color=MOVED_COLOR, ls="--", lw=1.4,
                               label="some logit moves > 0.1 % (aligned)"))
-    elif args.mode == "rate":
-        # Proxies: the scatter is colored point by point, its own handle would be green.
-        handles = [Line2D([], [], ls="none", marker="o", mfc=rm.RED, mec="black", mew=0.3,
-                          label=r"$P(\mathrm{mis})$ per bit"),
-                   Patch(facecolor=BAND_COLOR, alpha=0.45, label="95% Wilson CI")]
+    if args.mode == "rate":
+        handles = legend_handles(args)
     else:
         handles, _ = axes.flat[0].get_legend_handles_labels()
-    fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
-               fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.05))
+    if args.legend == "top":
+        fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
+                   fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.05))
     fig.tight_layout()
+
     return fig, n_min, p_reg
 
 
@@ -555,7 +581,9 @@ def print_tolerance(curves):
 
 def main():
     args = parse_args()
-    if args.mode == "map":
+    if args.legend == "only":
+        fig = plot_legend(args)          # no data needed
+    elif args.mode == "map":
         fig, summary = plot_map(load_steps(args), args.split)
         print_map_summary(summary)
     elif args.mode == "tolerance":

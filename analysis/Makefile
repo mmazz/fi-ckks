@@ -366,10 +366,15 @@ NNF  = nn_client nn_internal nn_tolerance
 NN_X = nn_profile nn_client_openfhe
 nn: $(NNF)
 
+# The six panels go side by side in the thesis (subfigures): each one without a legend,
+# and the shared legend as an image of its own (nn_client_legend).
 _nn_client:
 	for s in $(NN_CLIENT_HEAAN); do \
-	    $(NN) --title nn_client_heaan_$$s --where $(NN_HEAAN) --stages $$s --split gap || exit 1; \
+	    $(NN) --title nn_client_heaan_$$s --where $(NN_HEAAN) --stages $$s --split gap \
+	        --legend none || exit 1; \
 	done
+	$(NN) --title nn_client_legend --split gap --legend only
+
 _nn_client_openfhe:
 	for s in $(NN_CLIENT_OPENFHE); do \
 	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) --stages $$s --split gap || exit 1; \
