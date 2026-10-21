@@ -74,7 +74,8 @@ BAND_COLOR = "#6BAED6"
 # --split gap: one color per group of coefficients, the same in every NN figure.
 GROUP_COLOR = {"aligned": "#2a78d6", "other": "#eb6834"}
 GROUP_MARKER = {"aligned": "o", "other": "^"}
-GROUP_LABEL = {"aligned": "aligned coefficients", "other": "other coefficients"}
+GROUP_LABEL = {"aligned": "aligned coefficients", "other": "other coefficients",
+               "all": "all coefficients"}
 MOVED_COLOR = "#7a7975"
 # Faint reference line: with the output destroyed, a class drawn at random among the 10
 # would give P(mis) = 1 - 1/10. A reading of the plateau, not a measurement.
@@ -116,12 +117,12 @@ def parse_args():
     p.add_argument("--ncols", type=int, default=3)
     p.add_argument("--mode", choices=["rate", "stack", "map", "tolerance"], default="rate")
     p.add_argument("--split", choices=["none", "gap"], default="none",
-                   help="rate mode: aligned vs other coefficients (gap = (N/2) / slots)")
+                   help="rate and map modes: aligned vs other coefficients (gap = (N/2) / slots)")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
-    if args.split == "gap" and args.mode != "rate":
-        p.error("--split gap only applies to --mode rate")
+    if args.split == "gap" and args.mode not in ("rate", "map"):
+        p.error("--split gap only applies to --mode rate and --mode map")
     return args
 
 
@@ -224,6 +225,9 @@ def split_gap(data, cfg):
     aligned = data["coeff"] % gap_of(cfg) == 0
     return {"aligned": data[aligned], "other": data[~aligned]}
 
+def coeff_groups(data, cfg, split):
+    """--split none: {"all": every row}; --split gap: split_gap."""
+    return {"all": data} if split == "none" else split_gap(data, cfg)
 
 def encode_shift(cfg):
     """HEAAN adds the encoded plaintext to the encryption mod qQ and then shifts right by
@@ -242,6 +246,22 @@ def register_width(cfg):
         return int(cfg["logQ"]) - NN_LEVELS * int(cfg["logDelta"])
     return int(cfg["logQ"]) + encode_shift(cfg)
 
+def shift_encode(data, cfg):
+    """(data, shift): on the HEAAN encode register keep the bits at or above logQ and move
+    them down by logQ, so the x axis reads like the one of encrypt_c0 (see encode_shift).
+    The lower logQ bits are rounded away by the encryption: the largest P(mis) among them
+    is printed, so that dropping them can be checked. Other stages: unchanged, shift 0."""
+    shift = encode_shift(cfg)
+    if not shift:
+        return data, 0
+    low = data[data["bit"] < shift]
+    if not low.empty:
+        print(f"  {cfg['stage']}: dropped bits below logQ = {shift}, "
+              f"largest P(mis) among them = {per_bit(low)['rate'].max():.3f}")
+    out = data[data["bit"] >= shift].copy()
+    out["bit"] -= shift
+    return out, shift
+
 def register_rate(curve, log_q):
     """P(SDC) for a bit drawn uniformly from the register at the injection point, [0, log_q): interpolate the sampled bits."""
     bits = np.arange(int(log_q))
@@ -251,11 +271,12 @@ def register_rate(curve, log_q):
 # ------------------------------------------------------------------ #
 # Plot
 # ------------------------------------------------------------------ #
-def mark_params(ax, cfg):
-    # On the HEAAN encode panel both references move up by logQ (see encode_shift).
-    s = encode_shift(cfg)
+def mark_params(ax, cfg, shifted=0):
+    """logDelta and the top of the register W. On the HEAAN encode register both sit logQ
+    bits higher (encode_shift), unless the curve was already moved down by `shifted` bits."""
+    s = encode_shift(cfg) - shifted
     for val, name in [(cfg["logDelta"] + s, r"$\log\Delta$"),
-                      (register_width(cfg), r"$W$")]:
+                      (register_width(cfg) - shifted, r"$W$")]:
         ax.axvline(val, color="black", lw=0.8, ls="--", alpha=0.7, zorder=4)
         ax.text(val, 1.02, name, transform=ax.get_xaxis_transform(),
                 ha="center", va="bottom", fontsize=FONT - 5)
@@ -312,17 +333,22 @@ def plot(stages, args):
                              sharex=False, sharey=True, squeeze=False)
     n_min = {}      # fewest injections behind any bit of each panel
     p_reg = {}      # P(SDC | uniformly random bit of the register), per panel
-    for ax, (stage, (cfg, data)) in zip(axes.flat, stages.items()):
+    for i, (ax, (stage, (cfg, data))) in enumerate(zip(axes.flat, stages.items())):
+        data, shifted = shift_encode(data, cfg)
         curve = per_bit(data)
         n_min[stage] = int(curve["n"].min())
         if args.split == "gap":
             draw_split(ax, data, cfg)
         else:
             (draw_rate if args.mode == "rate" else draw_stack)(ax, curve)
-        mark_params(ax, cfg)
+        mark_params(ax, cfg, shifted)
         # interpolated over every bit of the register at the injection point and averaged
         # (dense near logDelta and logQ), so the plain mean of the samples would be biased.
-        p_reg[stage] = register_rate(curve, register_width(cfg))
+        p_reg[stage] = register_rate(curve, register_width(cfg) - shifted)
+        # x label on the panels with no panel below them
+        if i + ncols >= n:
+            ax.set_xlabel(r"Bit index $-\ \log Q$" if shifted else "Bit index",
+                          fontsize=FONT - 2)
         ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
                        fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
@@ -333,8 +359,6 @@ def plot(stages, args):
         ax.tick_params(labelsize=FONT - 5)
     for ax in axes.flat[n:]:
         ax.set_visible(False)
-    for ax in axes[-1]:
-        ax.set_xlabel("Bit index", fontsize=FONT - 2)
     for ax in axes[:, 0]:
         ax.set_ylabel(r"$P(\mathrm{mis})$" if args.mode == "rate" else "Fraction", fontsize=FONT - 2)
     if args.split == "gap":
@@ -394,17 +418,20 @@ def edges(curve):
     inside = curve[(curve["bit"] >= first) & (curve["bit"] <= last)]
     return first, last, float(inside["rate"].median()), int((inside["rate"] < 0.05).sum())
 
-
-def plot_map(steps):
-    """Map op_step x bit: one row per (stage, op_step), aligned | other coefficients."""
+def plot_map(steps, split):
+    """Map op_step x bit: one row per (stage, op_step). One panel over every coefficient
+    (--split none) or one per group, aligned | other (--split gap)."""
     width = max(int(cfg["bitsPerCoeff"]) for _, cfg, _ in steps)
     n = len(steps)
-    fig, axes = plt.subplots(1, 2, figsize=(13, 1.6 + 0.34 * n), sharey=True)
+    groups = ("all",) if split == "none" else ("aligned", "other")
+    fig, axes = plt.subplots(1, len(groups), figsize=(6.5 * len(groups), 1.6 + 0.34 * n),
+                             sharey=True, squeeze=False)
+    axes = axes[0]
     summary = {}
-    for ax, group in zip(axes, ("aligned", "other")):
+    for ax, group in zip(axes, groups):
         grid = np.full((n, width), np.nan)
         for i, (key, cfg, data) in enumerate(steps):
-            curve = per_bit(split_gap(data, cfg)[group])
+            curve = per_bit(coeff_groups(data, cfg, split)[group])
             grid[i] = bit_cells(curve, width)
             row = summary.setdefault(key, {"n": int(curve["n"].min())})
             row["n"] = min(row["n"], int(curve["n"].min()))   # fewest injections behind a bit
@@ -441,11 +468,12 @@ def print_map_summary(summary):
         if first is None:
             return f"{'-':>5s} {'-':>5s} {0.0:5.2f} {'':>5s}"
         return f"{first:5d} {last:5d} {plateau:5.2f} {holes if holes else '':>5}"
-    print(f"  {'':16s} {'aligned: first  last     P holes':>31s}  "
-          f"{'other: first  last     P holes':>31s}  min n/bit")
+    groups = [g for g in ("all", "aligned", "other") if g in next(iter(summary.values()))]
+    print(f"  {'':16s} " + "  ".join(f"{g + ': first  last     P holes':>31s}" for g in groups)
+          + "  min n/bit")
     for (stage, step), s in summary.items():
-        print(f"  {stage:13s} {step:2d}   {fmt(s['aligned'])}        {fmt(s['other'])}  {s['n']:5d}")
-
+        print(f"  {stage:13s} {step:2d}   " + "  ".join(f"      {fmt(s[g])}" for g in groups)
+              + f"  {s['n']:5d}")
 
 # ------------------------------------------------------------------ #
 # --mode tolerance
@@ -528,7 +556,7 @@ def print_tolerance(curves):
 def main():
     args = parse_args()
     if args.mode == "map":
-        fig, summary = plot_map(load_steps(args))
+        fig, summary = plot_map(load_steps(args), args.split)
         print_map_summary(summary)
     elif args.mode == "tolerance":
         fig, curves = plot_tolerance(load_stages(args))

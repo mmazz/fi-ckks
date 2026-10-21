@@ -345,41 +345,44 @@ BOOT_GROUP ?= 240
 _c2_fig07:
 	$(call HEAT3,c2_fig07_boot,--where $(OP_boot) --group $(BOOT_GROUP))
 	$(call HEAT3,c2_fig07_boot_eval,--where $(OP_boot_eval) --group $(BOOT_GROUP))
-
 # ======================================================================================
 # Neural network chapter (chap:app, nn_): probability that a flip changes the class
-# (scripts/NNCampaigns.py). In the thesis: the client stages, the vulnerable bits of every
-# injection site in execution order, and P(mis) against E_L2 of the logits.
+# (scripts/NNCampaigns.py). One figure per stage:
+#   nn_client    P(mis) per bit of each client stage, aligned vs other coefficients
+#                (HEAAN encode drawn against b - logQ)
+#   nn_internal  op_step x bit map of P(mis) of each internal stage, every coefficient
+#   nn_tolerance P(mis) against E_L2 of the logits
 # ======================================================================================
 NNP        = python3 nn_profile.py --results $(RES_NN) $(SHOW)
 NN_HEAAN   = library=heaanNN
 NN_OPENFHE = library=openfheNN
-NNF  = nn_client nn_profile nn_tolerance
-# Not in the thesis: op_step x bit map of the internal stages, median E_L2 of the logits
-# per bit, and the OpenFHE client stages (once their campaigns are in RES_NN).
-NN_X = nn_internal nn_l2 nn_client_openfhe
+NN_CLIENT_HEAAN   = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1 decode
+# OpenFHE has no decode stage (workloads/nn/openfhe_nn.cpp)
+NN_CLIENT_OPENFHE = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1
+NN_INTERNAL       = hidden_layer cheby_tanh3 mul add rot rescale
+NNF  = nn_client nn_internal nn_tolerance
+# Not in the thesis: vulnerable bits of every site in execution order, and the OpenFHE
+# client stages (once their campaigns are in RES_NN).
+NN_X = nn_profile nn_client_openfhe
 nn: $(NNF)
-# bit_curve.py ($(CURVE)) reads $(RES)
-$(addprefix _,$(NNF) $(NN_X)): RES = $(RES_NN)
- 
+
 _nn_client:
-	$(NN) --title nn_client_heaan --where $(NN_HEAAN) --split gap
-_nn_profile:
-	$(NNP) --title nn_profile_heaan --where $(NN_HEAAN)
+	for s in $(NN_CLIENT_HEAAN); do \
+	    $(NN) --title nn_client_heaan_$$s --where $(NN_HEAAN) --stages $$s --split gap || exit 1; \
+	done
+_nn_client_openfhe:
+	for s in $(NN_CLIENT_OPENFHE); do \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) --stages $$s --split gap || exit 1; \
+	done
+_nn_internal:
+	for s in $(NN_INTERNAL); do \
+	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s || exit 1; \
+	done
 _nn_tolerance:
 	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
-_nn_internal:
-	$(NN) --title nn_internal_heaan --where $(NN_HEAAN) --mode map --stages hidden_layer cheby_tanh3
-_nn_l2:
-	$(CURVE) --title nn_l2_heaan --where $(NN_HEAAN) \
-	    --query 'stage in ["encrypt_c0", "encrypt_c1", "decrypt_c0"]' --vary stage \
-	    --order encrypt_c0 encrypt_c1 decrypt_c0 \
-	    --labels '$$c_0$$ (encrypt)' '$$c_1$$ (encrypt)' '$$c_0$$ (before decrypt)' \
-	    --split gap --stat median --yscale log --xlim 0 60 \
-	    --ylabel 'median $$E_{L_2}$$ of the logits'
-_nn_client_openfhe:
-	$(NN) --title nn_client_openfhe --where $(NN_OPENFHE)
- 
+_nn_profile:
+	$(NNP) --title nn_profile_heaan --where $(NN_HEAAN)
+	
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
