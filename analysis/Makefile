@@ -430,7 +430,7 @@ _nn_profile:
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb
-EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe
+EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
 ev: $(EV)
@@ -518,6 +518,10 @@ _ev_mix:
 _ev_mul_openfhe:
 	$(call HEAT3,ev_mul_openfhe,--where $(OP_mul_ofhe_rns))
 
+_ev_add_openfhe:
+	$(call HEAT3,ev_add_openfhe,--where $(OP_add_ofhe_rns))
+
+
 # Bursts, x = first bit: each curve is the k = 1 one shifted left by k - 1.
 _ev_mb_enc_shift:
 	$(CURVE) --title ev_mb_enc_shift --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' \
@@ -537,6 +541,26 @@ _ev_mb_boot:
 _ev_mb_op_mul:
 	$(CURVE) --title ev_mb_op_mul --where $(OP_mul) \
 	    --vary amountBits --per op_step --xnorm top_bit --split gap $(KLABELS) $(YL)
+
+# Boot in RNS (boot_rns group): fault in encrypt, 0, 1 and 2 muls before the boot.
+# Register maps with the 21 limbs side by side (limb 0 on the left), one panel per pipeline.
+# Then the fraction of slots off by more than 10x per bit, averaged over the limbs. Not
+# is_sdc: a limb that is only dropped can still carry the boot's own error (~1e-4 here)
+# when a key switching touched the faulty component, and is_sdc flags that whenever a
+# slot is close to 0 (x^3 after "mul x2").
+OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
+RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot"
+RNS_BOOT_LABELS = "0 mul + boot" "1 mul + boot" "2 mul + boot"
+_ev_rns_boot:
+	for s in encrypt_c0 encrypt_c1; do \
+	    $(CMP) --title ev_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	done
+	$(CURVE) --title ev_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
+	    --vary pipeline --per stage --split gap --metric frac_failed \
+	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
+
 
 # ======================================================================================
 # Incremental build: `make c1_fig01` runs the recipe _c1_fig01 only when img/.c1_fig01.done
