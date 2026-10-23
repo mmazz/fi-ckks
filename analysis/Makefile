@@ -436,7 +436,7 @@ _nn_profile:
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
-            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_rns_boot
+            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_rns_boot ev_rns_ntt_boot
 EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
@@ -567,7 +567,15 @@ _ev_rns_boot:
 	$(CURVE) --title ev_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
-
+_ev_rns_ntt_boot:
+	for s in encrypt_c0 encrypt_c1; do \
+	    $(CMP) --title ev_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	done
+	$(CURVE) --title ev_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
+	    --vary pipeline --per stage --split gap --metric frac_failed \
+	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 
 # ======================================================================================
 # Incremental build: `make c1_fig01` runs the recipe _c1_fig01 only when img/.c1_fig01.done
