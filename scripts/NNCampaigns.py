@@ -19,7 +19,8 @@ OPENFHE = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numS
                logN=12, logQ=60, logDelta=30, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=1)
 OPENFHE_NON_NTT = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=0)
-
+OPENFHE_RNS_NON_NTT = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
+               logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=8, withNTT=0)
 
 OPENFHE_TEST = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=3, withNTT=1)
@@ -33,6 +34,7 @@ OPENFHE_INTERNAL = {"hidden_layer": 14, "cheby_tanh3": 10}
 
 HEAAN_CLIENT = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1", "decode"]
 OPENFHE_CLIENT = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c1"]
+OPENFHE_CLIENT_BACK = [ "decrypt_c0", "decrypt_c1"]
 OPENFHE_CLIENT_TEST = ["encrypt_c0"]
 
 
@@ -63,6 +65,7 @@ GROUPS = {
        for st, n in HEAAN_INTERNAL.items()},
     "openfhe_client": client(OPENFHE, OPENFHE_CLIENT),
     "openfhe_client_nonNTT": client(OPENFHE_NON_NTT, OPENFHE_CLIENT),
+    "openfhe_client_RNS_nonNTT": client(OPENFHE_RNS_NON_NTT, OPENFHE_CLIENT_BACK),
     **{f"openfhe_{st}": internal(OPENFHE, st, n) for st, n in OPENFHE_INTERNAL.items()},
     **{f"openfhe_{st}_nonNTT": internal(OPENFHE_NON_NTT, st, n) for st, n in OPENFHE_INTERNAL.items()},
     "openfhe_client_test": client(OPENFHE_TEST, OPENFHE_CLIENT_TEST),

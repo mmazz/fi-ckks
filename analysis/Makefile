@@ -367,10 +367,11 @@ NN_INTERNAL_HEAAN   = hidden_layer cheby_tanh3
 NN_INTERNAL_HEAAN_OPS   = mul add rot rescale
 # OpenFHE has no decode stage and only two internal stages (workloads/nn/openfhe_nn.cpp)
 NN_CLIENT_OPENFHE   = encode encrypt_c0 encrypt_c1 decrypt_c0 decrypt_c1
+NN_CLIENT_OPENFHE_BACK   =  decrypt_c0 decrypt_c1
 NN_INTERNAL_OPENFHE = hidden_layer cheby_tanh3
 
 # Every name in these lists needs its _name recipe below (see "Incremental build").
-NNF     = nn_client_heaan nn_internal_heaan nn_tolerance
+NNF     = nn_client_heaan nn_internal_heaan nn_tolerance nn_client_openfhe_test
 # OpenFHE: not in any release yet. Move them to NNF once they are.
 NN_OFHE = nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe
 # Not in the thesis: vulnerable bits of every site in execution order.
@@ -390,7 +391,13 @@ _nn_client_heaan:
 
 _nn_client_openfhe:
 	for s in $(NN_CLIENT_OPENFHE); do \
-	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) --stages $$s --split gap \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) mult_depth=8 --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
+
+_nn_client_openfhe_test:
+	for s in $(NN_CLIENT_OPENFHE_BACK); do \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) mult_depth=8 --stages $$s --split gap \
 	        --legend none || exit 1; \
 	done
 
@@ -429,9 +436,9 @@ _nn_profile:
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
-            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb
-EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe
-EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul
+            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_rns_boot
+EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
+EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
 ev: $(EV)
 $(addprefix _,$(EV_CLIENT)): RES = $(RES1)

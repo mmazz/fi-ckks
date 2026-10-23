@@ -407,10 +407,12 @@ def plot(stages, args):
         ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
                        fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
-        # Output registers are only log q_l = 70 bits wide: crop so that the window is
-        # readable. The control points above (up to bitsPerCoeff) are all masked.
+
+        # Output registers: HEAAN logits are only log q_l = 70 bits wide but the campaign
+        # samples up to bitsPerCoeff, so crop at W + 30. OpenFHE samples only q0, so never
+        # go past the last sampled bit (otherwise the panel is wider than the encrypt ones).
         if stage in OUTPUT_STAGES:
-            ax.set_xlim(-3, register_width(cfg) + 30)
+            ax.set_xlim(-3, min(register_width(cfg) + 30, curve["bit"].max() + 3))
         ax.tick_params(labelsize=FONT - 5)
     for ax in axes.flat[n:]:
         ax.set_visible(False)
