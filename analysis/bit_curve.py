@@ -126,6 +126,9 @@ def parse_args():
     p.add_argument("--shade", nargs="+", type=float, default=None, metavar="BIT",
                    help="shade the x range from each BIT to the right edge, darker where they "
                         "overlap (e.g. the bits above the modulus of each limb)")
+    p.add_argument("--seed_stat", choices=["mean", "median"], default="mean",
+                   help="how the repetitions of each (limb, coeff, bit) are combined: mean reads "
+                        "<metric>, median reads <metric>_median (only l2_rel and linf_rel have it)")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
 
@@ -185,8 +188,8 @@ def detector_bound(d, metric, never):
     missed = d.loc[(d["detected"] < 1) & ~blind, col]
     return (float(missed.max()) if len(missed) else None), col
 
-def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False, detect_onset=False):
-    """One row per (curve, limb, coeff, bit), seeds already averaged. Adds gap_aligned."""
+def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_spread=False, raw_spread=False, detect_onset=False, seed_stat="mean"):
+    """One row per (curve, limb, coeff, bit), seeds already combined with seed_stat. Adds gap_aligned."""
     keys = [c for c in vary if c in camps.columns] # 'limb' comes from the data, not from the registry     
     groups = camps.groupby(keys) if keys else [((), camps)]
     parts = []
@@ -199,7 +202,17 @@ def load_curve_data(camps, results, vary, drop_coeffs, metric, stat="mean", rep_
         d = load_data(g, results)
         drop = {N // 2 if c == "N/2" else int(c) for c in drop_coeffs}
         d = d[~d["coeff"].isin(drop)]
-        agg = {metric: "mean"}                              # mean over seeds
+        if seed_stat == "median":
+            # The collapse already stored the median over the repetitions of each cell.
+            # Copy it over <metric>, so the rest of the script keeps reading the same column.
+            # <metric>_lo / _hi (raw_spread, detect_onset) are min / max: they do not change.
+            med = f"{metric}_median"
+            if med not in d.columns:
+                sys.exit(f"--seed_stat median needs {med} in the collapsed data: available for "
+                         f"l2_rel and linf_rel, after 'python3 collapse.py <dir> --force'")
+            d[metric] = d[med]
+        agg = {metric: "mean"}          # one row per cell after the collapse: this keeps it as is
+
         if detect_onset:
             agg["detected"] = "mean"     # kept per cell: plot_curves() needs it for the onset
             if f"{metric}_hi" in d.columns:
@@ -507,7 +520,8 @@ def main():
         sub = camps if pv is None else camps[camps[args.per] == pv]
         try:
             data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs,
-                args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread, detect_onset=args.detect_onset)
+                args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread, detect_onset=args.detect_onset,
+                    seed_stat=args.seed_stat)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"

@@ -42,7 +42,7 @@ NN     = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 
 # y axis of every E_L2 curve: linear below 1e-2, which with inputs in [-1, 1] means values
 # off by about 1 % (E_L2 ~ 2^(b - logDelta) / (sqrt(2) rms(z))).
-YL      = --linthresh 1e-2 --ylabel '$$E_{L_2}$$ (symlog)'
+YL      = --linthresh 1e-2 --ylabel '$$E_{L_2}$$ (symlog)' --seed_stat median --stat median
 KLABELS = --labels 'k=1' 'k=2' 'k=4' 'k=8'
 
 # Heatmaps op_step x bit of every coefficient, of the aligned ones and of the other ones,
