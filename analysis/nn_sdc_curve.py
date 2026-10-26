@@ -268,8 +268,6 @@ def encode_shift(cfg):
     heaan_encode = str(cfg["library"]).startswith("heaan") and cfg["stage"] == "encode"
     return int(cfg["logQ"]) if heaan_encode else 0
 
-
-
 def register_width(cfg):
     """Bits the fault can land in: the width of the register at the injection point.
     HEAAN: logQ for the input ciphertext, logQ - NN_LEVELS*logDelta for the logits
