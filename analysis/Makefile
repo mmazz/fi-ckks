@@ -148,9 +148,9 @@ $(addprefix _,$(CH1)): RES = $(RES1)
 # Encoded plaintext, HEAAN vs OpenFHE (one limb, no NTT). HEAAN is shifted by logQ: its
 # encode works mod qQ.
 _c1_fig01:
-	$(SHIFT) --title c1_fig01_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
-	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
-	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL)
+	$(SHIFT) --title c1_fig01_encode_libs --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline="" \
+		--query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64 and attackModeSKA == 1)' \
+	    --vary library --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE' $(YL) --minmax
 
 # Seed variability: band = min..max per bit over every coefficient and repetition.
 _c1_fig02:

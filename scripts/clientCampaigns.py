@@ -222,7 +222,7 @@ GROUPS = {
     
         # EVIDENCE: the 1.4x of FIG 3 is OpenFHE's decode noise (CompleteInjection).
     # Without it (attackModeSKA=0) OpenFHE and HEAAN should coincide on every coefficient.
-    "plain_cmp_nonoise": grid(dict(BASE_OPENFHE, stage="encode", attackModeSKA=0),
+    "plain_cmp_nonoise": grid(dict(BASE_OPENFHE, stage="encode"), attackModeSKA=[0,2],
                               seed=SEEDS, seed_input=INPUTS),
     }
 
