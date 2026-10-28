@@ -57,7 +57,7 @@ endef
 # Configurations, one per campaign group (scripts/*Campaigns.py)
 # ======================================================================================
 # Chapter 6
-BASE       = library=heaan logN=6 logSlots=5 logQ=60 logDelta=40
+BASE       = library=heaan logN=6 logSlots=5 logQ=60 logDelta=40 logMin=0 logMax=0
 CLIENT_MUL = library=heaan logN=6 logSlots=3 logQ=150 logDelta=30 bitsPerCoeff=170
 OFHE       = library=openfhe logN=6 logQ=60 logDelta=30 bitsPerCoeff=64
 BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860
