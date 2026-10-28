@@ -56,7 +56,7 @@ def parse_args():
                    help="only the coefficients with coeff %% gap == 0 (aligned) or the rest")
     p.add_argument("--ncols", type=int, default=2)
     p.add_argument("--no_legend", action="store_true",
-                   help="omit the class legend above the panels (e.g. for a lower subfigure)")
+                   help="omit the class legend and the panel titles (for a lower subfigure)")
     p.add_argument("--title", default="slot_share")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
@@ -159,7 +159,8 @@ def plot(data, args):
             ax.axvline(b, color="black", ls=":", lw=1.2)
             ax.text(b, 1.02, r"$b_{\mathrm{vis}}$", transform=ax.get_xaxis_transform(),
                     ha="center", va="bottom", fontsize=FONT - 5)
-        ax.set_title(panel, fontsize=FONT - 4, pad=18)
+        if not args.no_legend:
+            ax.set_title(panel, fontsize=FONT - 4, pad=18)
         ax.set_xlim(f.index.min(), f.index.max())
         ax.set_ylim(0, 1)
         ax.tick_params(labelsize=FONT - 5)
