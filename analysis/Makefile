@@ -173,18 +173,18 @@ _c1_fig04:
 # logN = 6 vs 16, fault in c0.
 _c1_fig05:
 	$(CURVE) --title c1_fig05_logN \
-	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
+	    --where library=heaan stage=encrypt_c1 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
 	    --query 'logSlots == logN - 1' --vary logN --labels 'logN=6' 'logN=16' $(YL)
 
 # logDelta in {25, 35, 45, 55}, x = bit - logDelta: the curves collapse into one.
 _c1_fig06:
 	$(CURVE) --title c1_fig06_logDelta_shift \
-	    --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
 # logQ in {40, 60, 80, 100} with logDelta = 3/4 logQ, x = bit / logQ.
 _c1_fig07:
-	$(CURVE) --title c1_fig07_logQ --where library=heaan stage=encrypt_c0 pipeline= logN=6 logSlots=5 \
+	$(CURVE) --title c1_fig07_logQ --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 \
 	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' --vary logQ --xnorm over_q $(YL)
 
 # 8, 16 and 32 slots: aligned vs non-aligned coefficients.
