@@ -22,7 +22,7 @@ TAG="${2:-}"
 # of analysis/ (collapse, check_results, flat_curve, register_map_compare, utils/collapse,
 # utils/config, utils/sites) only runs in fi-ckks. --delete-excluded removes files an older
 # export left behind; P protects the figures and the data pin.
-KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py utils/sites.py
+KEEP=(Makefile requirements.txt bit_curve.py encode_shift.py step_heatmap.py register_map.py utils/sites.py limb_curve.py
       nn_sdc_curve.py build_ml_dataset.py utils/__init__.py utils/results.py slot_share.py register_map_compare.py
       master_curve.py thesis_numbers.py analytic_baseline.py theory_check.py nn_table.py nn_profile.py p_sdc.py
   )
