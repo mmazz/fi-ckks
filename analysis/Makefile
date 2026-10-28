@@ -58,16 +58,16 @@ endef
 # ======================================================================================
 # Chapter 6
 BASE       = library=heaan logN=6 logSlots=5 logQ=60 logDelta=40 logMin=0 logMax=0
-CLIENT_MUL = library=heaan logN=6 logSlots=3 logQ=150 logDelta=30 bitsPerCoeff=170
-OFHE       = library=openfhe logN=6 logQ=60 logDelta=30 bitsPerCoeff=64
-BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860
+CLIENT_MUL = library=heaan logN=6 logSlots=3 logQ=150 logDelta=30 bitsPerCoeff=170  logMin=0  logMax=0
+OFHE       = library=openfhe logN=6 logQ=60 logDelta=30 bitsPerCoeff=64  logMin=0  logMax=0
+BOOTP      = library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860  logMin=0  logMax=0
 # logSlots of the OpenFHE RNS and NTT figures (3 or 5)
 SL        ?= 3
 
 # Chapter 7
-SERVER = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30
-DEPTH  = library=heaan logN=6 logSlots=3 logQ=160 logDelta=30 bitsPerCoeff=324
-RESC   = library=heaan logN=6 logSlots=3 logQ=100 logDelta=30 bitsPerCoeff=110
+SERVER = library=heaan logN=6 logSlots=3 logQ=60 logDelta=30  logMin=0  logMax=0
+DEPTH  = library=heaan logN=6 logSlots=3 logQ=160 logDelta=30 bitsPerCoeff=324  logMin=0  logMax=0
+RESC   = library=heaan logN=6 logSlots=3 logQ=100 logDelta=30 bitsPerCoeff=110  logMin=0  logMax=0
 MIX    = add; mul; rot 2; mul; add
 # numSamples pins the thesis campaigns (mix_mul*, 50 samples): the explore_mix_* groups
 # share the rest of the config with 10 samples and are a separate experiment.
@@ -173,24 +173,24 @@ _c1_fig04:
 # logN = 6 vs 16, fault in c0.
 _c1_fig05:
 	$(CURVE) --title c1_fig05_logN \
-	    --where library=heaan stage=encrypt_c1 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 \
+	    --where library=heaan stage=encrypt_c1 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 logMin=0 logMax=0 \
 	    --query 'logSlots == logN - 1' --vary logN --labels 'logN=6' 'logN=16' $(YL)
 
 # logDelta in {25, 35, 45, 55}, x = bit - logDelta: the curves collapse into one.
 _c1_fig06:
 	$(CURVE) --title c1_fig06_logDelta_shift \
-	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0 \
+	    --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 logQ=60 bitsPerCoeff=64 logMin=0  logMax=0\
 	    --query 'logDelta in [25, 35, 45, 55]' --vary logDelta --xnorm minus_delta $(YL)
 
 # logQ in {40, 60, 80, 100} with logDelta = 3/4 logQ, x = bit / logQ.
 _c1_fig07:
-	$(CURVE) --title c1_fig07_logQ --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5 \
+	$(CURVE) --title c1_fig07_logQ --where library=heaan stage=encrypt_c1 pipeline= logN=6 logSlots=5  logMin=0  logMax=0\
 	    --query 'logDelta == 0.75 * logQ and bitsPerCoeff == 1.25 * logQ' --vary logQ --xnorm over_q $(YL)
 
 # 8, 16 and 32 slots: aligned vs non-aligned coefficients.
 _c1_fig08:
 	$(CURVE) --title c1_fig08_logSlots \
-	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64 \
+	    --where library=heaan pipeline= logN=6 logQ=60 logDelta=40 bitsPerCoeff=64  logMin=0  logMax=0\
 	    --query '$(ENC) and logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
 # Input magnitude: uniform in [2^logMin, 2^(logMin + 1)].
@@ -202,13 +202,13 @@ _c1_fig09:
 # A fault before "add; rot 3", 8, 16 and 32 slots.
 _c1_fig10:
 	$(CURVE) --title c1_fig10_add_rot \
-	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64 \
+	    --where library=heaan "pipeline=add; rot 3" logN=6 logQ=60 logDelta=30 bitsPerCoeff=64  logMin=0  logMax=0\
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage $(YL)
 
 # Same in OpenFHE (one limb, no NTT), with the bit from which its SDC detector fires.
 _c1_fig11:
 	$(CURVE) --title c1_fig11_add_rot_openfhe \
-	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=0 \
+	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=0  logMin=0  logMax=0\
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage --detect_onset $(YL)
 
 # A fault before 1, 2 and 3 ciphertext multiplications.
