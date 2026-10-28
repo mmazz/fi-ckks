@@ -34,7 +34,7 @@ BASE_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
 
 # logN comparison: random on both sides so both have the same number of sampled coefficients
 LOGN_CMP = dict(binary="fi_heaan", results_dir=RESULTS,
-                logQ=60, logDelta=40, bitsPerCoeff=64, stage="encrypt_c0")
+                logQ=60, logDelta=40, bitsPerCoeff=64)
 
 # logQ sweep at a fixed ratio: logDelta = 3/4 logQ, bitsPerCoeff = 5/4 logQ
 LOGQ_SWEEP = [40, 60, 80, 100]
@@ -93,10 +93,10 @@ GROUPS = {
     "enc_seeds": grid(dict(BASE), stage=ENC, seed=SEEDS_ANALYSIS, seed_input=SEEDS_ANALYSIS),
 
     # FIG 2 (logN does not change the pattern). x axis = bit, averaged over coefficients.
-    "logN_cmp": grid(dict(LOGN_CMP, logN=6, logSlots=5, isExhaustive=1),
+    "logN_cmp": grid(dict(LOGN_CMP, logN=6, logSlots=5, isExhaustive=1), stage=["encrypt_c0","encrypt_c1"],
                      seed=SEEDS, seed_input=INPUTS)
               + grid(dict(LOGN_CMP, logN=16, logSlots=15, isExhaustive=0, numSamples=NUM_SAMPLES),
-                     seed=SEEDS, seed_input=INPUTS),
+                      stage=["encrypt_c0","encrypt_c1"], seed=SEEDS, seed_input=INPUTS),
 
     # FIG 3 (encode OpenFHE vs HEAAN, panel a) and FIG 4 (HEAAN encode / c0 / c1, panel b;
     # c0 and c1 come from enc_seeds filtered to seeds 1-3). HEAAN's encoded plaintext is
