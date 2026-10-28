@@ -141,7 +141,7 @@ _teo:
 # Chapter 6, single-bit faults (c1_): the objects that enter or leave the pipeline.
 # ======================================================================================
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig06 c1_fig07 c1_fig08 c1_fig09 \
-      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18
+      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 c1_fig19_rns_boot c1_fig19_rns_ntt_boot
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
 
@@ -260,7 +260,33 @@ _c1_fig18:
 	$(CURVE) --title c1_fig18_ntt \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) --per stage \
 	    --size half $(YL)
-
+# Boot in RNS (boot_rns group): fault in encrypt, 0, 1 and 2 muls before the boot.
+# Register maps with the 21 limbs side by side (limb 0 on the left), one panel per pipeline.
+# Then the fraction of slots off by more than 10x per bit, averaged over the limbs. Not
+# is_sdc: a limb that is only dropped can still carry the boot's own error (~1e-4 here)
+# when a key switching touched the faulty component, and is_sdc flags that whenever a
+# slot is close to 0 (x^3 after "mul x2").
+OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
+RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot"
+RNS_BOOT_LABELS = "0 mul + boot" "1 mul + boot" "2 mul + boot"
+_c1_fig19_rns_boot:
+	for s in encrypt_c0 encrypt_c1; do \
+	    $(CMP) --title ev_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	done
+	$(CURVE) --title ev_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
+	    --vary pipeline --per stage --split gap --metric frac_failed \
+	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
+_c1_fig19_rns_ntt_boot:
+	for s in encrypt_c0 encrypt_c1; do \
+	    $(CMP) --title ev_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	done
+	$(CURVE) --title ev_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
+	    --vary pipeline --per stage --split gap --metric frac_failed \
+	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 # ======================================================================================
 # Chapter 6, multi-bit faults (mb_, burst_* groups). A burst of k = amountBits bits from
 # bit b should act as a single flip of its top bit b + k - 1: with --xnorm top_bit every
@@ -437,7 +463,7 @@ _nn_profile:
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
-            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_rns_boot ev_rns_ntt_boot
+            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb 
 EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
@@ -557,33 +583,7 @@ _ev_mb_op_mul:
 	$(CURVE) --title ev_mb_op_mul --where $(OP_mul) \
 	    --vary amountBits --per op_step --xnorm top_bit --split gap $(KLABELS) $(YL)
 
-# Boot in RNS (boot_rns group): fault in encrypt, 0, 1 and 2 muls before the boot.
-# Register maps with the 21 limbs side by side (limb 0 on the left), one panel per pipeline.
-# Then the fraction of slots off by more than 10x per bit, averaged over the limbs. Not
-# is_sdc: a limb that is only dropped can still carry the boot's own error (~1e-4 here)
-# when a key switching touched the faulty component, and is_sdc flags that whenever a
-# slot is close to 0 (x^3 after "mul x2").
-OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
-RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot"
-RNS_BOOT_LABELS = "0 mul + boot" "1 mul + boot" "2 mul + boot"
-_ev_rns_boot:
-	for s in encrypt_c0 encrypt_c1; do \
-	    $(CMP) --title ev_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
-	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
-	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
-	done
-	$(CURVE) --title ev_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
-	    --vary pipeline --per stage --split gap --metric frac_failed \
-	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
-_ev_rns_ntt_boot:
-	for s in encrypt_c0 encrypt_c1; do \
-	    $(CMP) --title ev_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
-	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
-	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
-	done
-	$(CURVE) --title ev_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
-	    --vary pipeline --per stage --split gap --metric frac_failed \
-	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
+
 
 # ======================================================================================
 # Incremental build: `make c1_fig01` runs the recipe _c1_fig01 only when img/.c1_fig01.done
