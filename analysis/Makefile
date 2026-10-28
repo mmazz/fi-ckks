@@ -168,7 +168,7 @@ _c1_fig03:
 # Does a fault break every slot or only a few? Per bit: no slot / some / every slot > 1 %.
 _c1_fig04:
 	$(SHARE) --title c1_fig04_share --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
-	$(SHARE) --title c1_fig04_share_1 --where $(BASE) logMin=0 logMax=1 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+	$(SHARE) --title c1_fig04_share_1 --where $(BASE) logMin=0 logMax=1 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage --no_legend
 
 # logN = 6 vs 16, fault in c0.
 _c1_fig05:
