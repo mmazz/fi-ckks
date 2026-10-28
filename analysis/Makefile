@@ -142,7 +142,8 @@ _teo:
 # Chapter 6, single-bit faults (c1_): the objects that enter or leave the pipeline.
 # ======================================================================================
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig06 c1_fig07 c1_fig08 c1_fig09 \
-      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 c1_fig19_rns_boot c1_fig19_rns_ntt_boot c1_fig20_rns_ntt_boot_limbs
+      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 \
+	  c1_fig19_rns_boot c1_fig19_rns_ntt_boot c1_fig20_rns_ntt_boot_limbs 
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
 
@@ -268,8 +269,8 @@ _c1_fig18:
 # when a key switching touched the faulty component, and is_sdc flags that whenever a
 # slot is close to 0 (x^3 after "mul x2").
 OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
-RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot"
-RNS_BOOT_LABELS = "0 mul + boot" "1 mul + boot" "2 mul + boot"
+RNS_LIMB_PIPES  = "boot" "add x2; rot 3; boot" "mul; boot" "mul x2; boot"
+RNS_LIMB_LABELS = "boot" "2 add + rot + boot" "1 mul + boot" "2 mul + boot"
 _c1_fig19_rns_boot:
 	for s in encrypt_c0 encrypt_c1; do \
 	    $(CMP) --title c1_fig19_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
@@ -290,9 +291,11 @@ _c1_fig19_rns_ntt_boot:
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 
 _c1_fig20_rns_ntt_boot_limbs:
-	$(LIMB) --title c1_fig20_rns_ntt_boot_limb --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
-	--vary pipeline --per stage --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) \
-	--ylabel '$$E_{L_2}$$ (symlog)'
+	$(LIMB) --title c1_fig20_rns_ntt_boot_limb --where $(OFHE_BOOT) withNTT=1 \
+	    --query '$(ENC) and pipeline in ["boot", "add x2; rot 3; boot", "mul; boot", "mul x2; boot"]' \
+	    --vary pipeline --per stage --order $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
+	    --ylabel '$$E_{L_2}$$ (symlog)'
+
 # ======================================================================================
 # Chapter 6, multi-bit faults (mb_, burst_* groups). A burst of k = amountBits bits from
 # bit b should act as a single flip of its top bit b + k - 1: with --xnorm top_bit every
