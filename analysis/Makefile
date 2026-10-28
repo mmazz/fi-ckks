@@ -275,7 +275,7 @@ _c1_fig19_rns_boot:
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
+	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$'\
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 _c1_fig19_rns_ntt_boot:
@@ -284,7 +284,7 @@ _c1_fig19_rns_ntt_boot:
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
+	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 # ======================================================================================
