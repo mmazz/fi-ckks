@@ -55,6 +55,8 @@ def parse_args():
     p.add_argument("--gap", choices=["all", "aligned", "other"], default="all",
                    help="only the coefficients with coeff %% gap == 0 (aligned) or the rest")
     p.add_argument("--ncols", type=int, default=2)
+    p.add_argument("--no_legend", action="store_true",
+                   help="omit the class legend above the panels (e.g. for a lower subfigure)")
     p.add_argument("--title", default="slot_share")
     p.add_argument("--show", action="store_true")
     return p.parse_args()
@@ -167,9 +169,11 @@ def plot(data, args):
         ax.set_xlabel("Bit index", fontsize=FONT - 2)
     for ax in axes[:, 0]:
         ax.set_ylabel("Fraction of injections", fontsize=FONT - 2)
-    handles = [Patch(facecolor=c, label=lab) for c, lab in zip(colors, labels)]
-    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False,
-               fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.07))
+    if not args.no_legend:
+        handles = [Patch(facecolor=c, label=lab) for c, lab in zip(colors, labels)]
+        fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False,
+                   fontsize=FONT - 4, bbox_to_anchor=(0.5, 1.07))
+
     fig.tight_layout()
     return fig
 
