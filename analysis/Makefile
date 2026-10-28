@@ -271,20 +271,20 @@ RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot"
 RNS_BOOT_LABELS = "0 mul + boot" "1 mul + boot" "2 mul + boot"
 _c1_fig19_rns_boot:
 	for s in encrypt_c0 encrypt_c1; do \
-	    $(CMP) --title ev_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
+	    $(CMP) --title c1_fig19_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title ev_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
+	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 _c1_fig19_rns_ntt_boot:
 	for s in encrypt_c0 encrypt_c1; do \
-	    $(CMP) --title ev_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
+	    $(CMP) --title c1_fig19_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title ev_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
+	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 # ======================================================================================
