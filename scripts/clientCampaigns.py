@@ -47,7 +47,8 @@ LOGSLOTS_SWEEP = [3, 4, 5]
 SWEEP_SLOTS = dict(BASE)             # logSlots is swept
 
 INPUT_SWEEP = [0, 9, 19, 29]         # logMin = x, logMax = x + 1
-
+# (logMin, logMax) pairs: degenerate range (0, 0) plus one-bit-wide windows
+INPUT_RANGES = [(0, 0)] + [(x, x + 1) for x in INPUT_SWEEP]
 # Pipeline figures. logSlots=3 -> gap = 4, so the coefficient gaps are clearly visible.
 CLIENT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=1,
               logN=6, logSlots=3, logQ=60, logDelta=30, bitsPerCoeff=64)
@@ -103,6 +104,8 @@ GROUPS = {
     "plain_cmp": grid(dict(BASE, stage="encode", bitsPerCoeff=128), seed=SEEDS, seed_input=INPUTS)
                + grid(dict(BASE_OPENFHE, stage="encode"), seed=SEEDS, seed_input=INPUTS),
 
+    # FIG 4 EV
+    "input_slots": grid(dict(BASE, logMin=0, logMax=1), stage=["encrypt_c0","encrypt_c1"],seed=SEEDS, seed_input=INPUTS),
     # FIG 5 (logDelta). Plot also with x = bit - logDelta: the curves should collapse.
     "sweep_delta": grid(dict(SWEEP_DELTA, stage="encrypt_c0"), stage=ENC,
                         logDelta=LOGDELTA_SWEEP, seed=SEEDS, seed_input=INPUTS),
@@ -118,10 +121,9 @@ GROUPS = {
 
     # FIG 8 (input magnitude). With l2_rel the c0 curve shifts by log2 of the magnitude
     # ratio. Paired sweep (logMax = logMin + 1), not a cartesian product.
-    "sweep_input": [run for x in INPUT_SWEEP
-                    for run in grid(dict(BASE, logDelta=20, logMin=x, logMax=x + 1),
+    "sweep_input": [run for lo, hi in INPUT_RANGES
+                    for run in grid(dict(BASE, logDelta=20, logMin=lo, logMax=hi),
                                     stage=ENC, seed=SEEDS, seed_input=INPUTS)],
-
     # EVIDENCE: with a null pipeline decrypt_c0 == encrypt_c0, decrypt_c1 == encrypt_c1
     # and decode == encode (same config as enc_seeds / plain_cmp).
     "dec_stages": grid(dict(BASE), stage=DEC, seed=SEEDS, seed_input=INPUTS)

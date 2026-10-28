@@ -168,6 +168,7 @@ _c1_fig03:
 # Does a fault break every slot or only a few? Per bit: no slot / some / every slot > 1 %.
 _c1_fig04:
 	$(SHARE) --title c1_fig04_share --where $(BASE) bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+	$(SHARE) --title c1_fig04_share_1 --where $(BASE) logMin=0 logMax=1 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
 
 # logN = 6 vs 16, fault in c0.
 _c1_fig05:
@@ -435,7 +436,7 @@ _nn_profile:
 # ======================================================================================
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
-EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 \
+EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_rns_boot ev_rns_ntt_boot
 EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
@@ -480,6 +481,13 @@ _ev_encode_ska:
 	$(SHIFT) --title ev_encode_ska --where $(subst library=heaan ,,$(BASE)) stage=encode pipeline= \
 	    --query '(library == "heaan" and bitsPerCoeff == 128) or (library == "openfhe" and bitsPerCoeff == 64)' \
 	    --vary library attackModeSKA --labels 'HEAAN (bit $$-$$ logQ)' 'OpenFHE, no decode noise' 'OpenFHE' $(YL)
+
+# to see other values
+_ev_fig04:
+	$(SHARE) --title ev_fig04_share_0 --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=20 logMin=0 logMax=0 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+	$(SHARE) --title ev_fig04_share_1 --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=20 logMin=0 logMax=1 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+	$(SHARE) --title ev_fig04_share_2 --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=20 logMin=9 logMax=10 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
+	$(SHARE) --title ev_fig04_share_3 --where library=heaan logN=6 logSlots=5 logQ=60 logDelta=20 logMin=19 logMax=20 bitsPerCoeff=64 pipeline= --query '$(ENC)' --vary stage
 
 # c1 versions of c1_fig06 and c1_fig07.
 _ev_logDelta_c1:
