@@ -170,6 +170,10 @@ GROUPS = {
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
     "boot_rns_ntt": grid(BOOT_OPENFHE, withNTT=[1], pipeline=["boot", "mul; boot", "mul x2; boot"], stage=ENC,
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
+
+#podria agregar algunos casos mas...
+    "boot_rns_ntt_rot_add": grid(BOOT_OPENFHE, withNTT=[1], pipeline=["add x2; rot 3; boot"], stage=ENC,
+                     seed=SEEDS[:1], seed_input=INPUTS[:2]),
     # ---- RNS / NTT (OpenFHE) ---------------------------------------------------------
     # FIG 12 (RNS: add + rot keeps the gaps). mult_depth=3 -> 4 limbs; use --vary limb.
     "add_rotRNS": grid(dict(CLIENT_OPENFHE, pipeline="add; rot 3", mult_depth=3),

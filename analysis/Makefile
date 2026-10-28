@@ -34,6 +34,7 @@ RES       ?= ../results
 SHOW      ?=
 
 CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
+LIMB   = python3 limb_curve.py   --results $(RES) $(SHOW)
 SHARE  = python3 slot_share.py   --results $(RES) $(SHOW)
 SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
 HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
@@ -141,7 +142,7 @@ _teo:
 # Chapter 6, single-bit faults (c1_): the objects that enter or leave the pipeline.
 # ======================================================================================
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig06 c1_fig07 c1_fig08 c1_fig09 \
-      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 c1_fig19_rns_boot c1_fig19_rns_ntt_boot
+      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 c1_fig19_rns_boot c1_fig19_rns_ntt_boot c1_fig20_rns_ntt_boot_limbs
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
 
@@ -287,6 +288,11 @@ _c1_fig19_rns_ntt_boot:
 	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
+
+_c1_fig20_rns_ntt_boot_limbs:
+	$(LIMB) --title c1_fig20_rns_ntt_boot_limb --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' \
+	--vary pipeline --per stage --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) \
+	--ylabel '$$E_{L_2}$$ (symlog)'
 # ======================================================================================
 # Chapter 6, multi-bit faults (mb_, burst_* groups). A burst of k = amountBits bits from
 # bit b should act as a single flip of its top bit b + k - 1: with --xnorm top_bit every
