@@ -326,7 +326,7 @@ _mb_fig02_boot_cut:
 # Chapter 7, server side (c2_). Each operation: heatmap op_step x bit with one row per
 # pattern, then the E_L2 curves of one step per pattern.
 # ======================================================================================
-CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig05b c2_fig06 c2_fig07
+CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
 ch2: $(CH2)
 $(addprefix _,$(CH2)): RES = $(RES2)
 
@@ -343,25 +343,41 @@ _c2_fig01:
 	$(call HEAT3,c2_fig01_add,--where $(OP_add))
 	$(CURVE) --title c2_fig01_add --where $(OP_add) --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
 
+# Stage labels as they appear in the dataset
+STAGE_T  := pmul
+STAGE_NT := pmul_non_transient
+
 _c2_fig02:
-	$(call HEAT3,c2_fig02_pmul,--where $(OP_pmul))
-	$(CURVE) --title c2_fig02_pmul --where $(OP_pmul) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig02_pmul,--where $(OP_pmul) stage=$(STAGE_T))
+	$(CURVE) --title c2_fig02_pmul --where $(OP_pmul) stage=$(STAGE_T) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig02_pmul_nt,--where $(OP_pmul) stage=$(STAGE_NT))
+	$(CURVE) --title c2_fig02_pmul_nt --where $(OP_pmul) stage=$(STAGE_NT) --query 'op_step in [$(PMUL_SHOW)]' --vary op_step --split gap $(YL)
+
+# Stage labels as they appear in the dataset
+MUL_STAGE_T  := mul
+MUL_STAGE_NT := mul_non_transient
 
 _c2_fig03:
-	$(call HEAT3,c2_fig03_mul,--where $(OP_mul))
-	$(CURVE) --title c2_fig03_mul --where $(OP_mul) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig03_mul,--where $(OP_mul) stage=$(MUL_STAGE_T))
+	$(CURVE) --title c2_fig03_mul --where $(OP_mul) stage=$(MUL_STAGE_T) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig03_mul_nt,--where $(OP_mul) stage=$(MUL_STAGE_NT))
+	$(CURVE) --title c2_fig03_mul_nt --where $(OP_mul) stage=$(MUL_STAGE_NT) --query 'op_step in [$(MUL_SHOW)]' --vary op_step --split gap $(YL)
 
 _c2_fig04:
 	$(call HEAT3,c2_fig04_rescale,--where $(OP_rescale) --per op_depth)
 	$(CURVE) --title c2_fig04_rescale --where $(OP_rescale) --vary op_step --per op_depth --split gap $(YL)
 
+# Stage labels as they appear in the dataset
+ROT_STAGE_T  := rot
+ROT_STAGE_NT := rot_non_transient
+
 _c2_fig05:
-	$(call HEAT3,c2_fig05_rot,--where $(OP_rot))
-	$(CURVE) --title c2_fig05_rot --where $(OP_rot) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
-# Persistent fault in the mul, in the steps where it differs from the read fault. Same
-# config as c2_fig03: its rows compare with the same steps there.
-_c2_fig05b:
-	$(call HEAT3,c2_fig05b_mul_persistent,--where $(OP_mul_nt))
+	$(call HEAT3,c2_fig05_rot,--where $(OP_rot) stage=$(ROT_STAGE_T))
+	$(CURVE) --title c2_fig05_rot --where $(OP_rot) stage=$(ROT_STAGE_T) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
+	$(call HEAT3,c2_fig05_rot_nt,--where $(OP_rot) stage=$(ROT_STAGE_NT))
+	$(CURVE) --title c2_fig05_rot_nt --where $(OP_rot) stage=$(ROT_STAGE_NT) --query 'op_step in [$(ROT_SHOW)]' --vary op_step --split gap $(YL)
+
+
 # Mixed pipeline with and without the final boot, one figure per op_step of the mul
 # number MIX_DEPTH. The thesis puts two steps side by side: half-width panels. Without the
 # boot the error reaches 1e216: above 1e6 it is drawn as triangles, as in c1_fig14.
