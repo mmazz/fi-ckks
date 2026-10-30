@@ -269,6 +269,9 @@ _c1_fig18:
 # when a key switching touched the faulty component, and is_sdc flags that whenever a
 # slot is close to 0 (x^3 after "mul x2").
 OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
+
+RNS_BOOT_PIPES = "boot"  "mul; boot" "mul x2; boot"
+RNS_BOOT_LABELS = "boot"  "1 mul + boot" "2 mul + boot"
 RNS_LIMB_PIPES  = "boot" "add x2; rot 3; boot" "mul; boot" "mul x2; boot"
 RNS_LIMB_LABELS = "boot" "2 add + rot + boot" "1 mul + boot" "2 mul + boot"
 _c1_fig19_rns_boot:
@@ -280,6 +283,7 @@ _c1_fig19_rns_boot:
 	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$'\
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
+
 _c1_fig19_rns_ntt_boot:
 	for s in encrypt_c0 encrypt_c1; do \
 	    $(CMP) --title c1_fig19_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
@@ -423,9 +427,8 @@ NN_CLIENT_OPENFHE_BACK   =  decrypt_c0 decrypt_c1
 NN_INTERNAL_OPENFHE = hidden_layer cheby_tanh3
 
 # Every name in these lists needs its _name recipe below (see "Incremental build").
-NNF     = nn_client_heaan nn_internal_heaan nn_tolerance nn_client_openfhe_test
-# OpenFHE: not in any release yet. Move them to NNF once they are.
-NN_OFHE = nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe
+NNF     = nn_client_heaan nn_internal_heaan nn_tolerance nn_client_openfhe_test nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe
+
 # Not in the thesis: vulnerable bits of every site in execution order.
 NN_X    = nn_profile $(NN_OFHE)
 .PHONY: nn_openfhe
@@ -443,7 +446,7 @@ _nn_client_heaan:
 
 _nn_client_openfhe:
 	for s in $(NN_CLIENT_OPENFHE); do \
-	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) mult_depth=8 --stages $$s --split gap \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE)  --stages $$s --split gap \
 	        --legend none || exit 1; \
 	done
 

@@ -38,42 +38,44 @@ def configs():
     out = []
     base = "library=='heaan' and isExhaustive==1 and logN==6"
     for D in (25, 35, 40, 45, 55):
-        q = f"{base} and pipeline=='' and stage=='{{st}}' and logSlots==5 and logQ==60 and logDelta=={D} and bitsPerCoeff==64 and logMin==0"
+        q = f"{base} and pipeline=='' and stage=='{{st}}' and logSlots==5 and logQ==60 and logDelta=={D} and bitsPerCoeff==64 and logMin==0 and logMax==0"
         for st, c1 in (("encrypt_c0", 0), ("encrypt_c1", 1)):
             out.append(("client, no operations", "client", q.format(st=st), D, rms_pow(1), c1, 0, 60))
     for Q, D in ((40, 30), (80, 60), (100, 75)):
-        q = f"{base} and pipeline=='' and stage=='encrypt_c0' and logQ=={Q} and logDelta=={D}"
+        q = f"{base} and pipeline=='' and stage=='encrypt_c0' and logQ=={Q} and logDelta=={D} and logMax==0"
         out.append(("client, no operations", "client", q, D, rms_pow(1), 0, 0, Q))
     for a in (0, 9, 19, 29):
         q = f"{base} and pipeline=='' and stage=='encrypt_c0' and logDelta==20 and logMin=={a}"
+        if a==0:
+            q = q+ " and logMax==1"
         out.append(("client, no operations", "client", q, 20, rms_interval(a), 0, 0, 60))
     for ls in (3, 4):
-        q = f"{base} and pipeline=='' and stage=='encrypt_c0' and logSlots=={ls} and logQ==60 and logDelta==40 and bitsPerCoeff==64"
+        q = f"{base} and pipeline=='' and stage=='encrypt_c0' and logSlots=={ls} and logQ==60 and logDelta==40 and bitsPerCoeff==64 and logMax==0"
         out.append(("client, no operations", "client", q, 40, rms_pow(1), 0, 0, 60))
     for ls in (3, 4, 5):
-        q = f"library=='heaan' and pipeline=='add; rot 3' and stage=='encrypt_c0' and logSlots=={ls}"
+        q = f"library=='heaan' and pipeline=='add; rot 3' and stage=='encrypt_c0' and logSlots=={ls} and logMax==0"
         out.append(("client, with operations", "client", q, 30, 2 * rms_pow(1), 0, 0, 60))
-    q = "library=='heaan' and pipeline=='add; rot 3' and stage=='encrypt_c1' and logSlots==5"
+    q = "library=='heaan' and pipeline=='add; rot 3' and stage=='encrypt_c1' and logSlots==5 and logMax==0"
     out.append(("client, with operations", "client", q, 30, 2 * rms_pow(1), 1, 0, 60))
     # The server releases also have the add of OpenFHE (same stage, pipeline and op_depth):
     # every server query pins the library.
     for s in (2, 3, 5):
-        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='add' and op_depth==1 and op_step=={s}",
+        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='add' and op_depth==1 and op_step=={s} and logMax==0",
                     30, 3 * rms_pow(1), 0, 0, 60))
     for s in (0, 8, 9, 10):
-        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='rot' and op_step=={s}", 30, rms_pow(1), 0, 0, 60))
+        out.append(("server, add and rot", "server", f"library=='heaan' and stage=='rot' and op_step=={s} and logMax==0", 30, rms_pow(1), 0, 0, 60))
     # registers followed by a rescale: below log Delta the change rounds to 0 or 1 (Lemma lem:rescale)
     for s in (22, 23, 25):
-        out.append(("server, mul and rescale", "server", f"library=='heaan' and stage=='mul' and pipeline=='mul' and op_step=={s}",
+        out.append(("server, mul and rescale", "server", f"library=='heaan' and stage=='mul' and pipeline=='mul' and op_step=={s} and logMax==0",
                     60, rms_pow(2), 0, 31, 60))
-    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==1",
+    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==1 and logMax==0",
                 60, rms_pow(3), 0, 31, 70))
-    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==3",
+    out.append(("server, mul and rescale", "server", "library=='heaan' and stage=='rescale' and op_depth==1 and op_step==3 and logMax==0",
                 30, rms_pow(3), 0, 0, 40))
     # The pmul of the thesis: second pmul of "pmul x2" with logQ=120 (level 90). The release
     # also has pmul x2 with logQ=100 and with bitsPerCoeff=140: pin both.
     out.append(("server, mul and rescale", "server",
-                "library=='heaan' and stage=='pmul' and pipeline=='pmul x2' and logQ==120 and bitsPerCoeff==124 and op_step==5",
+                "library=='heaan' and stage=='pmul' and pipeline=='pmul x2' and logQ==120 and bitsPerCoeff==124 and op_step==5 and logMax==0",
                 60, rms_pow(3), 0, 31, 90))
     return out
 
