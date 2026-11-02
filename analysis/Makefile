@@ -475,12 +475,12 @@ _nn_internal_heaan:
 
 _nn_internal_openfhe:
 	for s in $(NN_INTERNAL_OPENFHE); do \
-	    $(NN) --title nn_internal_openfhe_$$s --where $(NN_OPENFHE) --mode map --stages $$s || exit 1; \
+	    $(NN) --title nn_internal_openfhe_$$s --where $(NN_OPENFHE) --mode map --stages $$s --split gap  --separate || exit 1; \
 	done
 
 _nn_internal_openfheNTT:
 	for s in $(NN_INTERNAL_OPENFHE); do \
-	    $(NN) --title nn_internal_openfheNTT_$$s --where $(NN_OPENFHE_NTT) --mode map --stages $$s || exit 1; \
+	    $(NN) --title nn_internal_openfheNTT_$$s --where $(NN_OPENFHE_NTT) --mode map --stages $$s --split gap  --separate || exit 1; \
 	done
 
 _nn_tolerance:
