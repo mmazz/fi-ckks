@@ -142,7 +142,7 @@ _teo:
 # Chapter 6, single-bit faults (c1_): the objects that enter or leave the pipeline.
 # ======================================================================================
 CH1 = c1_fig01 c1_fig02 c1_fig03 c1_fig04 c1_fig05 c1_fig06 c1_fig07 c1_fig08 c1_fig09 \
-      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 \
+      c1_fig10 c1_fig11 c1_fig12 c1_fig13 c1_fig14 c1_fig15 c1_fig16 c1_fig17 c1_fig18 ev_c1_fig17\
 	  c1_fig19_rns_boot c1_fig19_rns_ntt_boot c1_fig20_rns_ntt_boot_limbs 
 ch1: $(CH1)
 $(addprefix _,$(CH1)): RES = $(RES1)
@@ -257,11 +257,18 @@ _c1_fig17:
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage \
 	    --detect_onset --drop_coeffs 0 $(YL)
 
+_ev_c1_fig17:
+	$(CURVE) --title ev_c1_fig17_add_pmul_rotRNS_ls \
+		--where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0 logSlots=3 \
+		--vary limb --split gap --per stage --detect_onset --drop_coeffs 0 $(YL) || exit 1; \
+
 # NTT, one limb, "add; rot 3". c0 and c1 go side by side: half-width panels.
 _c1_fig18:
 	$(CURVE) --title c1_fig18_ntt \
 	    --where $(OFHE) "pipeline=add; rot 3" mult_depth=0 withNTT=1 logSlots=$(SL) --per stage \
 	    --size half $(YL)
+
+
 # Boot in RNS (boot_rns group): fault in encrypt, 0, 1 and 2 muls before the boot.
 # Register maps with the 21 limbs side by side (limb 0 on the left), one panel per pipeline.
 # Then the fraction of slots off by more than 10x per bit, averaged over the limbs. Not

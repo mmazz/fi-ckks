@@ -59,7 +59,8 @@ def parse_args():
     p.add_argument("--results", default="../results")
     p.add_argument("--where", nargs="+", default=[], metavar="COL=VAL")
     p.add_argument("--vary", nargs="*", default=[], help="columns: one curve per combination of values")
-    p.add_argument("--per", default=None, help="one figure per value of this column (e.g. op_step)")
+    p.add_argument("--per", default=None,
+                      help="one figure per value of this column (e.g. op_step; limb: one per limb of the data)")
     p.add_argument("--split", choices=["none", "gap"], default="none",
                    help="gap: save <title>_aligned and <title>_other as two separate files")
     p.add_argument("--metric", default="l2_rel", help="column of data to be plotted")
@@ -515,15 +516,21 @@ def select_campaigns(args):
 def main():
     args = parse_args()
     camps = select_campaigns(args)
-    per_values = sorted(camps[args.per].unique()) if args.per else [None]
+    if args.per == "limb":
+       # limb is a column of the data, not of the campaigns: one figure per limb found.
+       per_values = sorted(int(l) for l in load_data(camps, args.results)["limb"].unique())
+    else:
+        per_values = sorted(camps[args.per].unique()) if args.per else [None]
     for pv in per_values:
-        sub = camps if pv is None else camps[camps[args.per] == pv]
+        sub = camps if pv is None or args.per == "limb" else camps[camps[args.per] == pv]
         try:
             data = load_curve_data(sub, args.results, args.vary, args.drop_coeffs,
                 args.metric, stat=args.stat, rep_spread=args.rep_spread, raw_spread=args.raw_spread, detect_onset=args.detect_onset,
                     seed_stat=args.seed_stat)
         except ValueError as e:
             sys.exit(f"ERROR: {e}\n  -> add a filter with --where, or use --vary/--per for that columns")
+        if args.per == "limb":
+           data = data[data["limb"] == pv]      # --rep_spread still pools every limb
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"
         make_figure(data, args.vary, args, name)
 
