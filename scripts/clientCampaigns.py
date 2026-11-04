@@ -179,6 +179,9 @@ GROUPS = {
 
     "add_pmul_rotRNS": grid(dict(CLIENT_OPENFHE, pipeline="add x2; pmul x3; rot 3", mult_depth=3),
                        stage=ENC, logSlots=LOGSLOTS_SWEEP, seed=SEEDS, seed_input=INPUTS),
+
+    "add_pmul_rotRNS_bis": grid(dict(CLIENT_OPENFHE, pipeline="add x2; pmul; rot 3", mult_depth=3),
+                       stage=ENC, logSlots=LOGSLOTS_SWEEP, seed=SEEDS, seed_input=INPUTS),
     # EVIDENCE: with a mul in RNS every bit breaks the output. Not plotted; quote the
     # SDC rate in the text.
     "mulRNS": grid(dict(CLIENT_OPENFHE, pipeline="mul", mult_depth=3),

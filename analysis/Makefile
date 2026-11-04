@@ -275,19 +275,19 @@ _c1_fig18:
 # is_sdc: a limb that is only dropped can still carry the boot's own error (~1e-4 here)
 # when a key switching touched the faulty component, and is_sdc flags that whenever a
 # slot is close to 0 (x^3 after "mul x2").
-OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 withNTT=0
-
+OFHE_BOOT       = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=52 bitsPerCoeff=64 mult_depth=2 
+RNS_BOOT_Q = $(ENC) and pipeline in ["boot", "mul; boot", "mul x2; boot"]
 RNS_BOOT_PIPES = "boot"  "mul; boot" "mul x2; boot"
 RNS_BOOT_LABELS = "boot"  "1 mul + boot" "2 mul + boot"
 RNS_LIMB_PIPES  = "boot" "add x2; rot 3; boot" "mul; boot" "mul x2; boot"
 RNS_LIMB_LABELS = "boot" "2 add + rot + boot" "1 mul + boot" "2 mul + boot"
 _c1_fig19_rns_boot:
 	for s in encrypt_c0 encrypt_c1; do \
-	    $(CMP) --title c1_fig19_rns_boot_map_$$s --where $(OFHE_BOOT) stage=$$s \
+	    $(CMP) --title c1_fig19_rns_boot_map_$$s --where $(OFHE_BOOT) withNTT=0 stage=$$s \
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$'\
+	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) withNTT=0 --query '$(RNS_BOOT_Q)'  	    --ylabel 'Fraction of slots $$>10\times$$'\
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 
@@ -297,7 +297,7 @@ _c1_fig19_rns_ntt_boot:
 	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query '$(ENC)' 	    --ylabel 'Fraction of slots $$>10\times$$' \
+	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query  '$(RNS_BOOT_Q)'	    --ylabel 'Fraction of slots $$>10\times$$' \
 	    --vary pipeline --per stage --split gap --metric frac_failed \
 	    --order $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS)
 
