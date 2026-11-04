@@ -253,7 +253,7 @@ _c1_fig16:
 # RNS, "add x2; pmul x3; rot 3", one curve per logSlots.
 _c1_fig17:
 	$(CURVE) --title c1_fig17_add_pmul_rotRNS \
-	    --where $(OFHE) "pipeline=add x2; pmul x3; rot 3" mult_depth=3 withNTT=0 \
+	    --where $(OFHE) "pipeline=add x2; pmul x2; rot 3" mult_depth=5 withNTT=0 \
 	    --query 'logSlots in [3, 4, 5]' --vary logSlots --split gap --per stage \
 	    --detect_onset --drop_coeffs 0 $(YL)
 
