@@ -160,7 +160,7 @@ GROUPS = {
 
     # ---- Inside the bootstrapping -----------------------------------------------------
     # FIG 7a (boot, the 8 checkpoints between its sub-steps).
-    "boot_outside": steps(dict(BOOT, stage="boot", pipeline="mul x4; boot"), BOOT_STEPS,
+    "boot_outside": steps(dict(BOOT, stage="boot", pipeline="mul x4; boot", logSlots=2), BOOT_STEPS,
                           seeds=SEEDS_BOOT, inputs=SEEDS_BOOT),
 
     # FIG 7b (inside evalExp). Needs slots < N/2: with logSlots = logN-1 the fork does not

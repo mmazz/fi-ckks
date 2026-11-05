@@ -98,7 +98,7 @@ OP_mul_depth = $(DEPTH) stage=mul "pipeline=mul x3"
 OP_mix       = $(MIXP) stage=mul "pipeline=$(MIX)"
 OP_mix_boot  = $(MIXP) stage=mul "pipeline=$(MIX); boot"
 OP_boot      = $(BOOTP) stage=boot "pipeline=mul x4; boot"
-OP_boot_eval = $(subst logSlots=3,logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
+OP_boot_eval = $(subst logSlots=2,$(BOOTP)) stage=boot_eval "pipeline=mul x4; boot"
 
 # Every figure averages ALL the repetitions of its config: the collapsed data has no seed
 # columns to filter on. enc_seeds (25x25) shares its config with the other BASE figures.
