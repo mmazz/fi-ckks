@@ -97,9 +97,9 @@ STEP_LABEL = {
                      "copy to rotate", "copy to rotate", "rotated", "rotated",
                      "accumulator", "accumulator", "acc. + rotated", "acc. + rotated",
                      r"$+ b_1$", r"$+ b_1$"],
-    "cheby_tanh3": [r"$z$", r"$z$", r"$z$ at the level of $z^2$", r"$z$ at the level of $z^2$",
-                    r"$z^3$", r"$z^3$", r"$z$ before $\times 0.98$", r"$z$ before $\times 0.98$",
-                    r"$0.98 z$", r"$0.98 z$"],
+    "cheby_tanh3": [r"$c$", r"$c$", r"$c$ at the level of $c^2$", r"$c$ at the level of $c^2$",
+                    r"$c^3$", r"$c^3$", r"$c$ before $\times 0.98$", r"$c$ before $\times 0.98$",
+                    r"$0.98 c$", r"$0.98 c$"],
 }
 STAGE_SHORT = {"hidden_layer": "hidden", "cheby_tanh3": "act."}
 # Each sampled bit is drawn as a cell of at most 2*CELL_HALF + 1 bits; the bits nobody
