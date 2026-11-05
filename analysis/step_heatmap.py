@@ -389,11 +389,11 @@ def plot(curves, groups, cfg, name, args):
     ax.set_yticks(range(len(curves)))
     if args.rows or args.collapse:
         ax.set_yticklabels(list(curves.index), fontsize=TICK_FONT)
-        ax.set_ylabel("op_step", fontsize=FONT)
+        ax.set_ylabel("paso", fontsize=FONT)
     else:
         letter = {s: chr(ord("A") + i) for i, g in enumerate(groups) for s in g}
         ax.set_yticklabels([f"{s} ({letter[s]})" for s in curves.index], fontsize=TICK_FONT - 2)
-        ax.set_ylabel("op_step (pattern)", fontsize=FONT)
+        ax.set_ylabel("paso", fontsize=FONT)
 
     # x ticks: every step-th single-bit column, and every bin at its center. A single-bit
     # tick closer than `step` columns to a bin tick is dropped so the labels do not overlap.
