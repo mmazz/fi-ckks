@@ -178,7 +178,9 @@ _c1_fig05:
 	$(CURVE) --title c1_fig05_logN \
 	    --where library=heaan stage=encrypt_c1 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 logMin=0 logMax=0 \
 	    --query 'logSlots == logN - 1' --vary logN --labels 'logN=6' 'logN=16' $(YL)
-
+	$(CURVE) --title ev_c1_fig05_logN_c0 \
+	    --where library=heaan stage=encrypt_c0 pipeline= logQ=60 logDelta=40 bitsPerCoeff=64 logMin=0 logMax=0 \
+	    --query 'logSlots == logN - 1' --vary logN --labels 'logN=6' 'logN=16' $(YL) 
 # logDelta in {25, 35, 45, 55}, x = bit - logDelta: the curves collapse into one.
 _c1_fig06:
 	$(CURVE) --title c1_fig06_logDelta_shift \
