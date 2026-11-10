@@ -502,7 +502,7 @@ _nn_profile:
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_isca_c1_fig15_map ev_isca_c1_fig20_rns_ntt_boot_map
-EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
+EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe  ev_isca_c2_fig07_map
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
 ev: $(EV)
@@ -628,7 +628,7 @@ REGCMP = python register_map_compare.py --results $(RES1)
 
 _ev_isca_c1_fig15_map:
 	for s in encrypt_c0 encrypt_c1; do \
-	  $(REGCMP) --title c1_fig15_boot_map_$$s \
+	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
 	      --where $(BOOTP) stage=$$s \
 	      --vary pipeline \
 	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
@@ -638,11 +638,24 @@ _ev_isca_c1_fig15_map:
 
 _ev_isca_c1_fig20_rns_ntt_boot_map:
 	for s in encrypt_c0 encrypt_c1; do \
-	  $(REGCMP) --title c1_fig20_rns_ntt_boot_map_$$s \
+	  $(REGCMP) --title ev_isca_c1_fig20_rns_ntt_boot_map_$$s \
 	      --where $(OFHE_BOOT) withNTT=1 stage=$$s  --fill_bits --per_limb --limb_stat mean\
 	      --vary pipeline --values $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
 	      --fill_bits --taco --metric l2_rel; \
 	done
+
+REGCMP = python3 register_map_compare.py --results $(RES) $(SHOW)
+
+# Groups printed by step_heatmap.py --collapse (_c2_fig07). One panel per group,
+# drawing its first step.
+BOOT_REPR        = 0 1 6 7
+BOOT_LABELS      = "0, 2, 4" "1, 3, 5" "6" "7"
+BOOT_EVAL_REPR   = ...
+BOOT_EVAL_LABELS = ...
+
+_ev_isca_c2_fig07_map:
+	$(REGCMP) --title ev_isca_c2_fig07_boot_map      --where $(OP_boot)      --vary op_step --collapse 3 --fill_bits
+	$(REGCMP) --title ev_isca_c2_fig07_boot_eval_map --where $(OP_boot_eval) --vary op_step --collapse 3 --fill_bits
 # ======================================================================================
 # Incremental build: `make c1_fig01` runs the recipe _c1_fig01 only when img/.c1_fig01.done
 # is older than FIG_DEPS (the plotting scripts, this Makefile and the data). Delete img/

@@ -27,7 +27,7 @@ import pandas as pd
 from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator
 from matplotlib.lines import Line2D
-
+import step_heatmap as sh                                              # noqa: E402
 sys.path.append(str(Path(__file__).resolve().parent))
 import register_map as rm                                              # noqa: E402
 from utils.results import (load_campaigns, load_data, select, require_single_config,  # noqa: E402
@@ -72,6 +72,10 @@ def parse_args():
                    help="with --per_limb: how to combine the coefficients of a limb (default: max)")
     p.add_argument("--taco", action="store_true",
                    help=f"masked threshold of {rm.TACO_MASKED_PCT:g}%% instead of {rm.MASKED_PCT:g}%%")
+    p.add_argument("--collapse", type=float, default=None, metavar="TOL",
+                   help="with --vary op_step: one panel per pattern of steps, found as in "
+                        "step_heatmap.py --collapse --tol TOL; each panel draws the first step "
+                        "of its group and is labelled with the steps of the group")
     p.add_argument("--metric", default="linf_rel",
                    help="relative error column used for the colors (default: linf_rel = MREP), "
                         "e.g. l2_rel; the same categories and thresholds are applied")
@@ -79,6 +83,12 @@ def parse_args():
     args = p.parse_args()
     if (args.diagram is None) == (args.vary is None):
         p.error("give exactly one of --diagram or --vary")
+    if args.collapse is not None and args.vary != "op_step":
+        p.error("--collapse needs --vary op_step")
+    if args.collapse is not None and args.values:
+        p.error("give --values or --collapse, not both")
+    if args.labels and len(args.labels) != len(args.values or []):
+        p.error("--labels needs one entry per --values")
     if args.vary and not args.values:
         p.error("--vary needs --values")
     if args.labels and len(args.labels) != len(args.values or []):
@@ -89,7 +99,23 @@ def parse_args():
 # ------------------------------------------------------------------ #
 # Data
 # ------------------------------------------------------------------ #
+def step_groups(camps, args):
+    """Groups of op_steps with the same pattern, as step_heatmap.py --collapse finds them
+    (MREP categories, aligned and non-aligned coefficients together, tolerance --collapse)."""
+    hargs = argparse.Namespace(color="mrep", stat=args.stat, coeff_stat="median",
+                               tol=args.collapse, floor=None, gap="all", results=args.results)
+    curves = sh.step_curves(camps, args.results, hargs)
+    return sh.collapse_patterns(camps, curves, hargs)
 
+
+def panel_values(camps, args):
+    """Values and labels of the --vary panels: --values as given, every value found in the
+    data if --values is missing, or one per pattern with --collapse."""
+    if args.collapse is not None:
+        groups = step_groups(camps, args)
+        return [g[0] for g in groups], [sh.fmt_steps(g) for g in groups]
+    values = args.values or sorted(camps[args.vary].unique())
+    return values, args.labels or [str(v) for v in values]
 def per_limb_cells(cells, stat):
     """One row per (limb, bit), the coefficients of each limb combined with `stat`.
     The limb index is moved to `coeff`, so panel_image draws one column per limb."""
@@ -122,9 +148,10 @@ def load_panels(args, sites):
         wanted = [(number, (camps["stage"] == stage) & (camps["op_step"] == op_step),
                    f"stage={stage} op_step={op_step}") for number, stage, op_step in sites]
     else:
-        labels = args.labels or args.values
-        wanted = [(label, camps[args.vary] == parse_value(v), f"{args.vary}={v}")
-                  for label, v in zip(labels, args.values)]
+        values, labels = panel_values(camps, args)
+        wanted = [(label, camps[args.vary] == (parse_value(v) if isinstance(v, str) else v),
+                   f"{args.vary}={v}") for label, v in zip(labels, values)]
+
     per_site = []
     for label, mask, desc in wanted:
         group = camps[mask]
