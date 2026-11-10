@@ -66,8 +66,15 @@ def parse_args():
     p.add_argument("--fill_bits", action="store_true",
                    help="random campaigns inject a subset of the bits: give each row that was not "
                         "injected the color of the next injected bit above it, instead of white")
+    p.add_argument("--per_limb", action="store_true",
+                   help="one column per limb: combine the coefficients of each limb with --limb_stat")
+    p.add_argument("--limb_stat", choices=["max", "median", "mean"], default="max",
+                   help="with --per_limb: how to combine the coefficients of a limb (default: max)")
     p.add_argument("--taco", action="store_true",
                    help=f"masked threshold of {rm.TACO_MASKED_PCT:g}%% instead of {rm.MASKED_PCT:g}%%")
+    p.add_argument("--metric", default="linf_rel",
+                   help="relative error column used for the colors (default: linf_rel = MREP), "
+                        "e.g. l2_rel; the same categories and thresholds are applied")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if (args.diagram is None) == (args.vary is None):
@@ -82,6 +89,26 @@ def parse_args():
 # ------------------------------------------------------------------ #
 # Data
 # ------------------------------------------------------------------ #
+
+def per_limb_cells(cells, stat):
+    """One row per (limb, bit), the coefficients of each limb combined with `stat`.
+    The limb index is moved to `coeff`, so panel_image draws one column per limb."""
+    out = cells.groupby(["limb", "bit"], as_index=False)["mrep"].agg(stat)
+    return out.assign(coeff=out["limb"], limb=0)
+
+def metric_per_cell(data, metric, stat):
+    """Same as register_map.mrep_per_cell, for any relative error column (in %).
+
+    On a collapsed dir the seeds are already combined and `{metric}_{stat}` holds that
+    stat, so it is picked by name. The result keeps the name `mrep`, so the colors and
+    the categories work unchanged."""
+    col = f"{metric}_{stat}" if f"{metric}_{stat}" in data.columns else metric
+    if col not in data.columns:
+        options = sorted(c for c in data.columns if "rel" in c)
+        raise ValueError(f"no column {col!r} in the data; relative columns: {options}")
+    data = data.assign(mrep=data[col].astype(float) * 100.0)
+    return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
+
 def load_panels(args, sites):
     """[(number, cfg, cells, n_campaigns)], one per site, in the order of `sites`."""
     filters = {k: parse_value(v) for k, v in (w.split("=", 1) for w in args.where)}
@@ -119,11 +146,14 @@ def load_panels(args, sites):
     panels = []
     for number, group in per_site:
         cfg = require_single_config(group).iloc[0]          # only seeds may vary
-        cells = rm.mrep_per_cell(load_data(group, args.results), args.stat)
+        cells = metric_per_cell(load_data(group, args.results), args.metric, args.stat)
         if args.ylim:
             cells = cells[cells["bit"].between(*args.ylim)]
+        if args.per_limb:
+            cells = per_limb_cells(cells, args.limb_stat)
         panels.append((number, cfg, cells, len(group)))
     return panels
+
 
 
 # ------------------------------------------------------------------ #
@@ -141,9 +171,12 @@ def fill_unsampled_rows(img, sampled):
     src = np.searchsorted(sampled, np.arange(img.shape[0]), side="left")
     return img[sampled[np.minimum(src, sampled.size - 1)]]
 
-def panel_image(cells, cfg, vmax, masked, fill=False):
-    """(bits, x, RGBA) image: one pixel per (coeff, bit), limbs side by side."""
-    N = 1 << int(cfg["logN"])
+
+def panel_image(cells, cfg, vmax, masked, fill=False, width=None):
+    """(bits, x, RGBA) image: one pixel per (coeff, bit), limbs side by side.
+    `width` overrides N (with --per_limb, one column per limb)."""
+    N = width or (1 << int(cfg["logN"]))
+
     n_limbs = int(cells["limb"].max()) + 1
     n_bits = int(cfg["bitsPerCoeff"])
     img = np.tile(np.array(EMPTY), (n_bits, N * n_limbs, 1))
@@ -155,7 +188,8 @@ def panel_image(cells, cfg, vmax, masked, fill=False):
     return img, N, n_limbs
 
 def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
-    img, N, n_limbs = panel_image(cells, cfg, vmax, args.masked, fill=args.fill_bits)
+    width = int(cells["coeff"].max()) + 1 if args.per_limb else None
+    img, N, n_limbs = panel_image(cells, cfg, vmax, args.masked, fill=args.fill_bits, width=width)
     n_bits, n_x = img.shape[:2]
     # One pixel per cell: no marker-size tuning, no gaps, exact at any figure size.
     ax.imshow(img, origin="lower", aspect="auto", interpolation="nearest",
@@ -206,7 +240,7 @@ def plot_comparison(panels, vmax, show_legend, args):
 
     fig.text(0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
              ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
-    fig.text((left + right) / 2, 0.03, "Coefficients",
+    fig.text((left + right) / 2, 0.03, "Limbs" if args.per_limb else "Coefficients",
              ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
     if show_legend:
         # One compact row. register_map.add_legend() is sized for one big panel and

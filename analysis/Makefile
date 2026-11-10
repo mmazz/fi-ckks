@@ -501,7 +501,7 @@ _nn_profile:
 # Evidence (ev_): claims of the text backed by data but not plotted in the thesis.
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
-            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb 
+            ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_isca_c1_fig15_map ev_isca_c1_fig20_rns_ntt_boot_map
 EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe 
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
@@ -623,6 +623,26 @@ _ev_mb_op_mul:
 
 
 
+################## ISCA #########################
+REGCMP = python register_map_compare.py --results $(RES1)
+
+_ev_isca_c1_fig15_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	  $(REGCMP) --title c1_fig15_boot_map_$$s \
+	      --where $(BOOTP) stage=$$s \
+	      --vary pipeline \
+	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
+	      --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
+	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric l2_rel; \
+	done
+
+_ev_isca_c1_fig20_rns_ntt_boot_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	  $(REGCMP) --title c1_fig20_rns_ntt_boot_map_$$s \
+	      --where $(OFHE_BOOT) withNTT=1 stage=$$s  --fill_bits --per_limb --limb_stat mean\
+	      --vary pipeline --values $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
+	      --fill_bits --taco --metric l2_rel; \
+	done
 # ======================================================================================
 # Incremental build: `make c1_fig01` runs the recipe _c1_fig01 only when img/.c1_fig01.done
 # is older than FIG_DEPS (the plotting scripts, this Makefile and the data). Delete img/
