@@ -89,8 +89,6 @@ def parse_args():
         p.error("give --values or --collapse, not both")
     if args.labels and len(args.labels) != len(args.values or []):
         p.error("--labels needs one entry per --values")
-    if args.vary and not args.values:
-        p.error("--vary needs --values")
     if args.labels and len(args.labels) != len(args.values or []):
         p.error("--labels needs one entry per --values")
     args.masked = rm.TACO_MASKED_PCT if args.taco else rm.MASKED_PCT
