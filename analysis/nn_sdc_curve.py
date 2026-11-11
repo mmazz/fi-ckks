@@ -148,8 +148,8 @@ def parse_args():
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
-    if args.split == "gap" and args.mode not in ("rate", "map"):
-        p.error("--split gap only applies to --mode rate and --mode map")
+    if args.split == "gap" and args.mode not in ("rate", "map", "limbmap"):
+        p.error("--split gap only applies to --mode rate, map and limbmap")
     if args.collapse and args.mode != "map":
         p.error("--collapse only applies to --mode map")
     if args.separate and (args.mode != "map" or args.split != "gap"):
@@ -608,51 +608,63 @@ def per_limb(data):
     out["rate"] = out["k"] / out["n"]
     return out.reset_index()
 
-
-def plot_limb_map(steps):
+def plot_limb_map(steps, split):
     """Map op_step x limb of P(mis): one row per (stage, op_step), one column per limb.
-    Gray: limbs that the register of that step does not have. Each cell prints its value,
-    so the protected limb and the rate of the other ones can be read off the figure."""
-    tables = [per_limb(data) for _, _, data in steps]
-    n_limbs = max(int(t["limb"].max()) for t in tables) + 1
+    One panel over every coefficient (--split none) or one per group, aligned | other
+    (--split gap). Gray: limbs that the register of that step does not have. Each cell
+    prints its value, so the protected limb and the rate of the other ones can be read off."""
+    groups = ("all",) if split == "none" else ("aligned", "other")
     n = len(steps)
-    grid = np.full((n, n_limbs), np.nan)
-    for i, t in enumerate(tables):
-        grid[i, t["limb"].to_numpy(int)] = t["rate"].to_numpy()
+    # tables[group][i]: per_limb of row i restricted to that group of coefficients
+    tables = {g: [per_limb(coeff_groups(data, cfg, split)[g]) for _, cfg, data in steps]
+              for g in groups}
+    n_limbs = max(int(t["limb"].max()) for g in groups for t in tables[g] if not t.empty) + 1
 
-    fig, ax = plt.subplots(figsize=(1.2 + 0.9 * n_limbs, 1.6 + 0.34 * n))
-    mesh = ax.pcolormesh(np.arange(n_limbs + 1), np.arange(n + 1), np.ma.masked_invalid(grid),
-                         cmap=MAP_CMAP, vmin=0, vmax=1, shading="flat")
-    for i in range(n):
-        for j in range(n_limbs):
-            if np.isfinite(grid[i, j]):
-                # white text on dark cells, black text on light ones
-                color = "white" if grid[i, j] > 0.5 else "black"
-                ax.text(j + 0.5, i + 0.5, comma(grid[i, j]), ha="center", va="center",
-                        fontsize=FONT - 7, color=color)
-    # one horizontal rule between stages, as in plot_map
-    for i in range(1, n):
-        if steps[i][0][0] != steps[i - 1][0][0]:
-            ax.axhline(i, color="black", lw=1.2)
-    ax.set_xlim(0, n_limbs)
-    ax.set_ylim(n, 0)
-    ax.set_xticks(np.arange(n_limbs) + 0.5)
-    ax.set_xticklabels([str(l) for l in range(n_limbs)])
-    ax.set_yticks(np.arange(n) + 0.5)
-    ax.set_yticklabels([row_label(*key) for key, _, _ in steps], fontsize=FONT - 6)
-    ax.set_xlabel("Limb", fontsize=FONT - 2)
-    ax.tick_params(labelsize=FONT - 5)
-    cbar = fig.colorbar(mesh, ax=ax, fraction=0.04, pad=0.02)
+    fig, axes = plt.subplots(1, len(groups), figsize=(1.2 + 0.9 * n_limbs * len(groups), 1.6 + 0.34 * n),
+                             sharey=True, squeeze=False)
+    axes = axes[0]
+    for ax, group in zip(axes, groups):
+        grid = np.full((n, n_limbs), np.nan)
+        for i, t in enumerate(tables[group]):
+            if not t.empty:
+                grid[i, t["limb"].to_numpy(int)] = t["rate"].to_numpy()
+        mesh = ax.pcolormesh(np.arange(n_limbs + 1), np.arange(n + 1), np.ma.masked_invalid(grid),
+                             cmap=MAP_CMAP, vmin=0, vmax=1, shading="flat")
+        for i in range(n):
+            for j in range(n_limbs):
+                if np.isfinite(grid[i, j]):
+                    # white text on dark cells, black text on light ones
+                    color = "white" if grid[i, j] > 0.5 else "black"
+                    ax.text(j + 0.5, i + 0.5, comma(grid[i, j]), ha="center", va="center",
+                            fontsize=FONT - 7, color=color)
+        # one horizontal rule between stages, as in plot_map
+        for i in range(1, n):
+            if steps[i][0][0] != steps[i - 1][0][0]:
+                ax.axhline(i, color="black", lw=1.2)
+        ax.set_xlim(0, n_limbs)
+        ax.set_xticks(np.arange(n_limbs) + 0.5)
+        ax.set_xticklabels([str(l) for l in range(n_limbs)])
+        ax.set_xlabel("Limb", fontsize=FONT - 2)
+        ax.tick_params(labelsize=FONT - 5)
+        if split != "none":
+            ax.set_title(GROUP_LABEL[group], fontsize=FONT - 3)
+
+        # Printed summary: P(mis) per limb and the fewest injections behind a cell of the row.
+        print(f"  [{group}]")
+        print(f"  {'row':22s} " + " ".join(f"{l:>6d}" for l in range(n_limbs)) + "   min n/limb")
+        for ((stage, step), _, _), t, row in zip(steps, tables[group], grid):
+            cells = " ".join(f"{v:6.2f}" if np.isfinite(v) else f"{'-':>6s}" for v in row)
+            n_min = int(t["n"].min()) if not t.empty else 0
+            print(f"  {stage:13s} {step_text(step):>8s} {cells}   {n_min:9d}")
+
+    axes[0].set_ylim(n, 0)
+    axes[0].set_yticks(np.arange(n) + 0.5)
+    axes[0].set_yticklabels([row_label(*key) for key, _, _ in steps], fontsize=FONT - 6)
+    cbar = fig.colorbar(mesh, ax=axes, fraction=0.04, pad=0.02)
     cbar.set_label(r"$P(\mathrm{mis})$", fontsize=FONT - 3)
     cbar.set_ticks([0, 0.5, RANDOM_CLASS, 1])
     cbar.set_ticklabels(["0", "0,5", "0,9", "1"])
     cbar.ax.tick_params(labelsize=FONT - 5)
-
-    # Printed summary: P(mis) per limb and the fewest injections behind a cell of the row.
-    print(f"  {'row':22s} " + " ".join(f"{l:>6d}" for l in range(n_limbs)) + "   min n/limb")
-    for ((stage, step), _, _), t, row in zip(steps, tables, grid):
-        cells = " ".join(f"{v:6.2f}" if np.isfinite(v) else f"{'-':>6s}" for v in row)
-        print(f"  {stage:13s} {step_text(step):>8s} {cells}   {int(t['n'].min()):9d}")
     return fig
 
 # ------------------------------------------------------------------ #
@@ -769,7 +781,7 @@ def main():
         fig, summary = plot_map(steps, args.split)
         print_map_summary(summary)
     elif args.mode == "limbmap":
-        fig = plot_limb_map(load_steps(args))
+        fig = plot_limb_map(load_steps(args), args.split)
     elif args.mode == "tolerance":
         fig, curves = plot_tolerance(load_stages(args))
         print_tolerance(curves)

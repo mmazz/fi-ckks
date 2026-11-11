@@ -437,7 +437,9 @@ NN_CLIENT_OPENFHE_BACK   =  decrypt_c0 decrypt_c1
 NN_INTERNAL_OPENFHE = hidden_layer cheby_tanh3
 
 # Every name in these lists needs its _name recipe below (see "Incremental build").
-NNF     = nn_client_heaan nn_internal_heaan nn_tolerance nn_client_openfhe_test nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe nn_internal_openfheNTT_limbs
+NNF     = nn_client_heaan nn_internal_heaan nn_tolerance nn_client_openfhe_test \
+		  nn_client_openfhe nn_client_openfheNTT nn_internal_openfheNTT nn_internal_openfhe \
+		  nn_internal_openfheNTT_limbs nn_internal_openfhe_limbs
 
 # Not in the thesis: vulnerable bits of every site in execution order.
 NN_X    = nn_profile $(NN_OFHE)
@@ -496,6 +498,12 @@ _nn_internal_openfheNTT:
 _nn_internal_openfheNTT_limbs:
 	$(NN) --title nn_internal_openfheNTT_cheby_limbs --where $(NN_OPENFHE_NTT) \
 	    --mode limbmap --stages cheby_tanh3
+
+_nn_internal_openfhe_limbs:
+	$(NN) --title nn_internal_openfhe_cheby_limbs --where $(NN_OPENFHE) \
+	    --mode limbmap --stages cheby_tanh3 --split gap
+
+
 
 _nn_tolerance:
 	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance
