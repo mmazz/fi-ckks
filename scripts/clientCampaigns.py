@@ -61,17 +61,18 @@ CLIENT_OPENFHE = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=1,
 
 BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
-
 # Bootstrapping in RNS (OpenFHE), coefficient form, gap 4 as in BOOT. EvalBootstrap needs
 # logQ - logDelta <= 9, hence logDelta=52. mult_depth=2: two levels left after the boot,
 # enough for "mul x2" before it. The context adds the levels of the boot itself, so the
 # fresh ciphertext has 21 limbs (60 + 20 x 52 bits). Random over EVERY (limb, coeff) pair
 # (21 x 64), with the usual list of bits: in RNS the bit does not matter, the limb does.
-BOOT_OPENFHE_LIMBS = 21
-BOOT_OPENFHE = dict(CLIENT_OPENFHE, logSlots=3, logQ=60, logDelta=52, mult_depth=2,
+BOOT_OPENFHE_LIMBS_OLD = 21
+
+BOOT_OPENFHE_OLD = dict(CLIENT_OPENFHE, logSlots=3, logQ=60, logDelta=52, mult_depth=2,
+                    isExhaustive=0, numSamples=BOOT_OPENFHE_LIMBS_OLD* 2**6)   # limbs x N
+BOOT_OPENFHE_LIMBS = 23
+BOOT_OPENFHE = dict(CLIENT_OPENFHE, logSlots=3, logQ=60, logDelta=59, mult_depth=4,
                     isExhaustive=0, numSamples=BOOT_OPENFHE_LIMBS * 2**6)   # limbs x N
-
-
 ENC = ["encrypt_c0", "encrypt_c1"]
 DEC = ["decrypt_c0", "decrypt_c1"]
 
@@ -159,7 +160,6 @@ GROUPS = {
                  seed=SEEDS, seed_input=INPUTS),
    "boot_sweep": grid(BOOT, pipeline=["mul; boot", "mul x2; boot", "mul x3; boot", "mul x5; boot"], stage=ENC,
                  seed=SEEDS, seed_input=INPUTS),
-
     # EVIDENCE (boot in RNS, make ev_rns_boot). OpenFHE drops the upper limbs before the
     # boot (Compress to 2 limbs in backends/openfhe.cpp) without reading them, rescales once
     # more and raises only limb 0. Expected: a limb that is only dropped is masked at every
@@ -170,7 +170,8 @@ GROUPS = {
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
     "boot_rns_ntt": grid(BOOT_OPENFHE, withNTT=[1], pipeline=["boot", "add x2; rot 3; boot", "mul; boot", "mul x2; boot"], stage=ENC,
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
-
+    "boot_muls_rns_ntt": grid(BOOT_OPENFHE, withNTT=[1], pipeline=[ "mul x3; boot", "mul x4; boot", "mul x5; boot"], stage=ENC,
+                     seed=SEEDS[:1], seed_input=INPUTS[:2]),
 
     # ---- RNS / NTT (OpenFHE) ---------------------------------------------------------
     # FIG 12 (RNS: add + rot keeps the gaps). mult_depth=3 -> 4 limbs; use --vary limb.

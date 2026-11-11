@@ -92,8 +92,13 @@ BOOT = dict(binary="fi_heaan", results_dir=RESULTS, isExhaustive=0, numSamples=N
             logN=6, logSlots=3, logQ=840, logDelta=40, bitsPerCoeff=860)
 BOOT_OPEN = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
             logN=6, logSlots=3, logQ=60, logDelta=59, bitsPerCoeff=64, withNTT=1, mult_depth=15)
+
+BOOT_OPENFHE_LIMBS = 23
+BOOT_OPEN_LIMBS = dict(binary="fi_openfhe", results_dir=RESULTS, isExhaustive=0, numSamples=4 * 2**6,
+            logN=6, logSlots=3, logQ=60, logDelta=59, bitsPerCoeff=64, withNTT=1, mult_depth=4)
+
 BOOT_OPENFHE = dict(SERVER_OPENFHE, isExhaustive=0, numSamples=NUM_SAMPLES,
-                    logQ=60, logDelta=52, mult_depth=2)
+                    logQ=60, logDelta=59, mult_depth=4)
 # Mixed pipeline: ops before and after each mul. Run with and without the final boot on
 # the SAME config, so the only difference between the two groups is the boot.
 MIX_PIPELINE = "add; mul; rot 2; mul; add"
@@ -181,7 +186,9 @@ GROUPS = {
                      pipeline=["add; mul x3; rot 1; boot", "add; mul x3; rot 2; boot",
                                "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
                      stage=["encrypt_c0", "encrypt_c1"], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
-
+    "boot_ops_2": grid(dict(BOOT, logSlots=3, logDelta=34), op_step=MUL_REPR,
+                     pipeline=[" mul x3; boot"], op_depth=[1,2],
+                     stage=["mul"], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
     "boot_ops_slots": grid(BOOT,
                            pipeline=["add; mul x3; rot 1; boot", "add; mul x3; rot 2; boot",
                                      "add; mul; boot", "add; mul x2; boot", "add; mul x2; rot 1; boot"],
@@ -207,6 +214,13 @@ GROUPS = {
     "explore_mix_mul_boot": steps(dict(BOOT, stage="mul", pipeline=MIX_PIPELINE + "; boot",
                                        numSamples=10),
                                   MUL_STEPS_Q, seeds=SEEDS_BOOT, inputs=INPUTS[:1], op_depth=[0, 1]),
+
+    "explore_2boots_rns_ntt":  grid(dict(BOOT_OPEN_LIMBS), pipeline=["mul x5; boot; mul x2; boot"], mult_depth=[8],
+                     stage=["mul"], op_step=[0,1,2,3], op_depth=[3,4,5,6], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
+    "explore_3boots_rns_ntt":  grid(dict(BOOT_OPEN_LIMBS), pipeline=["mul x2; boot; mul x2; boot; mul x2; boot"], mult_depth=[8],
+                     stage=["mul"], op_step=[0,1], op_depth=[0,2,4,5], seed=SEEDS_BOOT, seed_input=SEEDS_BOOT),
+
+
 }
 
 if __name__ == "__main__":

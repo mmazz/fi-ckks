@@ -70,6 +70,8 @@ def parse_args():
                    help="one column per limb: combine the coefficients of each limb with --limb_stat")
     p.add_argument("--limb_stat", choices=["max", "median", "mean"], default="max",
                    help="with --per_limb: how to combine the coefficients of a limb (default: max)")
+    p.add_argument("--no_refs", action="store_true",
+                   help="do not draw the logDelta / logQ lines (useful in RNS, where the bit does not matter)")
     p.add_argument("--taco", action="store_true",
                    help=f"masked threshold of {rm.TACO_MASKED_PCT:g}%% instead of {rm.MASKED_PCT:g}%%")
     p.add_argument("--collapse", type=float, default=None, metavar="TOL",
@@ -224,8 +226,8 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
     if args.ylim:
         ax.set_ylim(args.ylim[0] - 0.5, args.ylim[1] + 0.5)
     lo, hi = ax.get_ylim()
-    # Same references as register_map.py; the name is written once, right of the last panel.
-    for val, name in [(cfg["logDelta"], r"$\log\Delta$"), (cfg["logQ"], r"$\log Q$")]:
+    refs = [] if args.no_refs else [(cfg["logDelta"], r"$\log\Delta$"), (cfg["logQ"], r"$\log Q$")]
+    for val, name in refs:
         if lo < val - 0.5 < hi:
             ax.axhline(val - 0.5, color="black", lw=1, ls="--", zorder=4)
             if last:
