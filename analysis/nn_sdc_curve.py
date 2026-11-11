@@ -133,7 +133,6 @@ def parse_args():
     p.add_argument("--stages", nargs="+", default=CLIENT_STAGES,
                    help="one panel per stage, in this order (missing stages are skipped)")
     p.add_argument("--ncols", type=int, default=3)
-    p.add_argument("--mode", choices=["rate", "stack", "map", "tolerance"], default="rate")
     p.add_argument("--split", choices=["none", "gap"], default="none",
                    help="rate and map modes: aligned vs other coefficients (gap = (N/2) / slots)")
     p.add_argument("--legend", choices=["top", "none", "only"], default="top",
@@ -145,6 +144,7 @@ def parse_args():
                    help="--collapse: bits allowed to differ by more than SAME_P (default 0)")
     p.add_argument("--separate", action="store_true",
                    help="map mode with --split gap: <title>_aligned and <title>_other")
+    p.add_argument("--mode", choices=["rate", "stack", "map", "limbmap", "tolerance"], default="rate")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
@@ -596,6 +596,66 @@ def print_map_summary(summary):
               + f"  {s['n']:5d}")
 
 # ------------------------------------------------------------------ #
+# --mode limbmap
+# ------------------------------------------------------------------ #
+def per_limb(data):
+    """One row per limb: n injections and P(mis), pooling every coefficient and every
+    sampled bit of the limb. Same weighting as per_bit: a row of a collapsed dir stands
+    for n_seeds injections."""
+    w = data["n_seeds"] if "n_seeds" in data.columns else pd.Series(1.0, index=data.index)
+    d = pd.DataFrame({"limb": data["limb"], "n": w, "k": data["misclassified"] * w})
+    out = d.groupby("limb")[["n", "k"]].sum()
+    out["rate"] = out["k"] / out["n"]
+    return out.reset_index()
+
+
+def plot_limb_map(steps):
+    """Map op_step x limb of P(mis): one row per (stage, op_step), one column per limb.
+    Gray: limbs that the register of that step does not have. Each cell prints its value,
+    so the protected limb and the rate of the other ones can be read off the figure."""
+    tables = [per_limb(data) for _, _, data in steps]
+    n_limbs = max(int(t["limb"].max()) for t in tables) + 1
+    n = len(steps)
+    grid = np.full((n, n_limbs), np.nan)
+    for i, t in enumerate(tables):
+        grid[i, t["limb"].to_numpy(int)] = t["rate"].to_numpy()
+
+    fig, ax = plt.subplots(figsize=(1.2 + 0.9 * n_limbs, 1.6 + 0.34 * n))
+    mesh = ax.pcolormesh(np.arange(n_limbs + 1), np.arange(n + 1), np.ma.masked_invalid(grid),
+                         cmap=MAP_CMAP, vmin=0, vmax=1, shading="flat")
+    for i in range(n):
+        for j in range(n_limbs):
+            if np.isfinite(grid[i, j]):
+                # white text on dark cells, black text on light ones
+                color = "white" if grid[i, j] > 0.5 else "black"
+                ax.text(j + 0.5, i + 0.5, comma(grid[i, j]), ha="center", va="center",
+                        fontsize=FONT - 7, color=color)
+    # one horizontal rule between stages, as in plot_map
+    for i in range(1, n):
+        if steps[i][0][0] != steps[i - 1][0][0]:
+            ax.axhline(i, color="black", lw=1.2)
+    ax.set_xlim(0, n_limbs)
+    ax.set_ylim(n, 0)
+    ax.set_xticks(np.arange(n_limbs) + 0.5)
+    ax.set_xticklabels([str(l) for l in range(n_limbs)])
+    ax.set_yticks(np.arange(n) + 0.5)
+    ax.set_yticklabels([row_label(*key) for key, _, _ in steps], fontsize=FONT - 6)
+    ax.set_xlabel("Limb", fontsize=FONT - 2)
+    ax.tick_params(labelsize=FONT - 5)
+    cbar = fig.colorbar(mesh, ax=ax, fraction=0.04, pad=0.02)
+    cbar.set_label(r"$P(\mathrm{mis})$", fontsize=FONT - 3)
+    cbar.set_ticks([0, 0.5, RANDOM_CLASS, 1])
+    cbar.set_ticklabels(["0", "0,5", "0,9", "1"])
+    cbar.ax.tick_params(labelsize=FONT - 5)
+
+    # Printed summary: P(mis) per limb and the fewest injections behind a cell of the row.
+    print(f"  {'row':22s} " + " ".join(f"{l:>6d}" for l in range(n_limbs)) + "   min n/limb")
+    for ((stage, step), _, _), t, row in zip(steps, tables, grid):
+        cells = " ".join(f"{v:6.2f}" if np.isfinite(v) else f"{'-':>6s}" for v in row)
+        print(f"  {stage:13s} {step_text(step):>8s} {cells}   {int(t['n'].min()):9d}")
+    return fig
+
+# ------------------------------------------------------------------ #
 # --mode tolerance
 # ------------------------------------------------------------------ #
 def tolerance_curve(data):
@@ -708,6 +768,8 @@ def main():
             return
         fig, summary = plot_map(steps, args.split)
         print_map_summary(summary)
+    elif args.mode == "limbmap":
+        fig = plot_limb_map(load_steps(args))
     elif args.mode == "tolerance":
         fig, curves = plot_tolerance(load_stages(args))
         print_tolerance(curves)
