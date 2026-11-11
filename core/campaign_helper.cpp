@@ -62,7 +62,8 @@ void print_usage(const char* program_name) {
     for (const auto& e : kStageNames) stages += std::string(stages.empty() ? "" : ", ") + e.name;
     std::cout << "Usage: " << program_name << " [OPTIONS]\n\n"
               << "Options:\n"
-              << "  --stage <name>          Stage to target: " << stages << " (default: none)\n"
+              << "  --stage <name>          Stage to target: " << stages
+              << " (default: none = no fault, only report the CKKS error)\n"
               << "  --bitsPerCoeff <value>  Max bits per coeff (default: 64)\n"
               << "  --logN <value>          log Ring dimension (default: 3 = 2^3 = 8)\n"
               << "  --logQ <value>          First mod bits (default: 60)\n"

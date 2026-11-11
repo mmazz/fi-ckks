@@ -79,6 +79,37 @@ static bool baseline_ok(const BackendContext& ctx, const CampaignArgs& args,
     return ok;
 }
 
+
+// --stage none: run the pipeline once without any fault and report the error that CKKS
+// alone adds (plain reference vs decrypted output). Nothing is registered or logged.
+static int run_ckks_only(BackendContext* ctx, const CampaignArgs& args)
+{
+    const std::vector<double> ckks_golden  = run_clean(ctx, args);
+    const std::vector<double> plain_golden = get_reference_output(ctx);
+    const CKKSAccuracyMetrics m = EvaluateCKKSAccuracy(plain_golden, ckks_golden);
+
+    if (args.verbose) {
+        std::cout << "slot, plain, ckks, abs_error\n";
+        for (size_t i = 0; i < plain_golden.size(); i++)
+            std::cout << i << ", " << plain_golden[i] << ", " << ckks_golden[i] << ", "
+                      << std::abs(ckks_golden[i] - plain_golden[i]) << '\n';
+    }
+    std::cout << "CKKS-only error (no fault injected), pipeline '" << args.pipeline
+              << "', " << plain_golden.size() << " values\n"
+              << "  L2 abs error   : " << m.l2_abs_error   << '\n'
+              << "  L2 rel error   : " << m.l2_rel_error   << '\n'
+              << "  Linf abs error : " << m.linf_abs_error << '\n'
+              << "  Linf rel error : " << m.linf_rel_error << '\n'
+              << "  Bits precision : " << m.bits_precision << '\n';
+    if (ctx->classifier)
+        std::cout << "  Class plain/ckks: " << argmax(plain_golden) << " / "
+                  << argmax(ckks_golden) << '\n';
+
+    const bool ok = baseline_ok(*ctx, args, plain_golden, ckks_golden);
+    std::cout << "  Baseline check : " << (ok ? "PASS" : "FAIL") << '\n';
+    return ok ? 0 : 1;
+}
+
 static void run_one(BackendContext* ctx, CampaignArgs& args,
                     const std::vector<double>& ckks_golden, const FaultSpec& f, Sink& s)
 {
@@ -161,9 +192,12 @@ int main(int argc, char** argv)
         CampaignArgs args = parse_arguments(argc, argv);
         backend_prepare_args(args);
         validateArgs(args);
-        if (args.stage == Stage::None)
-            throw std::invalid_argument("must choose a --stage (see --help); "
-                                        "'none' injects nowhere");
+        // No stage: measure the CKKS error alone. Before the registry check, so it never
+        // touches campaigns_start.csv and can be run any number of times.
+        if (args.stage == Stage::None) {
+            CtxPtr ctx(setup_campaign(args), destroy_campaign);
+            return run_ckks_only(ctx.get(), args);
+        }
         // Client stages have no internal steps and run once: a non-zero op_step/op_depth
         // would run the same campaign under a different key and split the seed average.
         if (is_client_stage(args.stage) && (args.op_step != 0 || args.op_depth != 0))
