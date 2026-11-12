@@ -8,6 +8,7 @@ Usage:
     python3 count_campaigns.py                       # results_server results_client results_NN
     python3 count_campaigns.py results_server results_NN
     python3 count_campaigns.py --id-col campaign_id --lib-col library --inj-col injections
+    python3 count_campaigns.py ../results_NN --where "stage=encode|encrypt_c0|encrypt_c1|decrypt_c0|decrypt_c1|decode"
 """
 import argparse
 import csv
@@ -28,7 +29,22 @@ BITS_CANDIDATES = ["amountbits", "amount_bits", "nbits"]
 DEFAULT_IGNORE = ["seed", "seed_input"]
 
 GROUPS = ["heaan", "heaanNN", "openfhe", "openfheNN"]
-
+def parse_filters(exprs):
+    """Parse --where expressions 'col=v1,v2' or 'col!=v1,v2' into (col, negate, values)."""
+    filters = []
+    for e in exprs:
+        if "!=" in e:
+            col, vals = e.split("!=", 1)
+            negate = True
+        elif "=" in e:
+            col, vals = e.split("=", 1)
+            negate = False
+        else:
+            sys.exit(f"[error] bad --where '{e}', expected col=value or col!=value")
+        # '|' separates alternative values, so values may contain commas.
+        values = {v.strip().lower() for v in vals.split("|")}
+        filters.append((col.strip(), negate, values))
+    return filters
 
 def find_col(header, candidates, override, what, path, required=True):
     """Return the real column name in header for the given candidates (or the override)."""
@@ -102,9 +118,16 @@ def process_dir(d, args, totals):
         bits_col = find_col(header, BITS_CANDIDATES, args.bits_col, "amountBits",
                             start_path, required=False)
         cfg_cols = [h for h in header if h != id_col and h.lower() not in ignore]
-
+        # Resolve filter columns against this file's header (case-insensitive).
+        filters = [(find_col(header, [], col, "filter", start_path), neg, vals)
+                   for col, neg, vals in args.filters]
+        filtered_out = 0
         for row in reader:
             cid = row[id_col].strip()
+            # Keep the row only if every --where condition holds.
+            if not all((row[c].strip().lower() in vals) != neg for c, neg, vals in filters):
+                filtered_out += 1
+                continue
             group = classify(row[lib_col], os.path.basename(os.path.normpath(d)))
             if group is None:
                 print(f"[warn] {start_path}: campaign {cid} has unknown library "
@@ -126,7 +149,7 @@ def process_dir(d, args, totals):
                 except (ValueError, TypeError):
                     k = 1
             t["bits"] += n * k
-    print(f"[info] {d}: read")
+    print(f"[info] {d}: read ({filtered_out:,} campaigns filtered out by --where)")
 
 
 def main():
@@ -139,8 +162,10 @@ def main():
     p.add_argument("--bits-col", default=None, help="bits flipped per injection (multibit)")
     p.add_argument("--ignore-cols", default=",".join(DEFAULT_IGNORE),
                    help="comma-separated columns ignored when grouping configurations")
+    p.add_argument("--where", action="append", default=[],
+                   help="filter campaigns: 'col=v1,v2' or 'col!=v' (repeatable, all must hold)")
     args = p.parse_args()
-
+    args.filters = parse_filters(args.where)
     totals = defaultdict(lambda: {"campaigns": 0, "configs": set(), "unfinished": 0,
                                   "injections": 0, "bits": 0})
     for d in args.dirs:
