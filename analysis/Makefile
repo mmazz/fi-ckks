@@ -642,7 +642,7 @@ _ev_isca_c1_fig15_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
 	      --where $(BOOTP) stage=$$s \
-	      --vary pipeline --letters  --label_size 16\
+	      --vary pipeline --letters  --label_size 16  --font 22\
 	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
 	      --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
 	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel; \
@@ -661,7 +661,7 @@ _ev_isca_c1_fig19_rns_ntt_boot_map:
 	  $(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_$$s \
 	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \
 	      --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) \
-	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 14\
+	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 16 --font 22\
 	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
 _ev_isca_c1_fig20_rns_ntt_boot_map:
@@ -676,8 +676,8 @@ _ev_isca_2boots_rns_ntt_map:
 	for d in 4 5 6; do \
 	  $(REGCMP) --title ev_isca_2boots_rns_ntt_map_depth$$d \
 	      --where $(OFHE_2BOOT) mult_depth=8 op_depth=$$d \
-	      --vary op_step --values 0 1 --labels "step 0" "step 1" \
-	      --fill_bits --per_limb --limb_stat mean --taco --metric l2_rel --no_refs \
+	      --vary op_step --values 0 1 --labels "step 0" "step 1"  --label_size 16 --font 22\
+	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel --no_refs \
 	      $$( [ $$d != 3 ] && echo --no-legend ) || exit 1; \
 	done
 _ev_isca_2boots_rns_ntt_map2:

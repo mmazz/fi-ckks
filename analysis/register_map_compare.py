@@ -82,6 +82,8 @@ def parse_args():
     p.add_argument("--letters", nargs="?", const="a", default=None, metavar="FIRST",
                    help="with --vary: prefix each panel label with (a), (b), ...; FIRST is the "
                         "first letter (e.g. --letters f continues a figure that ended at (e))")
+    p.add_argument("--font", type=float, default=rm.FONT, metavar="PT",
+                   help=f"base font size; every text in the figure scales with it (default: {rm.FONT})")
     p.add_argument("--label_size", type=float, default=rm.FONT - 6, metavar="PT",
                    help=f"font size of the text under each panel (default: {rm.FONT - 6})")
     p.add_argument("--metric", default="linf_rel",
@@ -236,62 +238,90 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
         ax.set_ylim(args.ylim[0] - 0.5, args.ylim[1] + 0.5)
     lo, hi = ax.get_ylim()
     refs = [] if args.no_refs else [(cfg["logDelta"], r"$\log\Delta$"), (cfg["logQ"], r"$\log Q$")]
+    # logDelta and logQ a few bits apart (e.g. 59 and 60): the two names would overlap,
+    # so the lower one goes under its line and the upper one over it.
+    close = len(refs) == 2 and abs(cfg["logQ"] - cfg["logDelta"]) < 0.08 * (hi - lo)
     for val, name in refs:
         if lo < val - 0.5 < hi:
             ax.axhline(val - 0.5, color="black", lw=1, ls="--", zorder=4)
             if last:
-                ax.text(n_x - 0.5, val - 0.5, f" {name}", va="center", ha="left",
+                upper = val == max(v for v, _ in refs)
+                va = ("bottom" if upper else "top") if close else "center"
+                ax.text(n_x - 0.5, val - 0.5, f" {name}", va=va, ha="left",
                         fontsize=rm.FONT - 8, clip_on=False)
+
     cut = boot_cutoff_bit(cfg) if args.boot_cutoff else np.nan
     if np.isfinite(cut) and lo < cut - 0.5 < hi:
         # Between the last bit that still reaches the output and the first one removed.
         ax.axhline(cut - 0.5, color=CUT_COLOR, lw=2.5, ls=(0, (1.5, 1.5)), zorder=4)
     ax.set_xticks([0, n_x - 1])
-    ax.set_xticklabels(["0", str(n_x - 1)], fontsize=args.label_size-2)
+    ax.set_xticklabels(["0", str(n_x - 1)], fontsize=args.font - 8)
     ax.yaxis.set_major_locator(MaxNLocator(4, integer=True))
-    ax.tick_params(axis="y", labelsize=args.label_size-2, left=first, labelleft=first)
+    ax.tick_params(axis="y", labelsize=args.font - 8, left=first, labelleft=first)
 
     if args.diagram:            # register number of the datapath figure: red badge
         ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
-                color="white", fontsize=rm.FONT - 6, fontweight="bold", clip_on=False,
+                color="white", fontsize=args.font - 6, fontweight="bold", clip_on=False,
                 bbox=dict(boxstyle="circle,pad=0.3", facecolor="red", edgecolor="black", lw=0.8))
     else:                       # --vary: plain text label
         ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
                 fontsize=args.label_size, clip_on=False)
+
+
+def legend_handles(args):
+    handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
+               for color, label in [
+                   (rm.GREEN, rf"Masked ($\leq${args.masked:g}%)"),
+                   (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
+                   (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+                   (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%)")]]
+    if args.boot_cutoff:
+        handles.append(Line2D([], [], color=CUT_COLOR, lw=2.5, ls=(0, (1.5, 1.5)),
+                              label="Boot cutoff"))
+    return handles
+ 
+ 
+def add_legend(fig, handles, left, right, fontsize):
+    """Legend on top, in as few rows as fit within the width of the panels.
+    Returns the number of rows."""
+    n = len(handles)
+    for ncol in sorted({n, -(-n // 2), 2}, reverse=True):   # one row, two rows, two columns
+        leg = fig.legend(handles=handles, loc="upper center", ncol=ncol, frameon=False,
+                         fontsize=fontsize, bbox_to_anchor=((left + right) / 2, 1.0))
+        width = leg.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
+        if width <= (right - left) * fig.get_figwidth() or ncol == 2:
+            return -(-n // ncol)
+        leg.remove()
+ 
+ 
 def plot_comparison(panels, vmax, show_legend, args):
     n = len(panels)
+    k = args.font / rm.FONT         # --font: the left margin grows with the text
     fig, axes = plt.subplots(1, n, figsize=(max(6.0, 1.9 * n + 1.0), 4.2),
                              sharey=True, squeeze=False)
     axes = axes[0]
-    # With 3 panels or fewer the legend does not fit in one row: it takes two or three.
-    top = 0.95 if not show_legend else (0.88 if n > 3 else 0.74)
     # Fixed margins in inches, so the y label never runs into the ticks of a narrow figure.
     width = fig.get_figwidth()
-    left, right, bottom = 0.9 / width, 0.98, 0.26
+    left, right, bottom = k * 0.9 / width, 0.98, 0.26
+    top = 0.95
+    if show_legend:
+        # One compact legend. register_map.add_legend() is sized for one big panel and
+        # overlaps short panels; the severe gradient is still red -> black in the plot.
+        fontsize = args.font - 8
+        rows = add_legend(fig, legend_handles(args), left, right, fontsize)
+        # Room for the legend: ~1.8 line heights per row plus a small gap, in inches.
+        top = 1 - (0.15 + rows * 1.8 * fontsize / 72) / fig.get_figheight()
     fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, wspace=0.12)
+ 
     for i, (ax, (number, cfg, cells, _)) in enumerate(zip(axes, panels)):
         if args.letters:            # (a), (b), ... in front of the label under the panel
             number = f"({chr(ord(args.letters) + i)}) {number}"
         draw_panel(ax, number, cells, cfg, vmax, first=(i == 0), last=(i == n - 1), args=args)
-
-    fig.text(0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
-             ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
+ 
+    fig.text(k * 0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
+             ha="center", va="center", fontsize=args.font - 6, fontweight="bold")
     fig.text((left + right) / 2, 0.03, "Limbs" if args.per_limb else "Coefficients",
-             ha="center", va="center", fontsize=rm.FONT - 6, fontweight="bold")
-    if show_legend:
-        # One compact row. register_map.add_legend() is sized for one big panel and
-        # overlaps short panels; the severe gradient is still red -> black in the plot.
-        handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
-                   for color, label in [
-                       (rm.GREEN, rf"Masked ($\leq${args.masked:g}%)"),
-                       (rm.YELLOW, rf"Minor SDC ($\leq${rm.MINOR_PCT:g}%)"),
-                       (rm.ORANGE, rf"Moderate SDC ($\leq${rm.MODERATE_PCT:g}%)"),
-                       (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%)")]]
-        if args.boot_cutoff:
-            handles.append(Line2D([], [], color=CUT_COLOR, lw=2.5, ls=(0, (1.5, 1.5)),
-                                  label="Boot cutoff"))
-        fig.legend(handles=handles, loc="upper center", ncol=len(handles) if n > 3 else 2,
-                   frameon=False, fontsize=rm.FONT - 8, bbox_to_anchor=((left + right) / 2, 1.0))
+             ha="center", va="center", fontsize=args.font - 6, fontweight="bold")
     return fig
 
 
