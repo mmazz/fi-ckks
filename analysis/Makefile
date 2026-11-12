@@ -462,11 +462,7 @@ _nn_client_openfhe:
 	        --legend none || exit 1; \
 	done
 
-_nn_client_openfhe_test:
-	for s in $(NN_CLIENT_OPENFHE_BACK); do \
-	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) mult_depth=8 --stages $$s --split gap \
-	        --legend none || exit 1; \
-	done
+
 
 _nn_client_openfheNTT:
 	for s in $(NN_CLIENT_OPENFHE); do \
@@ -474,7 +470,11 @@ _nn_client_openfheNTT:
 	        --legend none || exit 1; \
 	done
 
-
+_nn_client_openfhe_test:
+	for s in $(NN_CLIENT_OPENFHE_BACK); do \
+	    $(NN) --title nn_client_openfhe_$$s --where $(NN_OPENFHE) mult_depth=8 --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
 _nn_internal_heaan:
 	for s in $(NN_INTERNAL_HEAAN); do \
 	    $(NN) --title nn_internal_heaan_$$s --where $(NN_HEAAN) --mode map --stages $$s   --split gap --separate || exit 1; \
@@ -642,7 +642,7 @@ _ev_isca_c1_fig15_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
 	      --where $(BOOTP) stage=$$s \
-	      --vary pipeline \
+	      --vary pipeline --letters  --label_size 16\
 	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
 	      --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
 	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel; \
@@ -651,13 +651,17 @@ _ev_isca_c1_fig15_map:
 RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot" "mul x3; boot" "mul x4; boot" "mul x5; boot"
 RNS_BOOT_LABELS = "boot" "1 mul + boot" "2 mul + boot" "3 mul + boot" "4 mul + boot" "5 mul + boot"
 RNS_BOOT_Q = $(ENC) and pipeline in ["boot", "mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"]
+RNS_BOOT_PIPES  = "mul x2; boot" "mul x3; boot"  "mul x5; boot"
+RNS_BOOT_LABELS =  "2 mul + boot" "3 mul + boot" "5 mul + boot"
+RNS_BOOT_Q = $(ENC) and pipeline in [ "mul x2; boot", "mul x3; boot",  "mul x5; boot"]
+
 
 _ev_isca_c1_fig19_rns_ntt_boot_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_$$s \
 	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \
 	      --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) \
-	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel \
+	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 14\
 	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
 _ev_isca_c1_fig20_rns_ntt_boot_map:
@@ -832,6 +836,34 @@ taco_pmul_map:
 	        --labels $(PMUL_MAP_LABELS) \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
+
+
+# TRUST 
+#
+.PHONY: trust_nn_client_heaan trust_nn_client_openfhe trust_nn_client_openfheNTT
+
+NN_trust     = python3 nn_sdc_curve_trust.py --results $(RES_NN) $(SHOW)
+_trust_nn_client_heaan:
+	for s in $(NN_CLIENT_HEAAN); do \
+	    $(NN_trust) --title nn_trust_client_heaan_$$s --where $(NN_HEAAN) --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
+	$(NN_trust) --title nn_trust_client_legend --split gap --legend only
+
+_trust_nn_client_openfhe:
+	for s in $(NN_CLIENT_OPENFHE); do \
+	    $(NN_trust) --title nn_trust_client_openfhe_$$s --where $(NN_OPENFHE)  --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
+
+
+
+_trust_nn_client_openfheNTT:
+	for s in $(NN_CLIENT_OPENFHE); do \
+	    $(NN_trust) --title nn_trust_client_openfheNTT_$$s --where $(NN_OPENFHE_NTT) --stages $$s --split gap \
+	        --legend none || exit 1; \
+	done
+
 
 # ======================================================================================
 # Thesis repo only: download the pinned data release before plotting. The stamp file

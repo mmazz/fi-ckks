@@ -5,13 +5,14 @@ One panel per value of --vary (typically stage or op_step); every other config c
 must be the same across panels. Works on a raw results dir (the collapsed cache is
 refreshed first) or on a collapsed one; each panel combines the seeds with --stat.
 
-
 Example (pipelines as panels):
   python3 register_map_compare.py --results ../results_client --title boot_map \\
       --where library=heaan logN=6 logSlots=3 logQ=840 logDelta=40 bitsPerCoeff=860 \\
               stage=encrypt_c1 \\
       --vary pipeline --values "mul x4" "mul; boot" "mul x2; boot" \\
       --labels "4 mul" "1 mul + boot" "2 mul + boot" --ylim 0 300 --boot_cutoff
+--letters prefixes the panel labels with (a), (b), ...; --letters f starts at (f).
+
 --values picks the panels and their order; --numbers sets the label drawn under each
 panel (default 1..n). The --vary column must not be in --where.
 One figure per op_step, all with the same color scale. With --vary op_step, a single
@@ -78,6 +79,11 @@ def parse_args():
                    help="with --vary op_step: one panel per pattern of steps, found as in "
                         "step_heatmap.py --collapse --tol TOL; each panel draws the first step "
                         "of its group and is labelled with the steps of the group")
+    p.add_argument("--letters", nargs="?", const="a", default=None, metavar="FIRST",
+                   help="with --vary: prefix each panel label with (a), (b), ...; FIRST is the "
+                        "first letter (e.g. --letters f continues a figure that ended at (e))")
+    p.add_argument("--label_size", type=float, default=rm.FONT - 6, metavar="PT",
+                   help=f"font size of the text under each panel (default: {rm.FONT - 6})")
     p.add_argument("--metric", default="linf_rel",
                    help="relative error column used for the colors (default: linf_rel = MREP), "
                         "e.g. l2_rel; the same categories and thresholds are applied")
@@ -91,9 +97,12 @@ def parse_args():
         p.error("give --values or --collapse, not both")
     if args.labels and len(args.labels) != len(args.values or []):
         p.error("--labels needs one entry per --values")
-    if args.labels and len(args.labels) != len(args.values or []):
-        p.error("--labels needs one entry per --values")
+    if args.letters and args.diagram:
+        p.error("--letters only applies to --vary (--diagram draws a numbered badge)")
+    if args.letters and not (len(args.letters) == 1 and args.letters.isalpha()):
+        p.error("--letters takes a single letter, e.g. --letters f")
     args.masked = rm.TACO_MASKED_PCT if args.taco else rm.MASKED_PCT
+
     return args
 
 # ------------------------------------------------------------------ #
@@ -238,9 +247,9 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
         # Between the last bit that still reaches the output and the first one removed.
         ax.axhline(cut - 0.5, color=CUT_COLOR, lw=2.5, ls=(0, (1.5, 1.5)), zorder=4)
     ax.set_xticks([0, n_x - 1])
-    ax.set_xticklabels(["0", str(n_x - 1)], fontsize=rm.FONT - 8)
+    ax.set_xticklabels(["0", str(n_x - 1)], fontsize=args.label_size-2)
     ax.yaxis.set_major_locator(MaxNLocator(4, integer=True))
-    ax.tick_params(axis="y", labelsize=rm.FONT - 8, left=first, labelleft=first)
+    ax.tick_params(axis="y", labelsize=args.label_size-2, left=first, labelleft=first)
 
     if args.diagram:            # register number of the datapath figure: red badge
         ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
@@ -248,8 +257,7 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
                 bbox=dict(boxstyle="circle,pad=0.3", facecolor="red", edgecolor="black", lw=0.8))
     else:                       # --vary: plain text label
         ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
-                fontsize=rm.FONT - 6, clip_on=False)
-
+                fontsize=args.label_size, clip_on=False)
 def plot_comparison(panels, vmax, show_legend, args):
     n = len(panels)
     fig, axes = plt.subplots(1, n, figsize=(max(6.0, 1.9 * n + 1.0), 4.2),
@@ -261,8 +269,9 @@ def plot_comparison(panels, vmax, show_legend, args):
     width = fig.get_figwidth()
     left, right, bottom = 0.9 / width, 0.98, 0.26
     fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, wspace=0.12)
-
     for i, (ax, (number, cfg, cells, _)) in enumerate(zip(axes, panels)):
+        if args.letters:            # (a), (b), ... in front of the label under the panel
+            number = f"({chr(ord(args.letters) + i)}) {number}"
         draw_panel(ax, number, cells, cfg, vmax, first=(i == 0), last=(i == n - 1), args=args)
 
     fig.text(0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
