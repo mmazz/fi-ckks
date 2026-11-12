@@ -9,10 +9,13 @@ Usage:
     python3 count_campaigns.py results_server results_NN
     python3 count_campaigns.py --id-col campaign_id --lib-col library --inj-col injections
     python3 count_campaigns.py ../results_NN --where "stage=encode|encrypt_c0|encrypt_c1|decrypt_c0|decrypt_c1|decode"
+    python3 count_campaigns.py ../results_NN --where "stage=decrypt_c0" --where "withNTT=0" --detected  --err-thr 1e-1
 """
 import argparse
 import csv
 import os
+import gzip
+import math
 import sys
 from collections import defaultdict
 
@@ -97,6 +100,46 @@ def read_end(path, args):
     if dup:
         print(f"[warn] {path}: {dup} repeated ids, kept the last row of each")
     return end
+TRUE_VALUES = {"1", "1.0", "true", "yes", "y", "t"}
+
+def count_detected(path, det_col, err_col=None, thr=None):
+    """Return per-file counts (rows, detected, and detected/undetected split by an
+    error threshold), or None if the file is unusable."""
+    if not os.path.isfile(path):
+        return None
+    c = {"rows": 0, "det": 0, "det_lo": 0, "det_hi": 0, "und_lo": 0, "und_hi": 0}
+    try:
+        with gzip.open(path, "rt", newline="") as f:
+            reader = csv.DictReader(f)
+            fields = reader.fieldnames or []
+            col = find_col(fields, [det_col.lower()], None, "detected", path, required=False)
+            if col is None:
+                print(f"[warn] {path}: no '{det_col}' column, skipped")
+                return None
+            ecol = None
+            if thr is not None:
+                ecol = find_col(fields, [err_col.lower()], None, "error", path, required=False)
+                if ecol is None:
+                    print(f"[warn] {path}: no '{err_col}' column, skipped")
+                    return None
+            for row in reader:
+                c["rows"] += 1
+                is_det = row[col].strip().lower() in TRUE_VALUES
+                if is_det:
+                    c["det"] += 1
+                if ecol is None:
+                    continue
+                try:
+                    err = float(row[ecol])
+                except (ValueError, TypeError):
+                    err = math.nan
+                # NaN/inf count as above the threshold (the output is broken anyway).
+                hi = math.isnan(err) or err >= thr
+                c[("det_" if is_det else "und_") + ("hi" if hi else "lo")] += 1
+    except (OSError, EOFError) as e:
+        print(f"[warn] {path}: unreadable ({e}), skipped")
+        return None
+    return c
 
 
 def process_dir(d, args, totals):
@@ -149,6 +192,20 @@ def process_dir(d, args, totals):
                 except (ValueError, TypeError):
                     k = 1
             t["bits"] += n * k
+            if args.detected:
+                # Per-campaign data file: <dir>/data/<6-digit id>.csv.gz
+                data_path = os.path.join(d, "data", f"campaign_{cid.zfill(6)}.csv.gz")
+                res = count_detected(data_path, args.det_col, args.err_col, args.err_thr)
+                if res is None:
+                    t["det_missing"] += 1
+                else:
+                    t["det_rows"] += res["rows"]
+                    t["det_hits"] += res["det"]
+                    if res["det"] > 0:
+                        t["det_campaigns"] += 1
+                    for k in ("det_lo", "det_hi", "und_lo", "und_hi"):
+                        t[k] += res[k]
+
     print(f"[info] {d}: read ({filtered_out:,} campaigns filtered out by --where)")
 
 
@@ -164,10 +221,23 @@ def main():
                    help="comma-separated columns ignored when grouping configurations")
     p.add_argument("--where", action="append", default=[],
                    help="filter campaigns: 'col=v1,v2' or 'col!=v' (repeatable, all must hold)")
+    p.add_argument("--detected", action="store_true",
+                   help="also count detected rows from <dir>/data/<id>.csv.gz")
+    p.add_argument("--det-col", default="detected",
+                   help="name of the detection column in the data files")
+    p.add_argument("--err-thr", type=float, default=None,
+                   help="error threshold: split rows into below/above (implies --detected)")
+    p.add_argument("--err-col", default="l2_rel",
+                   help="error column compared against --err-thr")
     args = p.parse_args()
     args.filters = parse_filters(args.where)
+    if args.err_thr is not None:
+        args.detected = True
     totals = defaultdict(lambda: {"campaigns": 0, "configs": set(), "unfinished": 0,
-                                  "injections": 0, "bits": 0})
+                                  "injections": 0, "bits": 0,
+                                  "det_rows": 0, "det_hits": 0,
+                                  "det_lo": 0, "det_hi": 0, "und_lo": 0, "und_hi": 0,
+                                  "det_campaigns": 0, "det_missing": 0})
     for d in args.dirs:
         process_dir(d, args, totals)
 
@@ -199,5 +269,25 @@ def main():
     print(f"\nheaan + openfhe (NN included): {grand['campaigns']:,} campaigns, "
           f"{grand['configs']:,} configurations, {grand['injections']:,} injections, "
           f"{grand['bits']:,} bits flipped")
+    if args.detected:
+        print()
+        print(f"{'group':<11}{'rows':>12}{'detected':>12}{'det %':>8}"
+              f"{'campaigns w/ det':>18}{'no data file':>14}")
+        for g in GROUPS:
+            t = totals[g]
+            pct = 100 * t["det_hits"] / t["det_rows"] if t["det_rows"] else 0.0
+            print(f"{g:<11}{t['det_rows']:>12,}{t['det_hits']:>12,}{pct:>7.1f}%"
+                  f"{t['det_campaigns']:>18,}{t['det_missing']:>14,}")
+        if args.err_thr is not None:
+            print(f"\n{args.err_col} threshold = {args.err_thr:g}  "
+                  f"(below: < thr, above: >= thr or NaN)")
+            print(f"{'group':<11}{'det below':>12}{'det above':>12}"
+                  f"{'undet below':>13}{'undet above':>13}")
+            for g in GROUPS:
+                t = totals[g]
+                print(f"{g:<11}{t['det_lo']:>12,}{t['det_hi']:>12,}"
+                      f"{t['und_lo']:>13,}{t['und_hi']:>13,}")
+
+
 if __name__ == "__main__":
     main()
