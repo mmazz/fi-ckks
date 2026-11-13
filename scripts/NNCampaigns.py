@@ -44,6 +44,7 @@ OPENFHE_CLIENT_TEST = ["encrypt_c0"]
 # would be a second config under their --where and break those figures.
 RESULTS_COEFF0 = str(ROOT / "results_NN_coeff0")
 OPENFHE_COEFF0 = dict(OPENFHE_NON_NTT, results_dir=RESULTS_COEFF0, numSamples=0)
+HEAAN_COEFF0 = dict(HEAAN, results_dir=RESULTS_COEFF0, numSamples=0)
 
 # Accuracy and F1 without faults, with the same parameters as the campaigns (fi_nn_metrics_*).
 # Images [0, METRIC_IMAGES) are split in chunks of METRIC_CHUNK, one run per chunk, so --jobs
@@ -79,9 +80,9 @@ GROUPS = {
     "heaan_metrics":   metrics(HEAAN, "fi_nn_metrics_heaan"),
     "openfhe_metrics": metrics(OPENFHE, "fi_nn_metrics_openfhe"),
     "heaan_decode_seeds": grid(HEAAN, stage=["decode"], seed=SEEDS_DECODE, seed_input=IMAGES),
-    "ev_openfhe_coeff0": client(OPENFHE_COEFF0, OPENFHE_CLIENT_BACK)
-                      + [r for st, n in OPENFHE_INTERNAL.items()
-                         for r in internal(OPENFHE_COEFF0, st, n)],
+    "ev_openfhe_coeff0": client(OPENFHE_COEFF0, ["decrypt_c0"]),
+    "ev_heaan_coeff0": client(HEAAN_COEFF0, ["decrypt_c0","decode"]),
+                      
     }
 
 if __name__ == "__main__":
