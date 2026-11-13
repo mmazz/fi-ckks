@@ -11,13 +11,13 @@ from campaigns import ROOT, grid, main
 RESULTS = str(ROOT / "results_NN")
 IMAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]     # --seed_input: index of the image in mnist_test.csv
 NUM_SAMPLES = 20             
-SEEDS = [1]             
+SEEDS = [1,3]             
 SEEDS_DECODE = [3,4,5,6]             
 
 HEAAN = dict(binary="fi_heaan_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
              logN=12, logQ=220, logDelta=30, logSlots=10, bitsPerCoeff=250)
 OPENFHE = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
-               logN=12, logQ=60, logDelta=30, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=1)
+               logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=1)
 OPENFHE_NON_NTT = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
                logN=12, logQ=60, logDelta=50, logSlots=10, bitsPerCoeff=64, mult_depth=5, withNTT=0)
 OPENFHE_RNS_NON_NTT = dict(binary="fi_openfhe_nn", results_dir=RESULTS, isExhaustive=0, numSamples=NUM_SAMPLES,
@@ -38,6 +38,12 @@ OPENFHE_CLIENT = ["encode", "encrypt_c0", "encrypt_c1", "decrypt_c0", "decrypt_c
 OPENFHE_CLIENT_BACK = [ "decrypt_c0", "decrypt_c1"]
 OPENFHE_CLIENT_TEST = ["encrypt_c0"]
 
+
+# Coefficient 0 of every limb, same bits as random (numSamples=0 in random mode). Its own
+# results dir: same config as the openfhe_* groups except numSamples, so in results_NN it
+# would be a second config under their --where and break those figures.
+RESULTS_COEFF0 = str(ROOT / "results_NN_coeff0")
+OPENFHE_COEFF0 = dict(OPENFHE_NON_NTT, results_dir=RESULTS_COEFF0, numSamples=0)
 
 # Accuracy and F1 without faults, with the same parameters as the campaigns (fi_nn_metrics_*).
 # Images [0, METRIC_IMAGES) are split in chunks of METRIC_CHUNK, one run per chunk, so --jobs
@@ -72,7 +78,10 @@ GROUPS = {
     "openfhe_client_test": client(OPENFHE_TEST, OPENFHE_CLIENT_TEST),
     "heaan_metrics":   metrics(HEAAN, "fi_nn_metrics_heaan"),
     "openfhe_metrics": metrics(OPENFHE, "fi_nn_metrics_openfhe"),
-    "heaan_decode_seeds": grid(HEAAN, stage=["decode"], seed=SEEDS_DECODE, seed_input=IMAGES)
+    "heaan_decode_seeds": grid(HEAAN, stage=["decode"], seed=SEEDS_DECODE, seed_input=IMAGES),
+    "ev_openfhe_coeff0": client(OPENFHE_COEFF0, OPENFHE_CLIENT_BACK)
+                      + [r for st, n in OPENFHE_INTERNAL.items()
+                         for r in internal(OPENFHE_COEFF0, st, n)],
     }
 
 if __name__ == "__main__":

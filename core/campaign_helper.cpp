@@ -84,7 +84,7 @@ void print_usage(const char* program_name) {
               << "  --thresholdSKA <value>  SDC detector threshold in bits (only openfhe, default: 5.0)\n"
               << "  --dnum <value>          Digit number (default: 3)\n"
               << "  --amountBits <value>    Amount of burst bits (default: 1)\n"
-              << "  --numSamples <value>    Amount of injections (default: 50)\n"
+              << "  --numSamples <value>    Amount of injections (default: 50; 0 with --isExhaustive 0 = coefficient 0 of every limb)\n"
               << "  --saveVectors <value>   Save the input output vectors (default: 0)\n"
               << "  --scaleTech <value>     Scaling technique (default: FIXEDMANUAL, others: FIXEDAUTO, FLEXIBLEAUTO or FLEXIBLEAUTOEXT)\n"
               << "  --results_dir <path>    Results directory (default: results)\n"

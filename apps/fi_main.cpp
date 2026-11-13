@@ -170,6 +170,14 @@ static void run_random(BackendContext* ctx, CampaignArgs& args, const std::vecto
     std::vector<uint32_t> bits_to_flip;
     for (uint32_t bit : bitsToFlipGenerator(args, s.reg_bits))
         if (bit + args.amountBits <= args.bitsPerCoeff) bits_to_flip.push_back(bit);
+    // numSamples == 0 (only reached with --isExhaustive 0): no sampling. Inject in
+    // coefficient 0 of every limb, sweeping the same bits as a random campaign.
+    if (args.numSamples == 0) {
+        for (uint32_t limb = 0; limb < s.num_limbs; limb++)
+            for (uint32_t bit : bits_to_flip)
+                run_one(ctx, args, ckks_golden, make_fault(args, limb, 0, bit), s);
+        return;
+    }
     std::set<std::pair<uint32_t, uint32_t>> seen;
     for (uint32_t sample = 0; sample < args.numSamples; sample++) {
         uint32_t limb = 0, coeff = 0;
