@@ -648,19 +648,20 @@ _ev_isca_c1_fig15_map:
 	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel; \
 	done
 
-RNS_BOOT_PIPES  = "boot" "mul; boot" "mul x2; boot" "mul x3; boot" "mul x4; boot" "mul x5; boot"
-RNS_BOOT_LABELS = "boot" "1 mul + boot" "2 mul + boot" "3 mul + boot" "4 mul + boot" "5 mul + boot"
-RNS_BOOT_Q = $(ENC) and pipeline in ["boot", "mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"]
-RNS_BOOT_PIPES  = "mul x2; boot" "mul x3; boot"  "mul x5; boot"
-RNS_BOOT_LABELS =  "2 mul + boot" "3 mul + boot" "5 mul + boot"
-RNS_BOOT_Q = $(ENC) and pipeline in [ "mul x2; boot", "mul x3; boot",  "mul x5; boot"]
+
+
+
+
+# ISCA figures (OFHE_BOOT_NEW: logDelta 59, mult_depth 4, NTT only)
+ISCA_BOOT_PIPES  = "mul x2; boot" "mul x3; boot" "mul x5; boot"
+ISCA_BOOT_LABELS = "2 mul + boot" "3 mul + boot" "5 mul + boot"
 
 
 _ev_isca_c1_fig19_rns_ntt_boot_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_$$s \
-	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \
-	      --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) \
+	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \\
+			  --vary pipeline --values $(ISCA_BOOT_PIPES) --labels $(ISCA_BOOT_LABELS) \
 	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 16 --font 22\
 	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
