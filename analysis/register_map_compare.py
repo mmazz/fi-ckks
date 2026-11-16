@@ -12,6 +12,13 @@ Example (pipelines as panels):
       --vary pipeline --values "mul x4" "mul; boot" "mul x2; boot" \\
       --labels "4 mul" "1 mul + boot" "2 mul + boot" --ylim 0 300 --boot_cutoff
 --letters prefixes the panel labels with (a), (b), ...; --letters f starts at (f).
+--no_labels leaves the space under the panels empty (the paper adds subcaptions).
+--font sets the base font size; every text in the figure scales with it.
+--separate saves each panel in its own file (<title>_1, <title>_2, ...) and the legend
+alone in two rows (<title>_legend), all with the same color scale. Only the first panel
+of each row has the y axis (--y_axis 1 4: rows 1-3 and 4-5): include them in LaTeX with
+the same height, not the same width.
+--legend_file keeps all the panels in one file and saves the legend alone, as --separate.
 
 --values picks the panels and their order; --numbers sets the label drawn under each
 panel (default 1..n). The --vary column must not be in --where.
@@ -32,7 +39,7 @@ import step_heatmap as sh                                              # noqa: E
 sys.path.append(str(Path(__file__).resolve().parent))
 import register_map as rm                                              # noqa: E402
 from utils.results import (load_campaigns, load_data, select, require_single_config,  # noqa: E402
-                           assign_config_id, finite_max, parse_value, assign_config_id)
+                           assign_config_id, finite_max, parse_value)
 from utils.sites import DIAGRAMS, select_sites                         # noqa: E402
 from bit_curve import boot_cutoff_bit                                  # noqa: E402
 
@@ -64,6 +71,20 @@ def parse_args():
                    help="how to combine the seeds in each (coeff, bit)")
     p.add_argument("--title", default="register_compare", help="output file name prefix")
     p.add_argument("--no-legend", "--no_legend", dest="no_legend", action="store_true")
+    p.add_argument("--separate", action="store_true",
+                   help="one file per panel (<title>_1, <title>_2, ...) plus the legend alone "
+                        "(<title>_legend, skipped with --no-legend), all with the same color scale")
+    p.add_argument("--legend_file", action="store_true",
+                   help="all panels in one file, the legend alone in <title>_legend; the figure "
+                        "is only as wide as the panels (as with --separate)")
+    p.add_argument("--no_labels", action="store_true",
+                   help="with --vary: no text under the panels (e.g. the paper puts it in "
+                        "\\subcaption); the x axis title moves up to the tick labels")
+    p.add_argument("--y_axis", nargs="+", type=int, default=[1], metavar="K",
+                   help="the panels (1, 2, ...) that start a row in the paper, which get the "
+                        "y axis; the panel before each one gets the logDelta / logQ names "
+                        "(default: 1, a single row). 0: no y axis at all (a file that goes "
+                        "on the right of another one in the paper)")
     p.add_argument("--fill_bits", action="store_true",
                    help="random campaigns inject a subset of the bits: give each row that was not "
                         "injected the color of the next injected bit above it, instead of white")
@@ -84,8 +105,8 @@ def parse_args():
                         "first letter (e.g. --letters f continues a figure that ended at (e))")
     p.add_argument("--font", type=float, default=rm.FONT, metavar="PT",
                    help=f"base font size; every text in the figure scales with it (default: {rm.FONT})")
-    p.add_argument("--label_size", type=float, default=rm.FONT - 6, metavar="PT",
-                   help=f"font size of the text under each panel (default: {rm.FONT - 6})")
+    p.add_argument("--label_size", type=float, default=None, metavar="PT",
+                   help="font size of the text under each panel (default: --font - 6)")
     p.add_argument("--metric", default="linf_rel",
                    help="relative error column used for the colors (default: linf_rel = MREP), "
                         "e.g. l2_rel; the same categories and thresholds are applied")
@@ -99,10 +120,14 @@ def parse_args():
         p.error("give --values or --collapse, not both")
     if args.labels and len(args.labels) != len(args.values or []):
         p.error("--labels needs one entry per --values")
+    if args.no_labels and (args.letters or args.diagram):
+        p.error("--no_labels draws no text under the panels: drop --letters / --diagram")
     if args.letters and args.diagram:
         p.error("--letters only applies to --vary (--diagram draws a numbered badge)")
     if args.letters and not (len(args.letters) == 1 and args.letters.isalpha()):
         p.error("--letters takes a single letter, e.g. --letters f")
+    if args.label_size is None:
+        args.label_size = args.font - 6
     args.masked = rm.TACO_MASKED_PCT if args.taco else rm.MASKED_PCT
 
     return args
@@ -248,7 +273,7 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
                 upper = val == max(v for v, _ in refs)
                 va = ("bottom" if upper else "top") if close else "center"
                 ax.text(n_x - 0.5, val - 0.5, f" {name}", va=va, ha="left",
-                        fontsize=rm.FONT - 8, clip_on=False)
+                        fontsize=args.font - 8, clip_on=False)
 
     cut = boot_cutoff_bit(cfg) if args.boot_cutoff else np.nan
     if np.isfinite(cut) and lo < cut - 0.5 < hi:
@@ -259,13 +284,32 @@ def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
     ax.yaxis.set_major_locator(MaxNLocator(4, integer=True))
     ax.tick_params(axis="y", labelsize=args.font - 8, left=first, labelleft=first)
 
+    # The label goes a fixed distance (in points) under the tick labels, so the gap
+    # does not change with the figure height or the font sizes.
+    below = dict(xy=(0.5, 0), xycoords="axes fraction", xytext=(0, -label_offset(args)),
+                 textcoords="offset points", ha="center", va="top", annotation_clip=False)
     if args.diagram:            # register number of the datapath figure: red badge
-        ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
-                color="white", fontsize=args.font - 6, fontweight="bold", clip_on=False,
-                bbox=dict(boxstyle="circle,pad=0.3", facecolor="red", edgecolor="black", lw=0.8))
-    else:                       # --vary: plain text label
-        ax.text(0.5, -0.16, str(number), transform=ax.transAxes, ha="center", va="center",
-                fontsize=args.label_size, clip_on=False)
+        ax.annotate(str(number), color="white", fontsize=args.font - 6, fontweight="bold",
+                    bbox=dict(boxstyle="circle,pad=0.3", facecolor="red", edgecolor="black",
+                              lw=0.8), **below)
+    elif not args.no_labels:    # --vary: plain text label
+        ax.annotate(str(number), fontsize=args.label_size, **below)
+
+
+# Space under the panels, in points. A line of text takes ~1.2 times its font size; the
+# x tick marks and their padding take ~7 pt (matplotlib defaults: 3.5 + 3.5).
+GAP_PT = 4          # between the tick labels, the panel labels and the x axis title
+
+
+def label_offset(args):
+    """From the bottom of the panel to the top of the label under it."""
+    return 7 + 1.2 * (args.font - 8) + GAP_PT
+
+
+def bottom_margin_pt(args):
+    """From the bottom of the panels to the bottom of the x axis title."""
+    labels = 0 if args.no_labels else 1.2 * args.label_size + GAP_PT
+    return label_offset(args) + labels + 1.2 * (args.font - 6) + GAP_PT
 
 
 def legend_handles(args):
@@ -281,48 +325,96 @@ def legend_handles(args):
     return handles
  
  
-def add_legend(fig, handles, left, right, fontsize):
-    """Legend on top, in as few rows as fit within the width of the panels.
-    Returns the number of rows."""
-    n = len(handles)
-    for ncol in sorted({n, -(-n // 2), 2}, reverse=True):   # one row, two rows, two columns
-        leg = fig.legend(handles=handles, loc="upper center", ncol=ncol, frameon=False,
-                         fontsize=fontsize, bbox_to_anchor=((left + right) / 2, 1.0))
-        width = leg.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
-        if width <= (right - left) * fig.get_figwidth() or ncol == 2:
-            return -(-n // ncol)
-        leg.remove()
- 
- 
-def plot_comparison(panels, vmax, show_legend, args):
+PANEL_H = 2.9       # height of the panels in inches, the same with or without the legend
+
+
+def draw_legend(fig, handles, ncol, fontsize, x=0.5):
+    """Legend on top of the figure, centered at `x`. Returns (legend, width, height),
+    the sizes in inches."""
+    leg = fig.legend(handles=handles, loc="upper center", ncol=ncol, frameon=False,
+                     fontsize=fontsize, bbox_to_anchor=(x, 1.0))
+    box = leg.get_window_extent(fig.canvas.get_renderer())
+    return leg, box.width / fig.dpi, box.height / fig.dpi
+
+
+def plot_comparison(panels, vmax, show_legend, args, first_index=0, n_total=None,
+                    compact=False):
+    """first_index / n_total: position of panels[0] among all the panels and how many
+    there are (--separate draws one at a time). Only the first panel of each row has the
+    y axis (title and tick labels), only the last one the logDelta / logQ names; the rows
+    start at --y_axis.
+    compact: the width only fits the panels (the legend is in another file)."""
     n = len(panels)
+    n_total = n_total or n
+    row_starts = {k - 1 for k in args.y_axis}
+    has_y = first_index in row_starts
     k = args.font / rm.FONT         # --font: the left margin grows with the text
-    fig, axes = plt.subplots(1, n, figsize=(max(6.0, 1.9 * n + 1.0), 4.2),
-                             sharey=True, squeeze=False)
+    # Room for the y title and the tick labels, in inches; without them, almost none.
+    left_in = k * 0.9 if has_y else 0.05
+    fig, axes = plt.subplots(1, n, sharey=True, squeeze=False)
     axes = axes[0]
-    # Fixed margins in inches, so the y label never runs into the ticks of a narrow figure.
-    width = fig.get_figwidth()
-    left, right, bottom = k * 0.9 / width, 0.98, 0.26
-    top = 0.95
+    # One compact legend. register_map.add_legend() is sized for one big panel and
+    # overlaps short panels; the severe gradient is still red -> black in the plot.
+    handles, fontsize = legend_handles(args), args.font - 8
+
+    # The figure is at least as wide as the legend in two columns, also with --no-legend:
+    # figures made by the same command (e.g. one per depth, only one with the legend) then
+    # have the same width, and the same scale when LaTeX fits them to the same width.
+    leg, legend_w, _ = draw_legend(fig, handles, 2, fontsize)
+    leg.remove()
+    if compact:
+        width = (1.9 * n + left_in) / 0.98
+    else:
+        width = max(6.0, 1.9 * n + 1.0, (legend_w + left_in) / 0.98)
+    left, right = left_in / width, 0.98
+    fig.set_size_inches(width, PANEL_H)
+
+    top_in = 0.2                    # above the panels: room for half a tick label
     if show_legend:
-        # One compact legend. register_map.add_legend() is sized for one big panel and
-        # overlaps short panels; the severe gradient is still red -> black in the plot.
-        fontsize = args.font - 8
-        rows = add_legend(fig, legend_handles(args), left, right, fontsize)
-        # Room for the legend: ~1.8 line heights per row plus a small gap, in inches.
-        top = 1 - (0.15 + rows * 1.8 * fontsize / 72) / fig.get_figheight()
+        # As few rows as fit within the width of the panels; two columns always fit.
+        for ncol in sorted({len(handles), -(-len(handles) // 2), 2}, reverse=True):
+            leg, w, h = draw_legend(fig, handles, ncol, fontsize, x=(left + right) / 2)
+            if w <= (right - left) * width or ncol == 2:
+                break
+            leg.remove()
+        top_in = h + GAP_PT / 72
+    # Margins in inches around panels of fixed height: the legend makes the figure taller
+    # instead of the panels shorter.
+    bottom_in = bottom_margin_pt(args) / 72
+    height = PANEL_H + top_in + bottom_in
+    fig.set_size_inches(width, height)
+    bottom, top = bottom_in / height, 1 - top_in / height
     fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, wspace=0.12)
- 
+
     for i, (ax, (number, cfg, cells, _)) in enumerate(zip(axes, panels)):
         if args.letters:            # (a), (b), ... in front of the label under the panel
-            number = f"({chr(ord(args.letters) + i)}) {number}"
-        draw_panel(ax, number, cells, cfg, vmax, first=(i == 0), last=(i == n - 1), args=args)
- 
-    fig.text(k * 0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
-             ha="center", va="center", fontsize=args.font - 6, fontweight="bold")
-    fig.text((left + right) / 2, 0.03, "Limbs" if args.per_limb else "Coefficients",
-             ha="center", va="center", fontsize=args.font - 6, fontweight="bold")
+            number = f"({chr(ord(args.letters) + first_index + i)}) {number}"
+        j = first_index + i         # position among all the panels
+        draw_panel(ax, number, cells, cfg, vmax, first=(j in row_starts),
+                   last=(j + 1 in row_starts or j == n_total - 1), args=args)
+
+    if has_y:
+        fig.text(k * 0.35 / width, (bottom + top) / 2, "i-th Bit of Register", rotation=90,
+                 ha="center", va="center", fontsize=args.font - 6, fontweight="bold")
+    # x axis title right under the panel labels (its bottom at the bottom of the margin).
+    fig.text((left + right) / 2, GAP_PT / 72 / height,
+             "Limbs" if args.per_limb else "Coefficients",
+             ha="center", va="bottom", fontsize=args.font - 6, fontweight="bold")
     return fig
+
+
+def plot_legend(args):
+    """The legend alone, in two rows (--separate, --legend_file), to fit a paper column."""
+    fig = plt.figure()
+    handles = legend_handles(args)
+    draw_legend(fig, handles, -(-len(handles) // 2), args.font - 8)
+    return fig
+
+
+def save(fig, out):
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
+    print(f"-> {out}.png / .pdf")
 
 
 # ------------------------------------------------------------------ #
@@ -335,17 +427,28 @@ def main():
         sys.exit(f"ERROR: {exc}")
 
     vmax = finite_max([cells["mrep"] for _, _, cells, _ in panels], rm.MODERATE_PCT)
-    fig = plot_comparison(panels, vmax, show_legend=not args.no_legend, args=args)
-    rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
-    out = rm.IMG_DIR / args.title
-    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
-    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
     for number, _, cells, reps in panels:
         print(f"  panel {number}: {len(cells)} cells, {reps} repetition(s)")
-    print(f"-> {out}.png / .pdf")
+    rm.IMG_DIR.mkdir(parents=True, exist_ok=True)
+    out = rm.IMG_DIR / args.title
+    if args.separate:
+        # Same vmax in every file, so the colors compare across the panels.
+        figs = [(plot_comparison([panel], vmax, show_legend=False, args=args, first_index=i,
+                                 n_total=len(panels), compact=True),
+                 out.with_name(f"{out.name}_{i + 1}"))
+                for i, panel in enumerate(panels)]
+    elif args.legend_file:
+        figs = [(plot_comparison(panels, vmax, show_legend=False, args=args, compact=True), out)]
+    else:
+        figs = [(plot_comparison(panels, vmax, show_legend=not args.no_legend, args=args), out)]
+    if (args.separate or args.legend_file) and not args.no_legend:
+        figs.append((plot_legend(args), out.with_name(f"{out.name}_legend")))
+    for fig, path in figs:
+        save(fig, path)
     if args.show:
         plt.show()
-    plt.close(fig)
+    for fig, _ in figs:
+        plt.close(fig)
 
 
 if __name__ == "__main__":

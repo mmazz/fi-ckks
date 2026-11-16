@@ -635,36 +635,39 @@ _ev_mb_op_mul:
 
 
 ################## ISCA #########################
-REGCMP = python register_map_compare.py --results $(RES1)
 
 OFHE_BOOT_NEW  = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=59 bitsPerCoeff=64 mult_depth=4 
+
+
+
 _ev_isca_c1_fig15_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
 	      --where $(BOOTP) stage=$$s \
-	      --vary pipeline --letters  --label_size 16  --font 22\
+	      --vary pipeline --font 26 --separate --y_axis 1 4 --no_labels \
 	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
-	      --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
-	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel; \
+	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel \
+	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
-
-
-
-
-
 # ISCA figures (OFHE_BOOT_NEW: logDelta 59, mult_depth 4, NTT only)
 ISCA_BOOT_PIPES  = "mul x2; boot" "mul x3; boot" "mul x5; boot"
 ISCA_BOOT_LABELS = "2 mul + boot" "3 mul + boot" "5 mul + boot"
 
-
 _ev_isca_c1_fig19_rns_ntt_boot_map:
-	for s in encrypt_c0 encrypt_c1; do \
-	  $(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_$$s \
-	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \\
-			  --vary pipeline --values $(ISCA_BOOT_PIPES) --labels $(ISCA_BOOT_LABELS) \
-	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 16 --font 22\
-	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
-	done
+	$(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_encrypt_c1 \
+	  --where $(OFHE_BOOT_NEW) withNTT=1 stage=encrypt_c1 \
+	  --vary pipeline --values $(ISCA_BOOT_PIPES) --labels $(ISCA_BOOT_LABELS) \
+	  --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 16 --font 22\
+
+# _ev_isca_c1_fig19_rns_ntt_boot_map:
+# 	for s in encrypt_c0 encrypt_c1; do \
+# 	  $(REGCMP) --title ev_isca_c1_fig19_rns_ntt_boot_map_$$s \
+# 	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \
+# 		  --vary pipeline --values $(ISCA_BOOT_PIPES) --labels $(ISCA_BOOT_LABELS) \
+# 	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel  --letters  --label_size 16 --font 22\
+# 	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+# 	done
+# 
 _ev_isca_c1_fig20_rns_ntt_boot_map:
 	for s in encrypt_c0 encrypt_c1; do \
 	  $(REGCMP) --title ev_isca_c1_fig20_rns_ntt_boot_map_$$s \
@@ -672,24 +675,26 @@ _ev_isca_c1_fig20_rns_ntt_boot_map:
 	      --vary pipeline --values $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
 	      --fill_bits --taco --metric linf_rel; \
 	done
+
+
 OFHE_2BOOT = $(OFHE_BOOT_NEW) withNTT=1 stage=mul "pipeline=mul x5; boot; mul x2; boot"
+
 _ev_isca_2boots_rns_ntt_map:
 	for d in 4 5 6; do \
 	  $(REGCMP) --title ev_isca_2boots_rns_ntt_map_depth$$d \
 	      --where $(OFHE_2BOOT) mult_depth=8 op_depth=$$d \
-	      --vary op_step --values 0 1 --labels "step 0" "step 1"  --label_size 16 --font 22\
+	      --vary op_step --values 0 1 --labels '$$c_0$$' '$$c_1$$' --font 26 --legend_file \
 	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel --no_refs \
-	      $$( [ $$d != 3 ] && echo --no-legend ) || exit 1; \
+	      $$( [ $$d != 5 ] && echo --no-legend --y_axis 0 ) || exit 1; \
 	done
 _ev_isca_2boots_rns_ntt_map2:
-	for d in 3 4 5; do \
-	  $(REGCMP) --title ev_isca_2boots_rns_ntt_map_depth$$d \
+	for d in 4 5 6; do \
+	  $(REGCMP) --title ev_isca_2boots_rns_ntt_map2_depth$$d \
 	      --where $(OFHE_2BOOT) mult_depth=8 op_depth=$$d \
-	      --vary op_step --values 2 3 --labels "step 2" "step 3" \
-	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel --no_refs \
-	      $$( [ $$d != 3 ] && echo --no-legend ) || exit 1; \
+	      --vary op_step --values 0 1 --labels '$$c_0$$' '$$c_1$$' --font 26 --legend_file \
+	      --fill_bits --per_limb --limb_stat mean --taco --metric l2_rel --no_refs \
+	      $$( [ $$d != 5 ] && echo --no-legend --y_axis 0 ) || exit 1; \
 	done
-
 
 
 OFHE_3BOOT = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=59 bitsPerCoeff=64 \
@@ -703,6 +708,7 @@ _ev_isca_3boots_rns_ntt_map:
 	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel --no_refs \
 	      $$( [ $$d != 0 ] && echo --no-legend ) || exit 1; \
 	done
+
 REGCMP = python3 register_map_compare.py --results $(RES) $(SHOW)
 
 # Groups printed by step_heatmap.py --collapse (_c2_fig07). One panel per group,
