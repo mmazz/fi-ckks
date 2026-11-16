@@ -645,10 +645,12 @@ _ev_isca_c1_fig15_map:
 	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
 	      --where $(BOOTP) stage=$$s \
 	      --vary pipeline --font 26 --separate --y_axis 1 4 --no_labels \
-	      --values 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
+	      --values 'mul; boot'  'mul x3; boot'  'mul x5; boot' \
 	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel \
 	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
+
+
 # ISCA figures (OFHE_BOOT_NEW: logDelta 59, mult_depth 4, NTT only)
 ISCA_BOOT_PIPES  = "mul x2; boot" "mul x3; boot" "mul x5; boot"
 ISCA_BOOT_LABELS = "2 mul + boot" "3 mul + boot" "5 mul + boot"
