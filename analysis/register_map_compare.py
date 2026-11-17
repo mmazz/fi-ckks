@@ -110,6 +110,9 @@ def parse_args():
     p.add_argument("--metric", default="linf_rel",
                    help="relative error column used for the colors (default: linf_rel = MREP), "
                         "e.g. l2_rel; the same categories and thresholds are applied")
+    p.add_argument("--gap", choices=["all", "aligned", "other"], default="all",
+                   help="only the coefficients the decode reads (aligned), only the rest, or all. "
+                        "Meaningless with withNTT=1: coeff is then an NTT index")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if (args.diagram is None) == (args.vary is None):
@@ -212,6 +215,12 @@ def load_panels(args, sites):
         cells = metric_per_cell(load_data(group, args.results), args.metric, args.stat)
         if args.ylim:
             cells = cells[cells["bit"].between(*args.ylim)]
+        if args.gap != "all":
+            aligned = cells["coeff"] % sh.gap_of(cfg) == 0
+            cells = cells[aligned] if args.gap == "aligned" else cells[~aligned]
+            # Contiguous columns: the k-th kept coefficient of each limb goes to column k.
+            cells = cells.assign(coeff=cells.groupby("limb")["coeff"].rank(method="dense").astype(int) - 1)
+            print(f"  panel {number}: --gap {args.gap}, {cells['coeff'].nunique()} coeffs per limb")
         if args.per_limb:
             cells = per_limb_cells(cells, args.limb_stat)
         panels.append((number, cfg, cells, len(group)))
@@ -251,7 +260,7 @@ def panel_image(cells, cfg, vmax, masked, fill=False, width=None):
     return img, N, n_limbs
 
 def draw_panel(ax, number, cells, cfg, vmax, first, last, args):
-    width = int(cells["coeff"].max()) + 1 if args.per_limb else None
+    width = int(cells["coeff"].max()) + 1 if (args.per_limb or args.gap != "all") else None
     img, N, n_limbs = panel_image(cells, cfg, vmax, args.masked, fill=args.fill_bits, width=width)
     n_bits, n_x = img.shape[:2]
     # One pixel per cell: no marker-size tuning, no gaps, exact at any figure size.

@@ -513,7 +513,7 @@ _nn_profile:
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_isca_c1_fig15_map ev_isca_c1_fig20_rns_ntt_boot_map ev_isca_c1_fig19_rns_ntt_boot_map
-EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe  ev_isca_c2_fig07_map  ev_isca_2boots_rns_ntt_map ev_isca_3boots_rns_ntt_map ev_isca_2boots_rns_ntt_map2
+EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe  ev_isca_c2_fig07_map  ev_isca_2boots_rns_ntt_map ev_isca_3boots_rns_ntt_map ev_isca_2boots_rns_ntt_map2 ev_isca_c1_fig20_rns_boot_gap_map
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
 ev: $(EV)
@@ -642,15 +642,15 @@ OFHE_BOOT_NEW  = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=59 bitsPerCo
 
 _ev_isca_c1_fig15_map:
 	for s in encrypt_c0 encrypt_c1; do \
-	  $(REGCMP) --title ev_isca_c1_fig15_boot_map_$$s \
-	      --where $(BOOTP) stage=$$s \
-	      --vary pipeline --font 26 --separate --y_axis 1 4 --no_labels \
-	      --values 'mul; boot'  'mul x3; boot'  'mul x5; boot' \
-	      --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel \
-	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	  for g in aligned other; do \
+	    $(REGCMP) --title ev_isca_c1_fig15_boot_map_$${s}_$$g \
+	        --where $(BOOTP) stage=$$s --gap $$g \
+	        --vary pipeline --font 26 --separate --y_axis 1 4 --no_labels \
+	        --values 'mul; boot' 'mul x3; boot' 'mul x5; boot' \
+	        --ylim 0 300 --boot_cutoff --fill_bits --taco --metric linf_rel \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	  done; \
 	done
-
-
 # ISCA figures (OFHE_BOOT_NEW: logDelta 59, mult_depth 4, NTT only)
 ISCA_BOOT_PIPES  = "mul x2; boot" "mul x3; boot" "mul x5; boot"
 ISCA_BOOT_LABELS = "2 mul + boot" "3 mul + boot" "5 mul + boot"
@@ -678,6 +678,28 @@ _ev_isca_c1_fig20_rns_ntt_boot_map:
 	      --fill_bits --taco --metric linf_rel; \
 	done
 
+RNS_GAP_PIPES  = "boot" "mul; boot" "mul x2; boot"
+RNS_GAP_LABELS = "boot" "1 mul + boot" "2 mul + boot"
+
+_ev_isca_c1_fig20_rns_boot_gap_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	  for g in aligned other; do \
+	    $(REGCMP) --title ev_isca_c1_fig20_rns_boot_gap_map_$${s}_$$g \
+	        --where $(OFHE_BOOT_NEW) withNTT=0 stage=$$s --gap $$g \
+	        --vary pipeline --values $(RNS_GAP_PIPES) --labels $(RNS_GAP_LABELS) \
+	        --fill_bits --per_limb --limb_stat max --taco --metric linf_rel --no_refs \
+	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	  done; \
+	done
+
+_ev_isca_c1_fig20_rns_ntt_boot_map:
+	for s in encrypt_c0 encrypt_c1; do \
+	  $(REGCMP) --title ev_isca_c1_fig20_rns_ntt_boot_map_$$s \
+	      --where $(OFHE_BOOT_NEW) withNTT=1 stage=$$s \
+	      --vary pipeline --values $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
+	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel \
+	      $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
+	done
 
 OFHE_2BOOT = $(OFHE_BOOT_NEW) withNTT=1 stage=mul "pipeline=mul x5; boot; mul x2; boot"
 
