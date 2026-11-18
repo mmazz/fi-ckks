@@ -485,10 +485,9 @@ _nn_internal_heaan:
 	done
  
 
-_nn_internal_openfhe:
-	for s in $(NN_INTERNAL_OPENFHE); do \
-	    $(NN) --title nn_internal_openfhe_$$s --where $(NN_OPENFHE) --mode map --stages $$s --split gap  --separate || exit 1; \
-	done
+_nn_internal_openfhe_limbs:
+	$(NN) --title nn_internal_openfhe_cheby_limbs --where $(NN_OPENFHE) \
+	    --mode limbmap --stages cheby_tanh3 --split gap
 
 _nn_internal_openfheNTT:
 	for s in $(NN_INTERNAL_OPENFHE); do \
@@ -499,9 +498,6 @@ _nn_internal_openfheNTT_limbs:
 	$(NN) --title nn_internal_openfheNTT_cheby_limbs --where $(NN_OPENFHE_NTT) \
 	    --mode limbmap --stages cheby_tanh3
 
-_nn_internal_openfhe_limbs:
-	$(NN) --title nn_internal_openfhe_cheby_limbs --where $(NN_OPENFHE) \
-	    --mode limbmap --stages cheby_tanh3 --split gap --separate
 
 _nn_tolerance:
 	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance

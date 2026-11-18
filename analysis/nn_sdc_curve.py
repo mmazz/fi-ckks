@@ -143,7 +143,7 @@ def parse_args():
     p.add_argument("--tol", type=int, default=0,
                    help="--collapse: bits allowed to differ by more than SAME_P (default 0)")
     p.add_argument("--separate", action="store_true",
-                   help="map mode with --split gap: <title>_aligned and <title>_other")
+                   help="map / limbmap mode with --split gap: <title>_aligned and <title>_other")
     p.add_argument("--mode", choices=["rate", "stack", "map", "limbmap", "tolerance"], default="rate")
     p.add_argument("--title", default="nn_sdc")
     p.add_argument("--show", action="store_true")
@@ -152,8 +152,8 @@ def parse_args():
         p.error("--split gap only applies to --mode rate, map and limbmap")
     if args.collapse and args.mode != "map":
         p.error("--collapse only applies to --mode map")
-    if args.separate and (args.mode != "map" or args.split != "gap"):
-        p.error("--separate only applies to --mode map --split gap")
+    if args.separate and (args.mode not in ("map", "limbmap") or args.split != "gap"):
+        p.error("--separate only applies to --mode map / limbmap --split gap")
     if args.legend != "top" and args.mode != "rate":
         p.error("--legend none / only only apply to --mode rate")
     return args
@@ -608,18 +608,21 @@ def per_limb(data):
     out["rate"] = out["k"] / out["n"]
     return out.reset_index()
 
-def plot_limb_map(steps, split):
+def plot_limb_map(steps, split, only=None):
     """Map op_step x limb of P(mis): one row per (stage, op_step), one column per limb.
     One panel over every coefficient (--split none) or one per group, aligned | other
-    (--split gap). Gray: limbs that the register of that step does not have. Each cell
-    prints its value, so the protected limb and the rate of the other ones can be read off."""
-    groups = ("all",) if split == "none" else ("aligned", "other")
+    (--split gap). only: draw just that group ("aligned" or "other"), for --separate.
+    Gray: limbs that the register of that step does not have. Each cell prints its value,
+    so the protected limb and the rate of the other ones can be read off."""
+    all_groups = ("all",) if split == "none" else ("aligned", "other")
+    groups = all_groups if only is None else (only,)
     n = len(steps)
-    # tables[group][i]: per_limb of row i restricted to that group of coefficients
+    # tables[group][i]: per_limb of row i restricted to that group of coefficients.
+    # Built for every group, so that n_limbs (and the figure width) is the same in the
+    # aligned and the other figure of --separate.
     tables = {g: [per_limb(coeff_groups(data, cfg, split)[g]) for _, cfg, data in steps]
-              for g in groups}
-    n_limbs = max(int(t["limb"].max()) for g in groups for t in tables[g] if not t.empty) + 1
-
+              for g in all_groups}
+    n_limbs = max(int(t["limb"].max()) for g in all_groups for t in tables[g] if not t.empty) + 1
     fig, axes = plt.subplots(1, len(groups), figsize=(1.2 + 0.9 * n_limbs * len(groups), 1.6 + 0.34 * n),
                              sharey=True, squeeze=False)
     axes = axes[0]
@@ -768,9 +771,10 @@ def main():
             # one (left), the color bar only on the other one (right). The summary of both
             # is printed once, as without --separate.
             summary = {}
-            for group, labels, cbar in (("aligned", True, False), ("other", False, True)):
-                fig, part = plot_map(steps, args.split, only=group, row_labels=labels,
-                                     colorbar=cbar)
+            # Row names and color bar on both figures: they go one above the other, and
+            # with the same layout the two maps line up.
+            for group in ("aligned", "other"):
+                fig, part = plot_map(steps, args.split, only=group) 
                 for key, row in part.items():
                     merged = summary.setdefault(key, {"n": row["n"]})
                     merged["n"] = min(merged["n"], row["n"])
@@ -781,7 +785,15 @@ def main():
         fig, summary = plot_map(steps, args.split)
         print_map_summary(summary)
     elif args.mode == "limbmap":
-        fig = plot_limb_map(load_steps(args), args.split)
+        steps = load_steps(args)
+        if args.separate:
+            # One figure per group, to go one above the other: same rows, same limbs,
+            # row names and color bar on both, so they line up.
+            for group in ("aligned", "other"):
+                fig = plot_limb_map(steps, args.split, only=group)
+                save_figure(fig, f"{args.title}_{group}", args.show)
+            return
+        fig = plot_limb_map(steps, args.split)
     elif args.mode == "tolerance":
         fig, curves = plot_tolerance(load_stages(args))
         print_tolerance(curves)
