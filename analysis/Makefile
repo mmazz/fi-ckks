@@ -501,7 +501,7 @@ _nn_internal_openfheNTT_limbs:
 
 _nn_internal_openfhe_limbs:
 	$(NN) --title nn_internal_openfhe_cheby_limbs --where $(NN_OPENFHE) \
-	    --mode limbmap --stages cheby_tanh3 --split gap
+	    --mode limbmap --stages cheby_tanh3 --split gap --separate
 
 _nn_tolerance:
 	$(NN) --title nn_tolerance_heaan --where $(NN_HEAAN) --mode tolerance

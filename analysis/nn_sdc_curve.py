@@ -402,8 +402,8 @@ def plot(stages, args):
         if i + ncols >= n:
             ax.set_xlabel(r"Bit index $-\ \log Q$" if shifted else "Bit index",
                           fontsize=FONT - 2)
-        ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
-                       fontsize=FONT - 3, pad=20)
+   #     ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
+   #                    fontsize=FONT - 3, pad=20)
         ax.grid(alpha=0.3)
 
         # Output registers: HEAAN logits are only log q_l = 70 bits wide but the campaign
