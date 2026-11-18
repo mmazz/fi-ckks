@@ -561,7 +561,7 @@ def plot_map(steps, split, only=None, row_labels=True, colorbar=True):
         ax.axvline(log_delta, color="black", lw=0.8, ls="--")
         ax.text(log_delta, 1.0, r"$\log\Delta$", transform=ax.get_xaxis_transform(),
                 ha="center", va="bottom", fontsize=FONT - 5)
-        ax.set_title(GROUP_LABEL[group], fontsize=FONT - 3, pad=20)
+        #ax.set_title(GROUP_LABEL[group], fontsize=FONT - 3, pad=20)
         ax.set_xlim(0, width)
         ax.set_xlabel("Bit index", fontsize=FONT - 2)
         ax.tick_params(labelsize=FONT - 5)
@@ -649,8 +649,8 @@ def plot_limb_map(steps, split, only=None):
         ax.set_xticklabels([str(l) for l in range(n_limbs)])
         ax.set_xlabel("Limb", fontsize=FONT - 2)
         ax.tick_params(labelsize=FONT - 5)
-        if split != "none":
-            ax.set_title(GROUP_LABEL[group], fontsize=FONT - 3)
+        #if split != "none":
+        #    ax.set_title(GROUP_LABEL[group], fontsize=FONT - 3)
 
         # Printed summary: P(mis) per limb and the fewest injections behind a cell of the row.
         print(f"  [{group}]")
@@ -716,7 +716,7 @@ def plot_tolerance(stages):
         # E_L2 = 1: the error is as large as the logits themselves
         ax.axvline(1.0, color="black", lw=0.8, ls=":", zorder=1)
         ax.axhline(RANDOM_CLASS, color="#bdbcb6", lw=0.8, zorder=1)
-        ax.set_title(title, fontsize=FONT - 3)
+        #ax.set_title(title, fontsize=FONT - 3)
         ax.set_xlabel(r"$E_{L_2}$ of the logits", fontsize=FONT - 2)
         ax.grid(alpha=0.3)
         ax.tick_params(labelsize=FONT - 5)
