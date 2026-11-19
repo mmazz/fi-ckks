@@ -342,7 +342,7 @@ _mb_fig02_boot_cut:
 # Chapter 7, server side (c2_). Each operation: heatmap op_step x bit with one row per
 # pattern, then the E_L2 curves of one step per pattern.
 # ======================================================================================
-CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07
+CH2 = c2_fig01 c2_fig02 c2_fig03 c2_fig04 c2_fig05 c2_fig06 c2_fig07 c1_fig21_2boots_rns_ntt_limbs
 ch2: $(CH2)
 $(addprefix _,$(CH2)): RES = $(RES2)
 
@@ -354,7 +354,15 @@ MUL_SHOW  ?= 0, 11, 14, 24
 ROT_SHOW  ?= 0, 1, 2, 3, 6
 # The mul of the mixed pipeline drawn in c2_fig06 (0 = first, 1 = second).
 MIX_DEPTH ?= 0
+OFHE_2BOOT_DEPTHS = 5 6
+OFHE_2BOOT_LABELS = "mul 6 (after boot 1)" "mul 7 (before boot 2)"
 
+
+_c1_fig21_2boots_rns_ntt_limbs:
+	$(LIMB) --title c1_fig21_2boots_rns_ntt_limb --where $(OFHE_2BOOT) mult_depth=8 \
+	    --query 'op_depth in [5, 6]' \
+	    --vary op_depth --per op_step --order $(OFHE_2BOOT_DEPTHS) --labels $(OFHE_2BOOT_LABELS) \
+	    --ylabel '$$E_{L_2}$$ (symlog)'
 _c2_fig01:
 	$(call HEAT3,c2_fig01_add,--where $(OP_add))
 	$(CURVE) --title c2_fig01_add --where $(OP_add) --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
@@ -737,6 +745,7 @@ _ev_isca_2boots_rns_ntt_map:
 	      --fill_bits --per_limb --limb_stat mean --taco --metric linf_rel --no_refs \
 	      $$( [ $$d != 5 ] && echo --no-legend --y_axis 0 ) || exit 1; \
 	done
+
 _ev_isca_2boots_rns_ntt_map2:
 	for d in 4 5 6; do \
 	  $(REGCMP) --title ev_isca_2boots_rns_ntt_map2_depth$$d \
