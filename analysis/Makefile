@@ -242,10 +242,12 @@ _c1_fig14:
 _c1_fig15:
 	$(CURVE) --title c1_fig15_boot_sweep --where $(BOOTP) \
 	    --query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
-	    --vary pipeline --per stage \
+	    --vary pipeline --per stage --split gap\
 	    --order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
 	    --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
 	    --xlim 0 300 --lines --boot_cutoff $(YL)
+
+
 
 # RNS (4 limbs), "add; rot 3", one curve per limb.
 _c1_fig16:
@@ -513,7 +515,7 @@ _nn_profile:
 # ======================================================================================
 EV_CLIENT = ev_decrypt ev_decode ev_dec_mul ev_mul_rns ev_detector ev_encode_ska ev_logDelta_c1 ev_fig04\
             ev_logQ_c1 ev_add_pmul_rot ev_rns_pmul ev_rns_add_pmul_rot_limb ev_isca_c1_fig15_map ev_isca_c1_fig20_rns_ntt_boot_map ev_isca_c1_fig19_rns_ntt_boot_map \
-			ev_isca_c1_fig20_rns_boot_gap_map
+			ev_isca_c1_fig20_rns_boot_gap_map ev_c1_fig15 ev_c1_fig15b ev_c1_fig19_rns_boot_pmul_limb
 EV_SERVER = ev_mul_depth ev_mix ev_mul_openfhe ev_add_openfhe  ev_isca_c2_fig07_map  ev_isca_2boots_rns_ntt_map ev_isca_3boots_rns_ntt_map ev_isca_2boots_rns_ntt_map2 
 EV_BURST  = ev_mb_enc_shift ev_mb_rns ev_mb_boot ev_mb_op_mul 
 EV = $(EV_CLIENT) $(EV_SERVER) $(EV_BURST)
@@ -521,6 +523,38 @@ ev: $(EV)
 $(addprefix _,$(EV_CLIENT)): RES = $(RES1)
 $(addprefix _,$(EV_SERVER)): RES = $(RES2)
 $(addprefix _,$(EV_BURST)):  RES = $(RES_BURST)
+
+
+_ev_c1_fig15:
+	$(CURVE) --title ev_c1_fig15_boot_sweep --where $(BOOTP) \
+	    --query 'pipeline in ["mul; boot", "mul x2; boot", "mul x3; boot", "mul x4; boot", "mul x5; boot"] and $(ENC)' \
+	    --vary pipeline --per stage --split gap \
+	    --order 'mul; boot' 'mul x2; boot' 'mul x3; boot' 'mul x4; boot' 'mul x5; boot' \
+	    --labels '1 mul + boot' '2 mul + boot' '3 mul + boot' '4 mul + boot' '5 mul + boot' \
+	    --xlim 0 300 --lines --boot_cutoff $(YL)
+
+_ev_c1_fig15b:
+	$(CURVE) --title ev_c1_fig15_boot_pmul --where $(BOOTP) \
+	    --query 'pipeline in ["pmul; boot", "pmul x2; boot"] and $(ENC)' \
+	    --vary pipeline --per stage --split gap \
+	    --order 'pmul; boot' 'pmul x2; boot'  \
+	    --labels '1 pmul + boot' '2 pmul + boot' \
+	    --xlim 0 300 --lines --boot_cutoff $(YL)
+
+
+# Boot in RNS after pmuls: one point per limb (x = limb where the bit was flipped),
+# error combined over every bit and coefficient of the limb.
+_ev_c1_fig19_rns_boot_pmul_limb:
+	$(LIMB) --title ev_c1_fig19_rns_boot_pmul_limb --where $(OFHE_BOOT) withNTT=0 mult_depth=4 logDelta=59\
+	    --query 'pipeline in ["pmul; boot", "pmul x2; boot"] and $(ENC)' \
+	    --vary pipeline --per stage --split gap \
+	    --order 'pmul; boot' 'pmul x2; boot' \
+	    --labels '1 pmul + boot' '2 pmul + boot' \
+	    --lines $(YL)
+
+	    --xlim 0 300 --lines --boot_cutoff $(YL)
+
+
 
 # Null pipeline: decrypt_cX lands on top of encrypt_cX.
 _ev_decrypt:

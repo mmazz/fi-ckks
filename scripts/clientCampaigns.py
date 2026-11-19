@@ -160,6 +160,8 @@ GROUPS = {
                  seed=SEEDS, seed_input=INPUTS),
    "boot_sweep": grid(BOOT, pipeline=["mul; boot", "mul x2; boot", "mul x3; boot", "mul x5; boot"], stage=ENC,
                  seed=SEEDS, seed_input=INPUTS),
+   "boot_test": grid(BOOT, pipeline=["pmul; boot", "pmul x2; boot"], stage=ENC,
+                 seed=SEEDS, seed_input=INPUTS),
     # EVIDENCE (boot in RNS, make ev_rns_boot). OpenFHE drops the upper limbs before the
     # boot (Compress to 2 limbs in backends/openfhe.cpp) without reading them, rescales once
     # more and raises only limb 0. Expected: a limb that is only dropped is masked at every
@@ -167,6 +169,8 @@ GROUPS = {
     # limbs 0-1 and the limb each rescale removes before the boot (the top one of each mul)
     # break the output at every bit. 0, 1 and 2 rescales before the boot.
     "boot_rns": grid(BOOT_OPENFHE, pipeline=["boot", "mul; boot", "mul x2; boot"], stage=ENC,
+                     seed=SEEDS[:1], seed_input=INPUTS[:2]),
+    "boot_rns_test": grid(BOOT_OPENFHE, pipeline=["boot", "pmul; boot", "pmul x2; boot"], stage=ENC,
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
     "boot_rns_ntt": grid(BOOT_OPENFHE, withNTT=[1], pipeline=["boot", "add x2; rot 3; boot", "mul; boot", "mul x2; boot"], stage=ENC,
                      seed=SEEDS[:1], seed_input=INPUTS[:2]),
