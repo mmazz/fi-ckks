@@ -354,15 +354,19 @@ MUL_SHOW  ?= 0, 11, 14, 24
 ROT_SHOW  ?= 0, 1, 2, 3, 6
 # The mul of the mixed pipeline drawn in c2_fig06 (0 = first, 1 = second).
 MIX_DEPTH ?= 0
-OFHE_2BOOT_DEPTHS = 5 6
-OFHE_2BOOT_LABELS = "mul 6 (after boot 1)" "mul 7 (before boot 2)"
+OFHE_2BOOT_DEPTHS = 4 5 6
+OFHE_2BOOT_LABELS = "mul 5 (antes boot 1)" "mul 6 (despues boot 1)" "mul 7 (antes boot 2)"
 
+
+OFHE_BOOTS_NEW  = library=openfhe logN=6 logSlots=3 logQ=60 logDelta=59 bitsPerCoeff=64 mult_depth=4 
+OFHE_2BOOTS = $(OFHE_BOOTS_NEW) withNTT=1 stage=mul "pipeline=mul x5; boot; mul x2; boot"
 
 _c1_fig21_2boots_rns_ntt_limbs:
-	$(LIMB) --title c1_fig21_2boots_rns_ntt_limb --where $(OFHE_2BOOT) mult_depth=8 \
-	    --query 'op_depth in [5, 6]' \
+	$(LIMB) --title c1_fig21_2boots_rns_ntt_limb --where $(OFHE_2BOOTS) mult_depth=8 \
+	    --query 'op_depth in [4, 5, 6]' \
 	    --vary op_depth --per op_step --order $(OFHE_2BOOT_DEPTHS) --labels $(OFHE_2BOOT_LABELS) \
 	    --ylabel '$$E_{L_2}$$ (symlog)'
+
 _c2_fig01:
 	$(call HEAT3,c2_fig01_add,--where $(OP_add))
 	$(CURVE) --title c2_fig01_add --where $(OP_add) --query 'op_step in [$(ADD_SHOW)]' --vary op_step --split gap $(YL)
