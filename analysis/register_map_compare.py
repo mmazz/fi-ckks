@@ -199,7 +199,7 @@ def load_panels(args, sites):
     panels = []
     for number, group in per_site:
         cfg = require_single_config(group).iloc[0]          # only seeds may vary
-        cells = metric_per_cell(load_data(group, args.results), args.metric, args.stat)
+        cells = sh.metric_per_cell(load_data(group, args.results), args.metric, args.stat)
         if args.ylim:
             cells = cells[cells["bit"].between(*args.ylim)]
         if args.gap != "all":
