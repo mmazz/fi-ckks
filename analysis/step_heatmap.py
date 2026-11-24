@@ -102,6 +102,11 @@ def parse_args():
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
+    p.add_argument("--legend_file", action="store_true",
+                   help="draw the panel without legend and save the legend alone in <title>_legend")
+    p.add_argument("--vmax", type=float, default=None,
+                   help="l2_rel: top of the red -> black gradient. Give the same value to every "
+                        "panel of a figure, so one shade means the same E_L2 in all of them")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
     if args.tol is None:
@@ -322,44 +327,42 @@ def report_ranges(curves, name):
 # ------------------------------------------------------------------ #
 def draw_mrep(fig, ax, values, args):
     """Categories as colors. linf_rel: register_map.py colors, severe as a red -> black
-    log gradient. l2_rel: the E_L2 classes of Ch. 4, one flat color each."""
-    vmax = finite_max(values, rm.MODERATE_PCT)
-    flat = values.ravel()
+    log gradient. l2_rel: the E_L2 classes of Ch. 4, destroyed as a red -> black log gradient.
+    Returns the legend entries, so the legend can also be saved alone (--legend_file)."""
     flat = values.ravel()
     if args.metric == "l2_rel":
         cat = categories(flat, "l2_rel")
         rgba = np.array([mcolors.to_rgba(L2_COLORS[c] if c >= 0 else NOT_FLIPPED) for c in cat])
-        # Destroyed cells: red -> black log gradient from E_L2 = 1 up to the largest finite
-        # value in the figure. An overflow (inf) is clipped to the top, so it shows as black.
-        top = finite_max(values, L2_DESTROYED)
+        # Destroyed cells: red -> black log gradient from E_L2 = 1 up to --vmax, or up to the
+        # largest finite value in the figure. An overflow (inf) is clipped to the top: black.
+        top = args.vmax if args.vmax is not None else finite_max(values, L2_DESTROYED)
         destroyed = cat == 3
         if destroyed.any():
             norm = mcolors.LogNorm(vmin=L2_DESTROYED, vmax=max(top, L2_DESTROYED * 1.01), clip=True)
             rgba[destroyed] = rm.SEVERE_CMAP(norm(flat[destroyed]))
+        entries = [
+            (L2_COLORS[0], r"Masked ($E_{L_2}=0$)"),
+            (L2_COLORS[1], r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
+            (L2_COLORS[2], r"Visible ($E_{L_2}> 10^{-2}$)"),
+            (L2_COLORS[3], rf"Destroyed ($E_{{L_2}}\geq 1$, up to {top:.3g})"),
+        ]
     else:
         vmax = finite_max(values, rm.MODERATE_PCT)
         rgba = rm.mrep_colors(flat, vmax)
         rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
+        entries = [
+            (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
+            (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
+            (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+            (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
+        ]
+    # Only when the figure has a cell that was not injected: an exhaustive map has none.
+    if np.isnan(flat).any():
+        entries.append((NOT_FLIPPED, "not injected"))
+
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
 
-    if not args.no_legend:
-        if args.metric == "l2_rel":
-            entries = [
-                (L2_COLORS[0], r"Masked ($E_{L_2}=0$)"),
-                (L2_COLORS[1], r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
-                (L2_COLORS[2], r"Visible ($E_{L_2}> 10^{-2}$)"),
-                (L2_COLORS[3], rf"Destroyed ($E_{{L_2}}\geq 1$, up to {top:.3g})"),
-            ]
-        else:
-            entries = [
-                (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
-                (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
-                (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
-                (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
-            ]
-        # Only when the figure has a cell that was not injected: an exhaustive map has none.
-        if np.isnan(flat).any():
-            entries.append((NOT_FLIPPED, "not injected"))
+    if not args.no_legend and not args.legend_file:
         handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
                    for color, label in entries]
         ax.legend(
@@ -370,6 +373,8 @@ def draw_mrep(fig, ax, values, args):
             fontsize=TICK_FONT,
             bbox_to_anchor=(0.5, 1.05),
         )
+    return entries
+
 
 def draw_log2(fig, ax, values, floor):
     # Sequential, light = small error. It starts at 15% of Blues so the smallest real error
@@ -412,6 +417,18 @@ def group_bits(curves, lo, hi, width):
     values = pd.concat(cols, axis=1).to_numpy(dtype=float)
     return values, labels, np.array(starts), np.array(binned)
 
+def save_legend(entries, name):
+    """The legend alone, so every panel of a figure keeps the same width."""
+    fig = plt.figure(figsize=(14, 0.6))
+    handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
+               for color, label in entries]
+    fig.legend(handles=handles, loc="center", ncol=len(handles), frameon=False, fontsize=TICK_FONT)
+    out = IMG_DIR / f"{name}_legend"
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=120)
+    print(f"-> {out}.png")
+    plt.close(fig)
+
 
 def plot(curves, groups, cfg, name, args):
     # Columns are only the bits that were flipped, so a random campaign (a subset of the
@@ -432,7 +449,7 @@ def plot(curves, groups, cfg, name, args):
 
     fig, ax = plt.subplots(figsize=(14, 0.35 * len(curves) + 2.5))
     if args.color == "mrep":
-        draw_mrep(fig, ax, values, args)
+        entries = draw_mrep(fig, ax, values, args)
     else:
         draw_log2(fig, ax, values, args.floor)
     # Row labels: the op_steps of each row (--rows / --collapse), or each op_step and its
@@ -476,6 +493,11 @@ def plot(curves, groups, cfg, name, args):
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=120)
     print(f"-> {out}.png")
+    if args.legend_file and args.color == "mrep":
+        save_legend(entries, name)
+    if args.show:
+        plt.show()
+    plt.close(fig)
     if args.show:
         plt.show()
     plt.close(fig)
@@ -495,6 +517,7 @@ def main():
         groups = patterns(curves, args)
         name = args.title if pv is None else f"{args.title}_{args.per}_{pv}"
         print(f"{name}: {len(curves)} steps -> {len(groups)} patterns ({args.color}, tol = {args.tol})")
+
         for i, g in enumerate(groups):
             print(f"  {chr(ord('A') + i)}: steps {g}  (representative: {g[0]})")
         print(f"  representatives: {[g[0] for g in groups]}")
