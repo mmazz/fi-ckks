@@ -37,8 +37,8 @@ CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
 LIMB   = python3 limb_curve.py   --results $(RES) $(SHOW)
 SHARE  = python3 slot_share.py   --results $(RES) $(SHOW)
 SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
-HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW)
-REG    = python3 register_map.py --results $(RES) $(SHOW)
+HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW) --metric l2_rel
+REG    = python3 register_map.py --results $(RES) $(SHOW) --metric l2_rel
 NN     = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 
 # y axis of every E_L2 curve: linear below 1e-2, which with inputs in [-1, 1] means values
@@ -289,7 +289,7 @@ RNS_LIMB_LABELS = "boot" "2 add + rot + boot" "1 mul + boot" "2 mul + boot"
 _c1_fig19_rns_boot:
 	for s in encrypt_c0 encrypt_c1; do \
 	    $(CMP) --title c1_fig19_rns_boot_map_$$s --where $(OFHE_BOOT) withNTT=0 stage=$$s \
-	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --metric l2_rel --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
 	$(CURVE) --title c1_fig19_rns_boot_failed --where $(OFHE_BOOT) withNTT=0 --query '$(RNS_BOOT_Q)'  	    --ylabel 'Fraction of slots $$>10\times$$'\
@@ -299,7 +299,7 @@ _c1_fig19_rns_boot:
 _c1_fig19_rns_ntt_boot:
 	for s in encrypt_c0 encrypt_c1; do \
 	    $(CMP) --title c1_fig19_rns_ntt_boot_map_$$s --where $(OFHE_BOOT) withNTT=1 stage=$$s \
-	        --vary pipeline --values $(RNS_BOOT_PIPES) --labels $(RNS_BOOT_LABELS) --fill_bits \
+	        --vary pipeline --values $(RNS_BOOT_PIPES) --metric l2_rel --labels $(RNS_BOOT_LABELS) --fill_bits \
 	        $$( [ $$s = encrypt_c1 ] && echo --no-legend ) || exit 1; \
 	done
 	$(CURVE) --title c1_fig19_rns_ntt_boot_failed --where $(OFHE_BOOT) withNTT=1 --query  '$(RNS_BOOT_Q)'	    --ylabel 'Fraction of slots $$>10\times$$' \
@@ -309,7 +309,7 @@ _c1_fig19_rns_ntt_boot:
 _c1_fig20_rns_ntt_boot_limbs:
 	$(LIMB) --title c1_fig20_rns_ntt_boot_limb --where $(OFHE_BOOT) withNTT=1 \
 	    --query '$(ENC) and pipeline in ["boot", "add x2; rot 3; boot", "mul; boot", "mul x2; boot"]' \
-	    --vary pipeline --per stage --order $(RNS_LIMB_PIPES) --labels $(RNS_LIMB_LABELS) \
+	    --vary pipeline --per stage --order $(RNS_LIMB_PIPES) --metric l2_rel --labels $(RNS_LIMB_LABELS) \
 	    --ylabel '$$E_{L_2}$$ (symlog)'
 
 # ======================================================================================

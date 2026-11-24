@@ -94,6 +94,9 @@ def parse_args():
                    help="end of the grouped range, excluded (default: logQ of the config)")
     p.add_argument("--group_width", type=int, default=None, metavar="W",
                    help="bits per bin (default: the whole range in one bin)")
+    p.add_argument("--metric", default="l2_rel",
+                   help="mrep coloring: relative error column, linf_rel (worst slot, default) "
+                        "or l2_rel (E_L2); same thresholds, applied to the value in %%")
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
@@ -121,6 +124,19 @@ def gap_of(cfg):
     """Distance between the coefficients the decode reads: (N/2) / slots."""
     return ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
 
+def metric_per_cell(data, metric, stat):
+    """Same as register_map.mrep_per_cell, for any relative error column (in %).
+
+    On a collapsed dir the seeds are already combined and `{metric}_{stat}` holds that
+    stat, so it is picked by name. The result keeps the name `mrep`, so the colors and
+    the categories work unchanged."""
+    col = f"{metric}_{stat}" if f"{metric}_{stat}" in data.columns else metric
+    if col not in data.columns:
+        options = sorted(c for c in data.columns if "rel" in c)
+        raise ValueError(f"no column {col!r} in the data; relative columns: {options}")
+    data = data.assign(mrep=data[col].astype(float) * 100.0)
+    return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
+
 
 def step_curves(camps, results, args, gap_sel=None):
     """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2).
@@ -137,7 +153,7 @@ def step_curves(camps, results, args, gap_sel=None):
             aligned = d["coeff"] % gap_of(cfg) == 0
             d = d[aligned] if gap_sel == "aligned" else d[~aligned]
         if args.color == "mrep":
-            cells = rm.mrep_per_cell(d, args.stat)                           # seeds combined
+            cells = metric_per_cell(d, args.metric, args.stat)               # seeds combined
             rows[int(step)] = cells.groupby("bit")["mrep"].agg(args.coeff_stat)
         else:
             per_coeff = d.groupby(["limb", "coeff", "bit"])["err_bits"].mean()   # mean over seeds
@@ -297,14 +313,22 @@ def draw_mrep(fig, ax, values, args):
     rgba = rm.mrep_colors(flat, vmax)
     rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
-
     if not args.no_legend:
-        entries = [
-            (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
-            (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
-            (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
-            (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
-        ]
+        if args.metric == "l2_rel":
+            # Same thresholds as the worst-slot categories, read as E_L2 = value / 100.
+            entries = [
+                (rm.GREEN, r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
+                (rm.YELLOW, r"Visible ($E_{L_2}\leq 10^{-1}$)"),
+                (rm.ORANGE, r"Visible ($E_{L_2}< 1$)"),
+                (rm.RED, rf"Destroyed ($E_{{L_2}}\geq 1$, up to {vmax / 100:.3g})"),
+            ]
+        else:
+            entries = [
+                (rm.GREEN, rf"Correct ($\leq${rm.MASKED_PCT:g}%)"),
+                (rm.YELLOW, rf"Degraded ($\leq${rm.MINOR_PCT:g}%)"),
+                (rm.ORANGE, rf"SDC ($\leq${rm.MODERATE_PCT:g}%)"),
+                (rm.RED, rf"Severe SDC ($>${rm.MODERATE_PCT:g}%, up to {vmax:.3g}%)"),
+            ]
         # Only when the figure has a cell that was not injected: an exhaustive map has none.
         if np.isnan(flat).any():
             entries.append((NOT_FLIPPED, "not injected"))

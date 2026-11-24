@@ -107,7 +107,7 @@ def parse_args():
                    help=f"base font size; every text in the figure scales with it (default: {rm.FONT})")
     p.add_argument("--label_size", type=float, default=None, metavar="PT",
                    help="font size of the text under each panel (default: --font - 6)")
-    p.add_argument("--metric", default="linf_rel",
+    p.add_argument("--metric", default="l2_rel",
                    help="relative error column used for the colors (default: linf_rel = MREP), "
                         "e.g. l2_rel; the same categories and thresholds are applied")
     p.add_argument("--gap", choices=["all", "aligned", "other"], default="all",
@@ -160,19 +160,6 @@ def per_limb_cells(cells, stat):
     The limb index is moved to `coeff`, so panel_image draws one column per limb."""
     out = cells.groupby(["limb", "bit"], as_index=False)["mrep"].agg(stat)
     return out.assign(coeff=out["limb"], limb=0)
-
-def metric_per_cell(data, metric, stat):
-    """Same as register_map.mrep_per_cell, for any relative error column (in %).
-
-    On a collapsed dir the seeds are already combined and `{metric}_{stat}` holds that
-    stat, so it is picked by name. The result keeps the name `mrep`, so the colors and
-    the categories work unchanged."""
-    col = f"{metric}_{stat}" if f"{metric}_{stat}" in data.columns else metric
-    if col not in data.columns:
-        options = sorted(c for c in data.columns if "rel" in c)
-        raise ValueError(f"no column {col!r} in the data; relative columns: {options}")
-    data = data.assign(mrep=data[col].astype(float) * 100.0)
-    return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
 
 def load_panels(args, sites):
     """[(number, cfg, cells, n_campaigns)], one per site, in the order of `sites`."""
