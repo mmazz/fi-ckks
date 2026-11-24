@@ -37,7 +37,7 @@ CURVE  = python3 bit_curve.py    --results $(RES) $(SHOW)
 LIMB   = python3 limb_curve.py   --results $(RES) $(SHOW)
 SHARE  = python3 slot_share.py   --results $(RES) $(SHOW)
 SHIFT  = python3 encode_shift.py --results $(RES) $(SHOW)
-HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW) --metric l2_rel
+HEAT   = python3 step_heatmap.py --results $(RES) $(SHOW) --metric l2_rel --legend_file
 REG    = python3 register_map.py --results $(RES) $(SHOW) --metric l2_rel
 NN     = python3 nn_sdc_curve.py --results $(RES_NN) $(SHOW)
 
