@@ -51,6 +51,8 @@ TICK_FONT = 14
 IMG_DIR = Path(__file__).resolve().parent / "img"
 ERR_CEIL_BITS = np.log2(ERR_CEIL)    # err_bits of an overflowed flip (see utils/results.py)
 ERR_FLOOR_BITS = np.log2(ERR_FLOOR)  # err_bits of a fully masked flip (error exactly 0)
+
+L2_COLORS =  [rm.GREEN, rm.YELLOW, rm.ORANGE, rm.RED]
 NOT_FLIPPED = "#dddddd"              # bit not injected at this step
 GROUP_COLS = 8                       # --group: drawn width of a bin, in single-bit columns
 
@@ -95,8 +97,8 @@ def parse_args():
     p.add_argument("--group_width", type=int, default=None, metavar="W",
                    help="bits per bin (default: the whole range in one bin)")
     p.add_argument("--metric", default="l2_rel",
-                   help="mrep coloring: relative error column, linf_rel (worst slot, default) "
-                        "or l2_rel (E_L2); same thresholds, applied to the value in %%")
+                   help="mrep coloring: relative error column, linf_rel (worst slot) "
+                        "or l2_rel (E_L2, default); same thresholds, applied to the value in %%")
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
@@ -116,7 +118,17 @@ def select_campaigns(args):
         sys.exit(f"No finished campaigns match --where {args.where} --query {args.query!r}")
     return camps
 
-
+def categories(values, metric="l2_rel"):
+    """Category of each cell, -1 for NaN.
+    linf_rel: register_map categories (0 correct, 1 degraded, 2 SDC, 3 severe SDC).
+    l2_rel: the E_L2 classes of Ch. 4 (0 masked, exactly 0; 1 not visible; 2 visible; 3 destroyed)."""
+    if metric == "l2_rel":
+        cat = np.select([values == 0, values <= rm.MASKED_PCT, values < rm.MODERATE_PCT],
+                        [0, 1, 2], default=3)
+    else:
+        cat = np.digitize(values, [rm.MASKED_PCT, rm.MINOR_PCT, rm.MODERATE_PCT], right=True)
+    cat = np.where(np.isnan(values), -1, cat)
+    return np.where(np.isinf(values), 3, cat)
 # ------------------------------------------------------------------ #
 # Data
 # ------------------------------------------------------------------ #
@@ -160,18 +172,13 @@ def step_curves(camps, results, args, gap_sel=None):
             rows[int(step)] = per_coeff.groupby("bit").mean()                      # mean over coeffs
     return pd.DataFrame(rows).T.sort_index()
 
-
-def categories(values):
-    """register_map category of each MREP: 0 masked, 1 minor, 2 moderate, 3 severe, -1 NaN."""
-    cat = np.digitize(values, [rm.MASKED_PCT, rm.MINOR_PCT, rm.MODERATE_PCT], right=True)
-    cat = np.where(np.isnan(values), -1, cat)
-    return np.where(np.isinf(values), 3, cat)
-
 def same_pattern(ref, row, args):
     """True if two step curves are close enough (see --tol) on every bit both have."""
     both = ref.notna() & row.notna()
     if args.color == "mrep":
-        return (categories(ref[both].to_numpy()) != categories(row[both].to_numpy())).sum() <= args.tol
+        cat_ref = categories(ref[both].to_numpy(), args.metric)
+        cat_row = categories(row[both].to_numpy(), args.metric)
+        return (cat_ref != cat_row).sum() <= args.tol
     diff = (ref[both] - row[both]).abs()
     return diff.empty or diff.max() < args.tol
 
@@ -307,20 +314,25 @@ def report_ranges(curves, name):
 # Plot
 # ------------------------------------------------------------------ #
 def draw_mrep(fig, ax, values, args):
-    """Same colors as register_map.py: categories, severe as a red -> black log gradient."""
+    """Categories as colors. linf_rel: register_map.py colors, severe as a red -> black
+    log gradient. l2_rel: the E_L2 classes of Ch. 4, one flat color each."""
     vmax = finite_max(values, rm.MODERATE_PCT)
     flat = values.ravel()
-    rgba = rm.mrep_colors(flat, vmax)
-    rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
+    if args.metric == "l2_rel":
+        cat = categories(flat, "l2_rel")
+        rgba = np.array([mcolors.to_rgba(L2_COLORS[c] if c >= 0 else NOT_FLIPPED) for c in cat])
+    else:
+        rgba = rm.mrep_colors(flat, vmax)
+        rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
+
     if not args.no_legend:
         if args.metric == "l2_rel":
-            # Same thresholds as the worst-slot categories, read as E_L2 = value / 100.
             entries = [
-                (rm.GREEN, r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
-                (rm.YELLOW, r"Visible ($E_{L_2}\leq 10^{-1}$)"),
-                (rm.ORANGE, r"Visible ($E_{L_2}< 1$)"),
-                (rm.RED, rf"Destroyed ($E_{{L_2}}\geq 1$, up to {vmax / 100:.3g})"),
+                (L2_COLORS[0], r"Masked ($E_{L_2}=0$)"),
+                (L2_COLORS[1], r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
+                (L2_COLORS[2], r"Visible ($E_{L_2}> 10^{-2}$)"),
+                (L2_COLORS[3], r"Destroyed ($E_{L_2}\geq 1$)"),
             ]
         else:
             entries = [
@@ -334,11 +346,10 @@ def draw_mrep(fig, ax, values, args):
             entries.append((NOT_FLIPPED, "not injected"))
         handles = [Patch(facecolor=color, edgecolor="black", lw=0.5, label=label)
                    for color, label in entries]
-
         ax.legend(
             handles=handles,
             loc="lower center",
-            ncol=3,
+            ncol=len(entries) if args.metric == "l2_rel" else 3,
             frameon=False,
             fontsize=TICK_FONT,
             bbox_to_anchor=(0.5, 1.05),
