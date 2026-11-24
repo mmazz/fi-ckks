@@ -118,17 +118,24 @@ def select_campaigns(args):
         sys.exit(f"No finished campaigns match --where {args.where} --query {args.query!r}")
     return camps
 
+# E_L2 class thresholds of Ch. 4, in E_L2 units (not in %)
+L2_VISIBLE = 1e-2
+L2_DESTROYED = 1.0
+
 def categories(values, metric="l2_rel"):
     """Category of each cell, -1 for NaN.
-    linf_rel: register_map categories (0 correct, 1 degraded, 2 SDC, 3 severe SDC).
-    l2_rel: the E_L2 classes of Ch. 4 (0 masked, exactly 0; 1 not visible; 2 visible; 3 destroyed)."""
+    linf_rel: register_map categories (0 correct, 1 degraded, 2 SDC, 3 severe SDC), values in %.
+    l2_rel: the E_L2 classes of Ch. 4 (0 masked, exactly 0; 1 not visible; 2 visible; 3 destroyed),
+    values in E_L2 units."""
     if metric == "l2_rel":
-        cat = np.select([values == 0, values <= rm.MASKED_PCT, values < rm.MODERATE_PCT],
+        cat = np.select([values == 0, values <= L2_VISIBLE, values < L2_DESTROYED],
                         [0, 1, 2], default=3)
     else:
         cat = np.digitize(values, [rm.MASKED_PCT, rm.MINOR_PCT, rm.MODERATE_PCT], right=True)
     cat = np.where(np.isnan(values), -1, cat)
     return np.where(np.isinf(values), 3, cat)
+
+
 # ------------------------------------------------------------------ #
 # Data
 # ------------------------------------------------------------------ #
@@ -318,10 +325,19 @@ def draw_mrep(fig, ax, values, args):
     log gradient. l2_rel: the E_L2 classes of Ch. 4, one flat color each."""
     vmax = finite_max(values, rm.MODERATE_PCT)
     flat = values.ravel()
+    flat = values.ravel()
     if args.metric == "l2_rel":
         cat = categories(flat, "l2_rel")
         rgba = np.array([mcolors.to_rgba(L2_COLORS[c] if c >= 0 else NOT_FLIPPED) for c in cat])
+        # Destroyed cells: red -> black log gradient from E_L2 = 1 up to the largest finite
+        # value in the figure. An overflow (inf) is clipped to the top, so it shows as black.
+        top = finite_max(values, L2_DESTROYED)
+        destroyed = cat == 3
+        if destroyed.any():
+            norm = mcolors.LogNorm(vmin=L2_DESTROYED, vmax=max(top, L2_DESTROYED * 1.01), clip=True)
+            rgba[destroyed] = rm.SEVERE_CMAP(norm(flat[destroyed]))
     else:
+        vmax = finite_max(values, rm.MODERATE_PCT)
         rgba = rm.mrep_colors(flat, vmax)
         rgba[np.isnan(flat)] = mcolors.to_rgba(NOT_FLIPPED)
     ax.imshow(rgba.reshape(*values.shape, 4), aspect="auto", interpolation="nearest")
@@ -332,7 +348,7 @@ def draw_mrep(fig, ax, values, args):
                 (L2_COLORS[0], r"Masked ($E_{L_2}=0$)"),
                 (L2_COLORS[1], r"Not visible ($E_{L_2}\leq 10^{-2}$)"),
                 (L2_COLORS[2], r"Visible ($E_{L_2}> 10^{-2}$)"),
-                (L2_COLORS[3], r"Destroyed ($E_{L_2}\geq 1$)"),
+                (L2_COLORS[3], rf"Destroyed ($E_{{L_2}}\geq 1$, up to {top:.3g})"),
             ]
         else:
             entries = [
