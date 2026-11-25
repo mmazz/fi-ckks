@@ -97,8 +97,8 @@ def parse_args():
     p.add_argument("--group_width", type=int, default=None, metavar="W",
                    help="bits per bin (default: the whole range in one bin)")
     p.add_argument("--metric", default="l2_rel",
-                   help="mrep coloring: relative error column, linf_rel (worst slot) "
-                        "or l2_rel (E_L2, default); same thresholds, applied to the value in %%")
+                   help="mrep coloring: linf_rel (worst slot, thresholds in %%) "
+                        "or l2_rel (E_L2, default; thresholds of Ch. 4: 1e-2 and 1)")
     p.add_argument("--title", default="step_heatmap")
     p.add_argument("--suptitle", default="", help="text above the figure (default: none)")
     p.add_argument("--no-legend", action="store_true", help="do not show the MREP category legend")
@@ -149,18 +149,19 @@ def gap_of(cfg):
     return ((1 << int(cfg["logN"])) // 2) // (1 << int(cfg["logSlots"]))
 
 def metric_per_cell(data, metric, stat):
-    """Same as register_map.mrep_per_cell, for any relative error column (in %).
+    """Same as register_map.mrep_per_cell, for any relative error column.
 
-    On a collapsed dir the seeds are already combined and `{metric}_{stat}` holds that
-    stat, so it is picked by name. The result keeps the name `mrep`, so the colors and
-    the categories work unchanged."""
+    linf_rel is returned in % (register_map thresholds); l2_rel stays in E_L2 units
+    (thresholds of Ch. 4). On a collapsed dir the seeds are already combined and
+    `{metric}_{stat}` holds that stat, so it is picked by name. The result keeps the
+    name `mrep`, so the colors and the categories work unchanged."""
     col = f"{metric}_{stat}" if f"{metric}_{stat}" in data.columns else metric
     if col not in data.columns:
         options = sorted(c for c in data.columns if "rel" in c)
         raise ValueError(f"no column {col!r} in the data; relative columns: {options}")
-    data = data.assign(mrep=data[col].astype(float) * 100.0)
+    scale = 100.0 if metric == "linf_rel" else 1.0      # only the MREP goes in %
+    data = data.assign(mrep=data[col].astype(float) * scale)
     return data.groupby(["limb", "coeff", "bit"], as_index=False)["mrep"].agg(stat)
-
 
 def step_curves(camps, results, args, gap_sel=None):
     """DataFrame: index = op_step, columns = bit. Value: MREP in % (mrep) or mean err_bits (log2).
@@ -296,22 +297,25 @@ def collapse(curves, spec, args):
         print(f"  WARNING: steps in no group of --rows (not drawn): {missing}")
     return merge_groups(curves, groups)
 
-def visible_ranges(curves):
-    """Per row: first and last bit whose MREP is above the Masked threshold, and how many
-    bits that is (if count != last - first + 1 the range has holes)."""
+
+def visible_ranges(curves, metric):
+    """Per row: first and last visible bit, and how many bits that is (if count != last -
+    first + 1 the range has holes). Visible: E_L2 > 1e-2 (l2_rel) or MREP > 1 % (linf_rel)."""
+    thr = L2_VISIBLE if metric == "l2_rel" else rm.MASKED_PCT
     out = []
     for label, row in curves.iterrows():
-        vis = row[row > rm.MASKED_PCT].index
+        vis = row[row > thr].index
         first, last = (int(vis.min()), int(vis.max())) if len(vis) else (None, None)
         out.append({"row": label, "first": first, "last": last, "count": len(vis)})
     # Nullable integers: a row with no visible bit must not turn the columns into floats.
     return pd.DataFrame(out).astype({"first": "Int64", "last": "Int64"})
 
 
-def report_ranges(curves, name):
+def report_ranges(curves, name, metric):
     """Print the visible bit range of every row and save it next to the figure."""
-    ranges = visible_ranges(curves)
-    print(f"  bits with MREP > {rm.MASKED_PCT:g}%:")
+    ranges = visible_ranges(curves, metric)
+    what = "E_L2 > 1e-2" if metric == "l2_rel" else f"MREP > {rm.MASKED_PCT:g}%"
+    print(f"  bits with {what}:")
     for r in ranges.itertuples():
         if r.count == 0:
             print(f"    {r.row:>12}: none")
@@ -498,9 +502,7 @@ def plot(curves, groups, cfg, name, args):
     if args.show:
         plt.show()
     plt.close(fig)
-    if args.show:
-        plt.show()
-    plt.close(fig)
+
 
 
 def main():
