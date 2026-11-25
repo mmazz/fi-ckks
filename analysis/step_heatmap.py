@@ -529,7 +529,7 @@ def main():
             groups = collapse_patterns(sub, curves, args)
             curves = merge_groups(curves, groups)
         if args.color == "mrep":
-            report_ranges(curves, name)
+            report_ranges(curves, name, args.metric)
         plot(curves, groups, sub.iloc[0], name, args)
 
 
