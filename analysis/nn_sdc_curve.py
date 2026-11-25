@@ -400,7 +400,7 @@ def plot(stages, args):
         p_reg[stage] = register_rate(curve, register_width(cfg) - shifted)
         # x label on the panels with no panel below them
         if i + ncols >= n:
-            ax.set_xlabel(r"Bit index $-\ \log Q$" if shifted else "Bit index",
+            ax.set_xlabel(r"Bit index $-\ \log P$" if shifted else "Bit index",
                           fontsize=FONT - 2)
         ax.set_title(f"{STAGE_LABEL.get(stage, stage)}  (P = {comma(p_reg[stage])})",
                        fontsize=FONT - 3, pad=20)
