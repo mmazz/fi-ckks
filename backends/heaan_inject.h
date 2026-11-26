@@ -4,7 +4,8 @@
 // El estado global vive en heaan_inject.cpp: una sola copia en todo el binario.
 #include "injector.h"
 #include <NTL/ZZX.h>
-
+#include <string>
+#include <vector>
 // Activa `inj` durante una corrida. Todos los flips (los que pide el fork y los
 // que hace el workload con client_flip) se validan contra ese Injector.
 // Tiene que haber exactamente UN scope vivo por run_iteration: no anidar.
@@ -19,3 +20,9 @@ public:
 // Flip en un polinomio del lado del workload (encode, encrypt, decrypt, registros de la NN).
 // Usa coeff/bit/amountBits del FaultSpec activo. En modo probe solo mide el ancho.
 void client_flip(Injector& inj, NTL::ZZX& poly);
+
+// Centered representative of every coefficient, same rule as Scheme::decode:
+// reduce mod q = 2^logq, subtract q when the top bit is set -> [-q/2, q/2).
+// Decimal strings: the values do not fit in a double.
+std::vector<std::string> centered_coeffs(const NTL::ZZX& mx, long logq, long N);
+

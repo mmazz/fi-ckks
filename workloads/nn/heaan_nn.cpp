@@ -291,7 +291,7 @@ IterationResult run_iteration(BackendContext* bctx, const CampaignArgs& args, In
 
     std::vector<Ciphertext> outs = forward(ctx, c, args, inj, site);
 
-    // Los faults de salida van al logit de la clase correcta.
+    // Output faults (and --saveVectors) use the correct-class logit.
     const size_t target = ctx.model.label;
     if (inj.here(Stage::DecryptC0)) client_flip(inj, outs[target].bx);
     if (inj.here(Stage::DecryptC1)) client_flip(inj, outs[target].ax);
@@ -301,6 +301,11 @@ IterationResult run_iteration(BackendContext* bctx, const CampaignArgs& args, In
     for (size_t o = 0; o < outs.size(); ++o) {
         Plaintext dec = ctx.scheme.decryptMsg(ctx.sk, outs[o]);
         if (o == target && inj.here(Stage::Decode)) client_flip(inj, dec.mx);
+        // Only the correct-class logit: the same ciphertext the output-stage faults hit.
+        if (o == target && args.saveVectors) {
+            res.plain_coeffs = centered_coeffs(dec.mx, dec.logq, ctx.cc.N);
+            res.plain_logq   = uint32_t(dec.logq);
+        }
         std::unique_ptr<std::complex<double>[]> v(ctx.scheme.decode(dec));
         res.values.push_back(v[0].real());
     }

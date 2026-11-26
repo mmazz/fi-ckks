@@ -4,6 +4,7 @@
 #include <NTL/ZZ.h>
 #include <algorithm>
 #include <stdexcept>
+#include <sstream>
 
 namespace {
 
@@ -16,6 +17,8 @@ const NTL::ZZX* g_last_poly = nullptr;   // direccion del poly flipeado
 NTL::ZZ         g_original;              // valor del coeficiente ANTES del flip
 NTL::ZZ         g_flipped;               // valor del coeficiente DESPUES del flip
 long            g_N         = 0;
+
+
 
 void fi_flip(NTL::ZZX& poly, uint32_t coeff, uint32_t bit, uint32_t width, long ring_degree)
 {
@@ -90,4 +93,20 @@ void client_flip(Injector& inj, NTL::ZZX& poly)
     if (&inj != g_inj) throw std::logic_error("client_flip called with an Injector that is not the active scope");
     const FaultSpec& f = inj.spec();
     heaanfi::flip(poly, f.coeff, f.bit, f.amountBits, g_N);
+}
+// Centered representative of every coefficient, same rule as Scheme::decode:
+// reduce mod q = 2^logq, subtract q when the top bit is set -> [-q/2, q/2).
+std::vector<std::string> centered_coeffs(const NTL::ZZX& mx, long logq, long N)
+{
+    const NTL::ZZ q = NTL::power2_ZZ(logq);
+    std::vector<std::string> out(N);
+    NTL::ZZ t;
+    for (long i = 0; i < N; ++i) {
+        NTL::rem(t, NTL::coeff(mx, i), q);       // coeff() returns 0 past deg(mx)
+        if (NTL::NumBits(t) == logq) t -= q;     // for (-q/2, q/2]: if (2*t > q) t -= q;
+        std::ostringstream ss;
+        ss << t;
+        out[i] = ss.str();
+    }
+    return out;
 }

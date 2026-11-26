@@ -7,6 +7,9 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <filesystem>
+#include <fstream>
+#include <cctype>
 
 using CtxPtr = std::unique_ptr<BackendContext, void (*)(BackendContext*)>;
 
@@ -79,12 +82,48 @@ static bool baseline_ok(const BackendContext& ctx, const CampaignArgs& args,
     return ok;
 }
 
+// written to results_dir/ckks_only_plain/<config>.csv
+// per coefficient (long format, so repetitions are averaged with a groupby).
+static void save_plain(const CampaignArgs& args, const IterationResult& r)
+{
+    if (r.plain_coeffs.empty()) {
+        std::cerr << "[WARN] --saveVectors: this backend does not export the plaintext\n";
+        return;
+    }
+        // One file per run, named after its config: parallel runs (--jobs) never share a file,
+    // and re-running a config overwrites its own file instead of duplicating rows.
+    const std::string dir = args.results_dir + "/ckks_only_plain";
+    std::filesystem::create_directories(dir);
+    std::string pipe = args.pipeline.empty() ? "none" : args.pipeline;
+    for (char& ch : pipe)
+        if (!std::isalnum(static_cast<unsigned char>(ch))) ch = '_';
+    const std::string path = dir + "/" + args.library +
+        "_logN" + std::to_string(args.logN) + "_logQ" + std::to_string(args.logQ) +
+        "_logDelta" + std::to_string(args.logDelta) + "_logSlots" + std::to_string(args.logSlots) +
+        "_" + pipe + "_seed" + std::to_string(args.seed) +
+        "_in" + std::to_string(args.seed_input) + ".csv";
+    std::ofstream out(path, std::ios::trunc);
+    if (!out) throw std::runtime_error("could not open " + path);
+    out << "library,logN,logQ,logDelta,logSlots,pipeline,seed,seed_input,logq,coeff,value\n";
+    for (size_t i = 0; i < r.plain_coeffs.size(); ++i)
+        out << args.library << ',' << args.logN << ',' << args.logQ << ',' << args.logDelta
+            << ',' << args.logSlots << ",\"" << args.pipeline << "\"," << args.seed << ','
+            << args.seed_input << ',' << r.plain_logq << ',' << i << ',' << r.plain_coeffs[i]
+            << '\n';
+    std::cout << "[INFO] Plaintext (" << r.plain_coeffs.size() << " coeffs) appended to "
+              << path << '\n';
+}
 
 // --stage none: run the pipeline once without any fault and report the error that CKKS
-// alone adds (plain reference vs decrypted output). Nothing is registered or logged.
+// alone adds (plain reference vs decrypted output). 
+// Nothing is registered; with --saveVectors the decrypted plaintext is appended to ckks_only_plain.csv
 static int run_ckks_only(BackendContext* ctx, const CampaignArgs& args)
 {
-    const std::vector<double> ckks_golden  = run_clean(ctx, args);
+    Injector inj = Injector::none();
+    const IterationResult clean = run_iteration(ctx, args, inj);
+    inj.finish();
+    const std::vector<double>& ckks_golden = clean.values;
+    if (args.saveVectors) save_plain(args, clean);
     const std::vector<double> plain_golden = get_reference_output(ctx);
     const CKKSAccuracyMetrics m = EvaluateCKKSAccuracy(plain_golden, ckks_golden);
 

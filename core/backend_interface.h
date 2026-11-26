@@ -5,7 +5,7 @@
 #include "campaign_helper.h"
 #include "injector.h"
 #include "metrics.h"
-
+#include <string>
 #include <cstdint>
 #include <vector>
 
@@ -14,6 +14,10 @@ struct IterationResult {
     bool     detected        = false;  // detector de SDC de la libreria (solo OpenFHE)
     uint32_t hidden_layer    = 0;      // NN: neurona donde cayo el fault
     uint32_t reduceSum_layer = 0;      // NN: rotacion de reduceSum donde cayo el fault
+    // Decrypted plaintext: all N coefficients, centered mod q_l, as decimal strings
+    // (exact; they do not fit in a double). Filled by HEAAN only, when --saveVectors is on.
+    std::vector<std::string> plain_coeffs;
+    uint32_t plain_logq = 0;   // log2(q_l) of the decrypted plaintext (level at the end)
 };
 
 struct BackendContext {
