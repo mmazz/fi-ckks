@@ -23,7 +23,10 @@ Prints
   2. Per key seed, aligned coefficients, plateau bits: measured P(mis), predicted P(mis)
      and the fraction of injections where model and data agree.
   3. Per key seed: fraction of ALL aligned coefficients whose flip lowers the logit (at
-     --bref), the quantity that should set P(mis) on the plateau.
+     --bref), the quantity that should set P(mis) on the plateau. The min-max over images
+     says whether that fraction is set by the key seed or by the image.
+  4. The same fraction against the measured P(mis), per key seed, and the figure
+     img/nn_decode_sign_summary.pdf (points on y = x: the sign model explains the seeds).
 """
 import argparse
 import math
@@ -195,7 +198,7 @@ def report_census(dumps, bref):
         js = [j for j in range(gap, N, gap) if j != N // 2]
         down = [logit_shift(flip_delta(d["m"][j], bref, d["logq"]), j, N, d["logd"]) < 0
                 for j in js]
-        per_seed.setdefault(seed, []).append(np.mean(down))
+        per_seed.setdefault(seed, []).append(float(np.mean(down)))
     for seed, v in per_seed.items():
         print(f" seed {seed}: {np.mean(v):.3f} (images: {min(v):.2f}-{max(v):.2f})")
 
@@ -230,6 +233,60 @@ def plot_dump(dumps, seed, img):
     print(f"\nSaved {out}")
 
 
+def census(d, bref):
+    """Fraction of the aligned coefficients (j != 0, N/2) whose flip at `bref` lowers the
+    correct logit, for one dump."""
+    N, gap = d["N"], d["gap"]
+    js = [j for j in range(gap, N, gap) if j != N // 2]
+    return float(np.mean([logit_shift(flip_delta(d["m"][j], bref, d["logq"]), j, N,
+                                      d["logd"]) < 0 for j in js]))
+
+
+def wilson(p, n, z=1.96):
+    if n == 0:
+        return np.nan, np.nan
+    c = (p + z * z / (2 * n)) / (1 + z * z / n)
+    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return c - h, c + h
+
+
+def plot_summary(dumps, data, bmin, bmax, bref):
+    """Measured P(mis) on the plateau against the census of the clean plaintext.
+
+    One large point per key seed (images pooled) and one small point per (seed, image).
+    The intervals count coefficients, not injections: the bits of one coefficient all move
+    the logit the same way, so they are not independent samples."""
+    import matplotlib.pyplot as plt
+    plateau = data[(data["bit"] >= bmin) & (data["bit"] <= bmax)]
+    fig, ax = plt.subplots(figsize=(4.2, 4.0))
+    ax.plot([0, 1], [0, 1], color="k", lw=0.6, ls="--", label="$y = x$")
+    print(f"\n=== 4. Census at bit {bref} against measured P(mis), bits {bmin}-{bmax} ===")
+    print(" seed   census   P(mis)   coefficients")
+    for seed, g in plateau.groupby("seed"):
+        seed = int(seed)
+        xs = [census(dumps[(seed, int(i))], bref) for i in g["seed_input"].unique()]
+        for img, gi in g.groupby("seed_input"):
+            ax.plot(census(dumps[(seed, int(img))], bref),
+                    gi["misclassified"].astype(float).mean(), ".", color="0.6", ms=4)
+        p = g["misclassified"].astype(float).mean()
+        n = g.groupby(["seed_input", "coeff"]).ngroups
+        lo, hi = wilson(p, n)
+        x = float(np.mean(xs))
+        ax.errorbar(x, p, yerr=[[p - lo], [hi - p]], fmt="o", ms=6, capsize=3,
+                    label=f"seed {seed}")
+        print(f" {seed:4d}    {x:.3f}    {p:.3f}   {n}")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel(f"fraction of flips that lower the logit (bit {bref})")
+    ax.set_ylabel("measured P(mis), aligned")
+    ax.legend(fontsize=7, loc="upper left")
+    IMG_DIR.mkdir(exist_ok=True)
+    out = IMG_DIR / "nn_decode_sign_summary.pdf"
+    fig.tight_layout()
+    fig.savefig(out)
+    print(f"Saved {out}")
+
+
 def main():
     args = parse_args()
     dumps = load_dumps(dump_files(args.dumps))
@@ -242,6 +299,7 @@ def main():
     data = predict(injections(args.results, args.stage, dumps), dumps, logits, labels)
     bmax = args.bmax if args.bmax is not None else next(iter(dumps.values()))["logq"] - 2
     report_agreement(data, args.bmin, bmax)
+    plot_summary(dumps, data, args.bmin, bmax, args.bref)
 
 
 if __name__ == "__main__":

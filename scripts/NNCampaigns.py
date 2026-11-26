@@ -87,7 +87,7 @@ GROUPS = {
     "heaan_decode_seeds": grid(HEAAN, stage=["decode"], seed=SEEDS_DECODE, seed_input=IMAGES),
     "ev_openfhe_coeff0": client(OPENFHE_COEFF0, ["decrypt_c0"]),
     "ev_heaan_coeff0": client(HEAAN_COEFF0, ["decrypt_c0","decode"]),
-    "heaan_plain": grid(HEAAN_PLAIN, seed=SEEDS_DECODE, seed_input=IMAGES),
+    "heaan_plain": grid(HEAAN_PLAIN, seed=SEEDS_DECODE+[2], seed_input=IMAGES),
     }
 
 if __name__ == "__main__":
