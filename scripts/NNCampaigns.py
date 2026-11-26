@@ -31,7 +31,8 @@ HEAAN_KS = dict(HEAAN, bitsPerCoeff=2 * 220 + 4)
 # Fault-free decrypted plaintext of the correct-class logit: all N coefficients, centered
 # mod q_l (written to results_NN/ckks_only_plain/, one file per run). --stage none does not
 # use the registry, so the group always re-runs; each run overwrites its own file.
-HEAAN_PLAIN = dict(HEAAN, stage="none", saveVectors=1)
+RESULTS_PLAIN = str(ROOT / "results_NN_plain")
+HEAAN_PLAIN = dict(HEAAN, results_dir=RESULTS_PLAIN, stage="none", saveVectors=1)
 
 # stage -> number of op_steps (see the header of workloads/nn/heaan_nn.cpp and openfhe_nn.cpp)
 HEAAN_INTERNAL = {"hidden_layer": 14, "cheby_tanh3": 10, "mul": 26, "rescale": 4, "add": 6, "rot": 12}
@@ -86,7 +87,7 @@ GROUPS = {
     "heaan_decode_seeds": grid(HEAAN, stage=["decode"], seed=SEEDS_DECODE, seed_input=IMAGES),
     "ev_openfhe_coeff0": client(OPENFHE_COEFF0, ["decrypt_c0"]),
     "ev_heaan_coeff0": client(HEAAN_COEFF0, ["decrypt_c0","decode"]),
-    "heaan_plain": grid(HEAAN_PLAIN, seed=SEEDS, seed_input=IMAGES),
+    "heaan_plain": grid(HEAAN_PLAIN, seed=SEEDS_DECODE, seed_input=IMAGES),
     }
 
 if __name__ == "__main__":
